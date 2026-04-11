@@ -1,0 +1,40 @@
+---
+# Autoflow EE — Security
+# ======================
+# Environnement dédié aux playbooks de sécurité et conformité.
+# Contient : collections sécurité + boto3 (AWS) + OpenScap bindings.
+#
+# Build : make ee-build EE=security
+# Push  : make ee-push EE=security
+
+version: 3
+
+images:
+  base_image:
+    name: 'quay.io/ansible/awx-ee:latest'
+
+dependencies:
+  galaxy:
+    collections:
+      - name: community.general
+        version: ">=9.0.0"
+      - name: ansible.posix
+        version: ">=1.5.0"
+      - name: community.crypto
+        version: ">=2.18.0"
+      - name: ansible.utils
+        version: ">=4.0.0"
+
+  python:
+    - requests>=2.31.0
+    - boto3>=1.34.0
+    - botocore>=1.34.0
+    - cryptography>=42.0.0
+    - pyyaml>=6.0
+
+  system:
+    - openssl-devel [platform:rpm]
+    - git [platform:rpm]
+
+options:
+  package_manager_path: /usr/bin/dnf

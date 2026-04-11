@@ -1,0 +1,306 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana",    "id": "grafana",    "name": "Grafana",    "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "id": null,
+  "uid": "ee-builder",
+  "title": "EE Builder — Execution Environments",
+  "description": "Build pipeline metrics for Ansible Execution Environments (ansible-builder + Gitea registry).",
+  "tags": ["autoflow", "ee", "ansible"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "timepicker": {},
+  "panels": [
+
+    {
+      "id": 1, "type": "row", "title": "Build Status",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+    },
+
+    {
+      "id": 2,
+      "title": "Service Up",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 0, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"type": "value", "options": {
+            "0": {"text": "DOWN", "color": "red"},
+            "1": {"text": "UP",   "color": "green"}
+          }}],
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red", "value": null},
+            {"color": "green", "value": 1}
+          ]},
+          "color": {"mode": "thresholds"}
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "up{job=\"ee_builder\"}",
+        "legendFormat": "EE Builder"
+      }]
+    },
+
+    {
+      "id": 3,
+      "title": "Builds Running",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 4, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "orange", "value": 2}
+          ]},
+          "color": {"mode": "thresholds"}
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "ee_builder_builds_running",
+        "legendFormat": "Running"
+      }]
+    },
+
+    {
+      "id": 4,
+      "title": "Total Builds — Success",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 8, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"fixedColor": "green", "mode": "fixed"}
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "sum(ee_builder_builds_total{status=\"success\"}) or vector(0)",
+        "legendFormat": "Success"
+      }]
+    },
+
+    {
+      "id": 5,
+      "title": "Total Builds — Failed",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 12, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "red",   "value": 1}
+          ]},
+          "color": {"mode": "thresholds"}
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "sum(ee_builder_builds_total{status=\"failed\"}) or vector(0)",
+        "legendFormat": "Failed"
+      }]
+    },
+
+    {
+      "id": 6,
+      "title": "Success Rate (24h)",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 16, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red",    "value": null},
+            {"color": "yellow", "value": 0.8},
+            {"color": "green",  "value": 1}
+          ]},
+          "color": {"mode": "thresholds"}
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "sum(increase(ee_builder_builds_total{status=\"success\"}[24h])) / (sum(increase(ee_builder_builds_total[24h])) > 0) or vector(1)",
+        "legendFormat": "Success Rate"
+      }]
+    },
+
+    {
+      "id": 7, "type": "row", "title": "Build Throughput",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 4}
+    },
+
+    {
+      "id": 8,
+      "title": "Build Rate (per hour) by EE",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {"lineWidth": 2, "fillOpacity": 10}
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by (ee) (increase(ee_builder_builds_total{status=\"success\"}[1h]))",
+          "legendFormat": "{{ee}} success"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by (ee) (increase(ee_builder_builds_total{status=\"failed\"}[1h]))",
+          "legendFormat": "{{ee}} failed"
+        }
+      ]
+    },
+
+    {
+      "id": 9,
+      "title": "Builds Running (concurrent)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {"lineWidth": 2, "fillOpacity": 15}
+        },
+        "overrides": [{
+          "matcher": {"id": "byName", "options": "Running"},
+          "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+        }]
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "ee_builder_builds_running",
+        "legendFormat": "Running"
+      }]
+    },
+
+    {
+      "id": 10, "type": "row", "title": "Per-EE Breakdown",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13}
+    },
+
+    {
+      "id": 11,
+      "title": "Cumulative Builds by EE and Status",
+      "type": "bargauge",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null}
+          ]},
+          "color": {"mode": "thresholds"}
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "text": {}
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "ee_builder_builds_total",
+        "legendFormat": "{{ee}} / {{status}}"
+      }]
+    },
+
+    {
+      "id": 12,
+      "title": "Resource Usage — EE Builder",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"lineWidth": 2, "fillOpacity": 10}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "CPU (s)"},
+            "properties": [{"id": "unit", "value": "s"}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Memory (MB)"},
+            "properties": [{"id": "unit", "value": "decmbytes"}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "rate(process_cpu_seconds_total{job=\"ee_builder\"}[5m])",
+          "legendFormat": "CPU (s)"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "process_resident_memory_bytes{job=\"ee_builder\"} / 1024 / 1024",
+          "legendFormat": "Memory (MB)"
+        }
+      ]
+    }
+
+  ]
+}

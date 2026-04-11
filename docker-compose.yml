@@ -609,6 +609,14 @@ services:
       # ── Metrics (Prometheus) ──────────────────
       GITEA__metrics__ENABLED:       "true"
       GITEA__metrics__TOKEN:         ${GITEA_METRICS_TOKEN:-change_me_metrics_token}
+      # ── Container Registry (OCI packages) ─────
+      # Gitea serves the container registry on the same HTTP port (3001).
+      # Push:  docker push localhost:3001/<user>/<image>:<tag>
+      # Pull (intra-stack): docker pull gitea:3001/<user>/<image>:<tag>
+      GITEA__packages__ENABLED:                  "true"
+      GITEA__packages__CHUNKED_UPLOAD_PATH:      /var/lib/gitea/tmp/packages
+      GITEA__packages__LIMIT_TOTAL_OWNER_SIZE:   ${GITEA_REGISTRY_OWNER_LIMIT:--1}  # -1 = unlimited
+      GITEA__packages__LIMIT_SIZE_CONTAINER:     ${GITEA_REGISTRY_IMAGE_LIMIT:--1}  # per-image limit
       # ── Mailer (disabled by default) ──────────
       GITEA__mailer__ENABLED:        "false"
       # ── Logging ───────────────────────────────
@@ -635,6 +643,50 @@ services:
         reservations:
           cpus: '0.05'
           memory: 128M
+
+  # ── EE Builder ───────────────────────────────
+  # Listens for Gitea push webhooks and rebuilds Execution Environment images
+  # when execution-environments/ changes. Needs Docker socket to run
+  # ansible-builder and push to the Gitea container registry.
+  ee_builder:
+    build:
+      context: ./services/ee-builder
+      dockerfile: Dockerfile
+    container_name: autoflow_ee_builder
+    restart: unless-stopped
+    environment:
+      GITEA_WEBHOOK_SECRET: ${GITEA_WEBHOOK_SECRET:-}
+      GITEA_REGISTRY_TOKEN: ${GITEA_REGISTRY_TOKEN:-}
+      GITEA_USER:           ${GITEA_USER:-admin}
+      REGISTRY:             gitea:${GITEA_HTTP_PORT:-3001}
+      EE_BASE_DIR:          /execution-environments
+      BUILD_PYCMD:          /usr/bin/python3.12
+      EE_DEFAULT_VERSION:   ${EE_DEFAULT_VERSION:-latest}
+      LOG_LEVEL:            ${LOG_LEVEL:-info}
+    volumes:
+      - ./execution-environments:/execution-environments:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-998}"
+    ports:
+      - "${EE_BUILDER_PORT:-8003}:8003"
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/healthz || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    <<: *log-default
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   # ── Alertmanager ─────────────────────────────
   # Receives firing alerts from Prometheus and routes them to the Autoflow

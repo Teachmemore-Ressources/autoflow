@@ -5,8 +5,15 @@
 COMPOSE   = docker compose
 SERVICES  =
 
+# ── EE config (override on CLI: make ee-build EE=security VERSION=1.2.0) ──
+EE       ?= base
+VERSION  ?= latest
+REGISTRY ?= localhost:3001
+GITEA_USER ?= admin
+
 .PHONY: help start stop restart logs status build pull setup \
-        backup restore monitoring-up monitoring-down
+        backup restore monitoring-up monitoring-down \
+        ee-build ee-push ee-build-push ee-list
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -72,6 +79,29 @@ setup:          ## Bootstrap: copy .env.example → .env (skips if .env already 
 	else \
 		echo "  .env already exists – skipping."; \
 	fi
+
+# ── Execution Environments ───────────────────────────────────
+
+ee-build:       ## Build an EE image  (e.g. make ee-build EE=security VERSION=1.0.0)
+	@echo "Building EE: $(EE) → $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)"
+	~/.local/bin/ansible-builder build \
+		--file execution-environments/$(EE)/execution-environment.yml \
+		--tag $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION) \
+		--context /tmp/ee-build-$(EE) \
+		--build-arg PYCMD=/usr/bin/python3.12 \
+		--verbosity 1
+
+ee-push:        ## Push a built EE image to Gitea registry  (e.g. make ee-push EE=security VERSION=1.0.0)
+	@echo "Pushing EE: $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)"
+	docker push $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)
+
+ee-build-push:  ## Build + push in one step  (e.g. make ee-build-push EE=base VERSION=1.0.0)
+	$(MAKE) ee-build EE=$(EE) VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)
+	$(MAKE) ee-push  EE=$(EE) VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)
+
+ee-list:        ## List available EE definitions
+	@echo "Available Execution Environments:"
+	@ls execution-environments/ | sed 's/^/  /'
 
 # ── Utilities ────────────────────────────────────────────────
 
