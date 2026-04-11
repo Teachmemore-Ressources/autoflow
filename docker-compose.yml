@@ -54,7 +54,7 @@ services:
 
   # ── PostgreSQL ───────────────────────────────
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.17-alpine  # pinned: was 15-alpine (9 HIGH CVEs fixed)
     container_name: autoflow_postgres
     restart: unless-stopped
     environment:
@@ -83,7 +83,7 @@ services:
 
   # ── Redis ────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.8-alpine     # pinned: was 7-alpine (43 CRITICAL/HIGH CVEs fixed)
     container_name: autoflow_redis
     restart: unless-stopped
     command: >
@@ -115,7 +115,7 @@ services:
   # Runs ONCE: migrates DB, creates admin user, loads demo data.
   # awx_web and awx_task will not start until this service exits 0.
   awx_migrate:
-    image: ghcr.io/ansible/awx:${AWX_VERSION:-24.6.1}
+    image: autoflow/awx-patched:${AWX_VERSION:-24.6.1}
     container_name: autoflow_awx_migrate
     restart: "no"
     user: root
@@ -148,7 +148,7 @@ services:
   # AWX's internal nginx listens on port 80 inside the container.
   # Exposed directly on AWX_HTTP_PORT (default 80).
   awx_web:
-    image: ghcr.io/ansible/awx:${AWX_VERSION:-24.6.1}
+    image: autoflow/awx-patched:${AWX_VERSION:-24.6.1}
     container_name: autoflow_awx_web
     restart: unless-stopped
     hostname: awxweb
@@ -222,7 +222,7 @@ services:
 
   # ── AWX Task (Celery dispatcher + workers) ───
   awx_task:
-    image: ghcr.io/ansible/awx:${AWX_VERSION:-24.6.1}
+    image: autoflow/awx-patched:${AWX_VERSION:-24.6.1}
     container_name: autoflow_awx_task
     restart: unless-stopped
     hostname: awx
@@ -512,7 +512,7 @@ services:
       DOCKERHUB_USER:           ${DOCKERHUB_USER:-}
       DOCKERHUB_PASSWORD:       ${DOCKERHUB_PASSWORD:-}
       TRIVY_CACHE_DIR:          /home/autoflow/.cache/trivy
-      TRIVY_TIMEOUT:            ${TRIVY_TIMEOUT:-120}
+      TRIVY_TIMEOUT:            ${TRIVY_TIMEOUT:-300}
       AWX_VERSION:              ${AWX_VERSION:-24.6.1}
       LOG_LEVEL:                ${LOG_LEVEL:-info}
       RATE_LIMIT:               ${RATE_LIMIT:-60/minute}

@@ -56,8 +56,8 @@ _last_check_ts = Gauge(
 _IMAGE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("ghcr.io/ansible/awx",                       None,       "github",    "ansible/awx"),
     ("quay.io/ansible/receptor",                   "latest",   "latest",    "ansible/receptor"),
-    ("postgres",                                   "15-alpine","dockerhub", "library/postgres"),
-    ("redis",                                      "7-alpine", "dockerhub", "library/redis"),
+    ("postgres",                                   "15.17-alpine","dockerhub", "library/postgres"),
+    ("redis",                                      "7.4.8-alpine", "dockerhub", "library/redis"),
     ("prom/prometheus",                            "latest",   "latest",    "prometheus/prometheus"),
     ("grafana/grafana",                            "latest",   "latest",    "grafana/grafana"),
     ("prom/alertmanager",                          "latest",   "latest",    "prometheus/alertmanager"),

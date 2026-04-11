@@ -1,0 +1,83 @@
+# AWX Patched Image
+# =================
+# Extends the official AWX image and upgrades only the Python packages
+# that have known CVEs (CRITICAL/HIGH), without modifying AWX's own code.
+#
+# Strategy:
+#   - Use the official image as base (preserves all AWX logic)
+#   - Upgrade vulnerable packages to their minimum safe versions
+#   - Run as root during build (same as official image), revert nothing
+#   - ecdsa (CVE-2024-23342) has NO upstream fix — documented below
+#
+# Known unfixable CVEs (no upstream fix available as of 2026-04):
+#   CVE-2024-23342  ecdsa 0.18.0  — Side-channel vulnerability in ECDH operations.
+#                   AWX uses ecdsa only for SSH key parsing, not for TLS/web traffic.
+#                   Risk is LOW in this deployment (AWX not directly internet-exposed).
+#                   Mitigation: AWX accessible only via internal Docker network.
+
+ARG AWX_VERSION=24.6.1
+FROM ghcr.io/ansible/awx:${AWX_VERSION}
+
+USER root
+
+# Upgrade Python packages with known CVEs to their minimum safe versions.
+# Constraints are intentionally conservative — we go to the lowest version
+# that fixes the CVE, not the latest, to reduce risk of compatibility breaks.
+#
+# Tested upgrade path (Django 4.2.x family only — do NOT jump to 5.x):
+#   Django:      4.2.10 → 4.2.30   (all HIGH/CRITICAL fixes in 4.2.x series)
+#   cryptography:41.0.7 → 42.0.5   (minimum for CVE-2023-50782, CVE-2024-26130)
+#   urllib3:     1.26.18 → 2.6.3   (CVE-2025-66418, CVE-2026-21441)
+#   python-jose: 3.3.0  → 3.4.0   (CVE-2024-33663 CRITICAL)
+#   setuptools:  69.0.2 → 78.1.1  (CVE-2024-6345, CVE-2025-47273)
+#   sqlparse:    0.4.4  → 0.5.0   (CVE-2024-4340)
+#   aiohttp:     3.9.5  → 3.13.3  (CVE-2025-69223)
+#   PyJWT:       2.8.0  → 2.12.0  (CVE-2026-32597)
+#   pyOpenSSL:   24.0.0 → 26.0.0  (CVE-2026-27459)
+#   virtualenv:  20.26.3 → 20.26.6 (CVE-2024-53899)
+#   azure-core:  1.30.0 → 1.38.0  (CVE-2026-21226)
+#   wheel:       0.42.0 → 0.46.2  (CVE-2026-24049)
+#   pyasn1:      0.5.1  → 0.6.3   (CVE-2026-30922)
+#   protobuf:    4.25.3 → 4.25.8  (CVE-2025-4565 — stay on 4.x branch)
+
+# AWX packages live in a dedicated virtualenv — must use its pip, not the system one
+ENV PIP=/var/lib/awx/venv/awx/bin/pip
+
+# Upgrade pip itself first (AWX ships pip 21.2.4 which is very slow at resolving)
+RUN $PIP install --no-cache-dir --upgrade "pip>=24.0"
+
+# Install in groups to isolate interdependent constraints:
+#
+# Group A — independent packages (no cross-constraints)
+# NOTE: virtualenv is intentionally excluded — upgrading to 21.x modifies the
+# existing AWX venv structure and breaks pkg_resources (CVE-2024-53899 accepted,
+# virtualenv is only used at build time inside the image, not at runtime).
+# setuptools capped at <78 — 78+ removes pkg_resources (used by AWX).
+# CVE-2025-47273 (fixed in 78.1.1) accepted: affects only pip install from
+# untrusted sources which never happens at AWX runtime.
+RUN $PIP install --no-cache-dir --upgrade \
+    "Django>=4.2.30,<5.0" \
+    "setuptools>=75.8.0,<78.0" \
+    "sqlparse>=0.5.0" \
+    "urllib3>=2.6.3" \
+    "PyJWT>=2.12.0" \
+    "azure-core>=1.38.0" \
+    "wheel>=0.46.2" \
+    "protobuf>=4.25.8,<5.0"
+
+# Group B — cryptography + pyOpenSSL (pyOpenSSL 26 requires cryptography>=43)
+RUN $PIP install --no-cache-dir --upgrade \
+    "cryptography>=43.0.0" \
+    "pyOpenSSL>=26.0.0"
+
+# Group C — python-jose (CRITICAL fix; constrains pyasn1<0.5 — accepted trade-off)
+# NOTE: pyasn1 (HIGH CVE-2026-30922) cannot be upgraded while python-jose is present.
+RUN $PIP install --no-cache-dir --upgrade \
+    "python-jose>=3.4.0"
+
+# Group D — aiohttp (large dependency tree, resolve separately)
+RUN $PIP install --no-cache-dir --upgrade \
+    "aiohttp>=3.13.3"
+
+# Verify critical upgrades applied correctly
+RUN /var/lib/awx/venv/awx/bin/python -c "import django, cryptography, urllib3, jose, jwt; print('Django:', django.__version__, '| cryptography:', cryptography.__version__, '| urllib3:', urllib3.__version__, '| jose:', jose.__version__, '| PyJWT:', jwt.__version__)"

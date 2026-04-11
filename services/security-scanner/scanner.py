@@ -68,8 +68,8 @@ def _build_image_list() -> list[tuple[str, str]]:
     return [
         ("ghcr.io/ansible/awx", settings.awx_version),
         ("quay.io/ansible/receptor", "latest"),
-        ("postgres", "15-alpine"),
-        ("redis", "7-alpine"),
+        ("postgres", "15.17-alpine"),
+        ("redis", "7.4.8-alpine"),
         ("prom/prometheus", "latest"),
         ("grafana/grafana", "latest"),
         ("prom/alertmanager", "latest"),
@@ -133,8 +133,9 @@ async def _scan_image(image: str, tag: str) -> None:
     cmd = [
         "trivy", "image",
         "--format", "json",
-        "--exit-code", "0",   # never exit non-zero on findings
+        "--exit-code", "0",      # never exit non-zero on findings
         "--no-progress",
+        "--scanners", "vuln",    # vulnerability only — skip secret scanning (much faster)
         "--cache-dir", settings.trivy_cache_dir,
         "--timeout", f"{settings.trivy_timeout}s",
         full_ref,

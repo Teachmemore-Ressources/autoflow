@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     # ── Trivy ─────────────────────────────────────────────────────────────────
     trivy_cache_dir: str = "/home/autoflow/.cache/trivy"
     # Max seconds to wait for a single image scan before aborting
-    trivy_timeout: int = 120
+    # AWX image is ~2GB and needs more time; 300s (5min) is safe
+    trivy_timeout: int = 300
 
     # ── External API credentials ──────────────────────────────────────────────
     # Optional GitHub PAT — increases rate limit from 60 to 5000 req/hr
