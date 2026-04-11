@@ -15,6 +15,7 @@ volumes:
   receptor_run:         # shared socket dir between receptor ↔ awx_task
   prometheus_data:
   grafana_data:
+  trivy_db:             # Trivy vulnerability DB cache (persisted across restarts)
 
 # ── Shared environment anchors ───────────────────────────────
 
@@ -489,6 +490,56 @@ services:
         reservations:
           cpus: '0.01'
           memory: 16M
+
+  # ── Security Scanner ────────────────────────
+  # Runs Trivy CVE scans on all stack images and checks for newer image versions.
+  # Exposes results as Prometheus metrics at /metrics (port 8002).
+  # Requires the host Docker socket (read-only) to scan local images.
+  # IMPORTANT: set DOCKER_GID in .env to the GID of /var/run/docker.sock on the host:
+  #   stat -c '%g' /var/run/docker.sock
+  security_scanner:
+    build:
+      context: ./services/security-scanner
+      dockerfile: Dockerfile
+      args:
+        TRIVY_VERSION: "${TRIVY_VERSION:-0.63.0}"
+    container_name: autoflow_security_scanner
+    restart: unless-stopped
+    environment:
+      SCAN_INTERVAL:            ${SCAN_INTERVAL:-21600}
+      VERSION_CHECK_INTERVAL:   ${VERSION_CHECK_INTERVAL:-3600}
+      GITHUB_TOKEN:             ${GITHUB_TOKEN:-}
+      DOCKERHUB_USER:           ${DOCKERHUB_USER:-}
+      DOCKERHUB_PASSWORD:       ${DOCKERHUB_PASSWORD:-}
+      TRIVY_CACHE_DIR:          /home/autoflow/.cache/trivy
+      TRIVY_TIMEOUT:            ${TRIVY_TIMEOUT:-120}
+      AWX_VERSION:              ${AWX_VERSION:-24.6.1}
+      LOG_LEVEL:                ${LOG_LEVEL:-info}
+      RATE_LIMIT:               ${RATE_LIMIT:-60/minute}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - trivy_db:/home/autoflow/.cache/trivy
+    group_add:
+      - "${DOCKER_GID:-998}"
+    ports:
+      - "${SECURITY_SCANNER_PORT:-8002}:8002"
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    <<: *log-default
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
 
   # ── Alertmanager ─────────────────────────────
   # Receives firing alerts from Prometheus and routes them to the Autoflow

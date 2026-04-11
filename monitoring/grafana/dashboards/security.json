@@ -1,0 +1,588 @@
+{
+  "uid": "autoflow-security",
+  "title": "Security Overview",
+  "description": "Trivy CVE scan results and image version status for the Autoflow stack.",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["security", "autoflow"],
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Security Summary",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+
+    {
+      "id": 2,
+      "title": "Critical CVEs",
+      "description": "Total CRITICAL vulnerabilities across all scanned images",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(trivy_vulnerabilities_total{severity=\"CRITICAL\"}) or vector(0)",
+          "legendFormat": "Critical CVEs",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "mappings": [],
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 3,
+      "title": "High CVEs",
+      "description": "Total HIGH vulnerabilities across all scanned images",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(trivy_vulnerabilities_total{severity=\"HIGH\"}) or vector(0)",
+          "legendFormat": "High CVEs",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "mappings": [],
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 4,
+      "title": "Outdated Images",
+      "description": "Number of images running behind the latest available version",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(image_version_outdated) or vector(0)",
+          "legendFormat": "Outdated",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          },
+          "mappings": [],
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 5,
+      "title": "Scanner Health",
+      "description": "1 = last scan cycle completed successfully",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "security_scanner_healthy",
+          "legendFormat": "Health",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Vulnerability Breakdown",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+    },
+
+    {
+      "id": 11,
+      "title": "CVEs by Image and Severity",
+      "description": "Stacked bar showing vulnerability counts per image, coloured by severity",
+      "type": "barchart",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"CRITICAL\"} > 0 or trivy_vulnerabilities_total{severity=\"CRITICAL\"} == 0",
+          "legendFormat": "CRITICAL — {{image}}",
+          "refId": "A"
+        },
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"HIGH\"} > 0 or trivy_vulnerabilities_total{severity=\"HIGH\"} == 0",
+          "legendFormat": "HIGH — {{image}}",
+          "refId": "B"
+        },
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"MEDIUM\"} > 0 or trivy_vulnerabilities_total{severity=\"MEDIUM\"} == 0",
+          "legendFormat": "MEDIUM — {{image}}",
+          "refId": "C"
+        },
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"LOW\"} > 0 or trivy_vulnerabilities_total{severity=\"LOW\"} == 0",
+          "legendFormat": "LOW — {{image}}",
+          "refId": "D"
+        }
+      ],
+      "options": {
+        "xField": "Time",
+        "stacking": "normal",
+        "fillOpacity": 80,
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "stacking": { "mode": "normal", "group": "A" } }
+        },
+        "overrides": [
+          { "matcher": { "id": "byNamePattern", "options": "^CRITICAL" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "dark-red" } }] },
+          { "matcher": { "id": "byNamePattern", "options": "^HIGH" },     "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byNamePattern", "options": "^MEDIUM" },   "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+          { "matcher": { "id": "byNamePattern", "options": "^LOW" },      "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 12,
+      "title": "Critical CVEs Over Time",
+      "description": "Trend of CRITICAL vulnerabilities per image across scan cycles",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"CRITICAL\"}",
+          "legendFormat": "{{image}}:{{tag}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "dark-red" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "dark-red", "value": null }]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 13,
+      "title": "High + Medium CVEs Over Time",
+      "description": "Trend of HIGH and MEDIUM vulnerabilities per image",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"HIGH\"}",
+          "legendFormat": "HIGH — {{image}}:{{tag}}",
+          "refId": "A"
+        },
+        {
+          "expr": "trivy_vulnerabilities_total{severity=\"MEDIUM\"}",
+          "legendFormat": "MEDIUM — {{image}}:{{tag}}",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 5 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byNamePattern", "options": "^HIGH" },   "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byNamePattern", "options": "^MEDIUM" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Scan Details",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }
+    },
+
+    {
+      "id": 21,
+      "title": "Scan Age per Image",
+      "description": "How long ago each image was last scanned (lower is fresher)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "time() - trivy_last_scan_timestamp_seconds",
+          "legendFormat": "{{image}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "sortBy": [{ "displayName": "Value", "desc": true }]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "displayMode": "color-background" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 21600 },
+              { "color": "red", "value": 43200 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "transformations": [
+        { "id": "sortBy", "options": { "fields": [{ "displayName": "Value", "desc": true }] } }
+      ]
+    },
+
+    {
+      "id": 22,
+      "title": "Scan Duration per Image",
+      "description": "How long the last Trivy scan took per image",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 8, "x": 10, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "trivy_scan_duration_seconds",
+          "legendFormat": "{{image}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "displayMode": "gradient",
+        "valueMode": "color"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 90 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 23,
+      "title": "Scan Errors",
+      "description": "Cumulative Trivy scan failures per image",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(trivy_scan_errors_total) or vector(0)",
+          "legendFormat": "Total Errors",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Image Version Status",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 }
+    },
+
+    {
+      "id": 31,
+      "title": "Version Status",
+      "description": "Current vs latest version for each image. Pinned images using 'latest' tag are excluded from comparison.",
+      "type": "table",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "image_version_outdated",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": {
+              "image": "Image",
+              "current_version": "Running",
+              "latest_version": "Latest",
+              "Value": "Status"
+            },
+            "indexByName": { "image": 0, "current_version": 1, "latest_version": 2, "Value": 3 }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "displayMode": "auto" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "0": { "text": "UP TO DATE", "color": "green" } } },
+                  { "type": "value", "options": { "1": { "text": "OUTDATED",   "color": "red"   } } }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "color", "value": { "mode": "thresholds" } },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red",   "value": 1 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 32,
+      "title": "Last Version Check",
+      "description": "Time elapsed since the last version check cycle completed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "time() - version_last_check_timestamp_seconds",
+          "legendFormat": "Age",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 3600 },
+              { "color": "red",    "value": 7200 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 33,
+      "title": "Version Check Errors",
+      "description": "Cumulative API failures during version checks (GitHub / DockerHub rate limits, network errors)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(version_check_errors_total) or vector(0)",
+          "legendFormat": "Errors",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Scanner Internals",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "panels": [
+        {
+          "id": 41,
+          "title": "Scanner HTTP Request Rate",
+          "description": "FastAPI request throughput on the security_scanner service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "rate(http_request_duration_seconds_count{job=\"security_scanner\"}[5m])",
+              "legendFormat": "{{handler}} {{method}}",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "lineWidth": 1, "fillOpacity": 10 }
+            }
+          }
+        }
+      ]
+    }
+
+  ]
+}
