@@ -20,6 +20,15 @@ FROM ghcr.io/ansible/awx:${AWX_VERSION}
 
 USER root
 
+# ── OS-level security patches ─────────────────────────────────────────────────
+# AWX is based on CentOS Stream 9 — use dnf to upgrade system packages.
+# --security flag limits upgrades to packages with published CVE advisories only,
+# reducing the risk of compatibility breaks from unrelated updates.
+# nobest + skip-broken: tolerate packages that can't be upgraded due to deps.
+RUN dnf upgrade --security -y --nobest --skip-broken && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
+
 # Upgrade Python packages with known CVEs to their minimum safe versions.
 # Constraints are intentionally conservative — we go to the lowest version
 # that fixes the CVE, not the latest, to reduce risk of compatibility breaks.

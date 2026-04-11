@@ -67,3 +67,10 @@ scrape_configs:
     static_configs:
       - targets: ['security_scanner:8002']
     metrics_path: /metrics
+
+  # Gitea — repository, user, and CI metrics
+  - job_name: gitea
+    static_configs:
+      - targets: ['gitea:3001']
+    metrics_path: /metrics
+    bearer_token: "4ccdb295528a9454706ed41d4008d6cb"

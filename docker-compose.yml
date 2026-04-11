@@ -16,6 +16,8 @@ volumes:
   prometheus_data:
   grafana_data:
   trivy_db:             # Trivy vulnerability DB cache (persisted across restarts)
+  gitea_data:           # Gitea repositories + config
+  gitea_postgres_data:  # Dedicated PostgreSQL instance for Gitea
 
 # ── Shared environment anchors ───────────────────────────────
 
@@ -536,6 +538,99 @@ services:
       resources:
         limits:
           cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  # ── Gitea PostgreSQL ─────────────────────────
+  # Dedicated PostgreSQL for Gitea — isolated from the AWX database so that
+  # a Gitea issue never impacts AWX and vice-versa.
+  gitea_postgres:
+    image: postgres:15.17-alpine
+    container_name: autoflow_gitea_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${GITEA_DB_NAME:-gitea}
+      POSTGRES_USER:     ${GITEA_DB_USER:-gitea}
+      POSTGRES_PASSWORD: ${GITEA_DB_PASSWORD:-change_me_gitea_db}
+    volumes:
+      - gitea_postgres_data:/var/lib/postgresql/data
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GITEA_DB_USER:-gitea} -d ${GITEA_DB_NAME:-gitea}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    <<: *log-default
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # ── Gitea ─────────────────────────────────────
+  # Self-hosted Git service for storing and versioning Ansible playbooks,
+  # roles, and EE definitions. AWX can pull directly from Gitea via its
+  # "Source Control" credential + project sync feature.
+  gitea:
+    image: gitea/gitea:1.23-rootless
+    container_name: autoflow_gitea
+    restart: unless-stopped
+    depends_on:
+      gitea_postgres:
+        condition: service_healthy
+    environment:
+      # ── Instance ──────────────────────────────
+      GITEA__server__DOMAIN:            ${GITEA_DOMAIN:-localhost}
+      GITEA__server__HTTP_PORT:         "3001"
+      GITEA__server__ROOT_URL:          ${GITEA_ROOT_URL:-http://localhost:3001}
+      GITEA__server__SSH_DOMAIN:        ${GITEA_DOMAIN:-localhost}
+      GITEA__server__SSH_PORT:          "${GITEA_SSH_PORT:-2222}"
+      GITEA__server__START_SSH_SERVER:  "true"
+      # ── Database ──────────────────────────────
+      GITEA__database__DB_TYPE:    postgres
+      GITEA__database__HOST:       gitea_postgres:5432
+      GITEA__database__NAME:       ${GITEA_DB_NAME:-gitea}
+      GITEA__database__USER:       ${GITEA_DB_USER:-gitea}
+      GITEA__database__PASSWD:     ${GITEA_DB_PASSWORD:-change_me_gitea_db}
+      # ── Security ──────────────────────────────
+      GITEA__security__SECRET_KEY:          ${GITEA_SECRET_KEY:-change_me_gitea_secret}
+      GITEA__security__INTERNAL_TOKEN:      ${GITEA_INTERNAL_TOKEN:-change_me_gitea_internal}
+      GITEA__security__INSTALL_LOCK:        "true"   # skip the web installer
+      # ── Admin account (created on first start) ─
+      GITEA__admin__DEFAULT_THEME:          "gitea-dark"
+      GITEA__admin__DISABLE_REGISTRATION:   "true"   # only admin can create users
+      # ── Metrics (Prometheus) ──────────────────
+      GITEA__metrics__ENABLED:       "true"
+      GITEA__metrics__TOKEN:         ${GITEA_METRICS_TOKEN:-change_me_metrics_token}
+      # ── Mailer (disabled by default) ──────────
+      GITEA__mailer__ENABLED:        "false"
+      # ── Logging ───────────────────────────────
+      GITEA__log__LEVEL:             ${GITEA_LOG_LEVEL:-Warn}
+    volumes:
+      - gitea_data:/var/lib/gitea
+    ports:
+      - "${GITEA_HTTP_PORT:-3001}:3001"
+      - "${GITEA_SSH_PORT:-2222}:2222"
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3001/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    <<: *log-default
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
           memory: 512M
         reservations:
           cpus: '0.05'
