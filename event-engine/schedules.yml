@@ -1,0 +1,56 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Autoflow Event Engine — Scheduled Events
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# Each entry fires a synthetic event on a cron schedule (UTC).
+# The event is processed by rules.yml exactly like a webhook — with dedup
+# and routing to the matching AWX job template.
+#
+# Fields
+# ──────
+#   name    – unique job ID (string, required)
+#   cron    – standard 5-field cron expression, UTC
+#   source  – event source label  (default: "scheduler")
+#   action  – event action label  (default: "scheduled")
+#   data    – arbitrary dict, passed as extra_vars to the matched template
+#
+# Hot-reload: POST /admin/schedules/reload (no container restart needed)
+# ──────────────────────────────────────────────────────────────────────────────
+
+schedules:
+
+  # ── Daily health check ─────────────────────────────────────────────────────
+  - name: daily-health-check
+    cron: "0 6 * * *"
+    source: scheduler
+    action: health-check
+    data:
+      environment: production
+      check_type: full
+
+  # ── Weekly compliance scan (Sundays at 02:00 UTC) ─────────────────────────
+  - name: weekly-compliance-scan
+    cron: "0 2 * * 0"
+    source: scheduler
+    action: compliance-scan
+    data:
+      scope: all
+      generate_report: "true"
+
+  # ── Certificate expiry check every 15 minutes ────────────────────────────
+  - name: cert-expiry-check
+    cron: "*/15 * * * *"
+    source: scheduler
+    action: cert-check
+    data:
+      threshold_days: 30
+      notify_on_expiry: "true"
+
+  # ── Nightly backup at 03:30 UTC ───────────────────────────────────────────
+  - name: nightly-backup
+    cron: "30 3 * * *"
+    source: scheduler
+    action: backup
+    data:
+      target: postgres
+      retention_days: 7

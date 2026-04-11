@@ -1,0 +1,85 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Alertmanager configuration
+#
+# Routing:
+#   critical → autoflow_engine + slack_critical  (if SLACK_WEBHOOK_URL set)
+#   warning  → autoflow_engine
+#   default  → autoflow_engine
+#
+# To enable Slack: set SLACK_WEBHOOK_URL in your .env and uncomment the
+# slack_configs sections below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  resolve_timeout: 5m
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertmanager@autoflow.local'
+
+# ── Inhibit rules ─────────────────────────────────────────────────────────────
+# Suppress warning-level alerts when a critical alert for the same resource
+# is already firing.
+inhibit_rules:
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: [alertname, instance]
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+# templates:
+#   - '/etc/alertmanager/templates/*.tmpl'
+
+# ── Routing tree ──────────────────────────────────────────────────────────────
+route:
+  # Default receiver catches everything not matched by a child route
+  receiver: autoflow_engine
+  group_by: [alertname, severity]
+  group_wait:      30s    # Wait before sending the first notification
+  group_interval:  5m     # Wait before sending a notification for new alerts
+  repeat_interval: 4h     # Re-send if still firing after this duration
+
+  routes:
+    # Critical alerts: route to Autoflow engine AND Slack (if configured)
+    - matchers:
+        - severity = critical
+      receiver: autoflow_engine_critical
+      group_wait:      10s
+      repeat_interval: 1h
+      continue: false
+
+    # Warning alerts: route to Autoflow engine only
+    - matchers:
+        - severity = warning
+      receiver: autoflow_engine
+      repeat_interval: 2h
+      continue: false
+
+# ── Receivers ─────────────────────────────────────────────────────────────────
+receivers:
+
+  # Sends ALL alerts (firing + resolved) to the Autoflow event engine webhook.
+  # The event engine rule file maps alertname/severity to the correct playbook.
+  - name: autoflow_engine
+    webhook_configs:
+      - url: "http://event_engine:8001/webhook/alertmanager"
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+  # Critical receiver: event engine + optional Slack
+  - name: autoflow_engine_critical
+    webhook_configs:
+      - url: "http://event_engine:8001/webhook/alertmanager"
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: "${SLACK_WEBHOOK_URL}"
+    #     channel: "#alerts-critical"
+    #     send_resolved: true
+    #     title: '{{ if eq .Status "firing" }}🔴 CRITICAL{{ else }}✅ RESOLVED{{ end }}: {{ .CommonLabels.alertname }}'
+    #     text: >-
+    #       {{ range .Alerts }}
+    #       *Alert:* {{ .Labels.alertname }}
+    #       *Summary:* {{ .Annotations.summary }}
+    #       *Description:* {{ .Annotations.description }}
+    #       *Severity:* {{ .Labels.severity }}
+    #       {{ end }}

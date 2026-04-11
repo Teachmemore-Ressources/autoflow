@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Autoflow Event Engine — Routing Rules
+#
+# Rules are evaluated top-to-bottom; the FIRST match wins.
+# If no rule matches, the event is sent to the default template defined by
+# AWX_JOB_TEMPLATE_ID in the environment.
+#
+# Rule schema
+# ───────────
+# name: str                    Human-readable label (for logs)
+# match:                       All conditions must be true (AND logic)
+#   source: str                Exact match on event.source
+#   action: str                Exact match on event.action  (supports "prefix*")
+#   <dotted.path>: value       Any flattened key from event.data
+# job_template_id: int         AWX job template to launch
+# extra_vars:                  Static key/value pairs injected into AWX
+#   key: value
+# extra_vars_from_data:        Map event.data paths → AWX extra_var keys
+#   awx_var: data.dotted.path
+# ─────────────────────────────────────────────────────────────────────────────
+
+rules:
+
+  # ── GitHub: push to main branch → deploy production ────────────────────────
+  - name: "GitHub push to main → deploy prod"
+    match:
+      source: "github"
+      action: "push"
+      ref:    "refs/heads/main"
+    job_template_id: 7        # replace with your Deploy template ID
+    extra_vars:
+      environment: "production"
+    extra_vars_from_data:
+      git_repo:   "repository.full_name"
+      git_commit: "head_commit.id"
+      git_author: "head_commit.author"
+
+  # ── GitHub: push to develop → deploy staging ───────────────────────────────
+  - name: "GitHub push to develop → deploy staging"
+    match:
+      source: "github"
+      action: "push"
+      ref:    "refs/heads/develop"
+    job_template_id: 8        # replace with your Staging Deploy template ID
+    extra_vars:
+      environment: "staging"
+    extra_vars_from_data:
+      git_repo:   "repository.full_name"
+      git_commit: "head_commit.id"
+
+  # ── GitHub: release published → tag-based deploy ───────────────────────────
+  - name: "GitHub release published → production release"
+    match:
+      source: "github"
+      action: "published"
+    job_template_id: 7
+    extra_vars:
+      environment: "production"
+      is_release:  "true"
+    extra_vars_from_data:
+      release_tag:  "release.tag_name"
+      release_name: "release.name"
+      git_repo:     "repository.full_name"
+
+  # ── Alertmanager: critical alert firing → auto-remediation ─────────────────
+  - name: "Critical alert firing → remediation playbook"
+    match:
+      source:   "alertmanager"
+      action:   "firing"
+      severity: "critical"
+    job_template_id: 10       # replace with your Remediation template ID
+    extra_vars:
+      trigger: "alert"
+    extra_vars_from_data:
+      alert_name: "alertname"
+      alert_summary: "summary"
+
+  # ── Alertmanager: warning alert firing → notify only ──────────────────────
+  - name: "Warning alert firing → notification job"
+    match:
+      source:   "alertmanager"
+      action:   "firing"
+      severity: "warning"
+    job_template_id: 11       # replace with your Notification template ID
+    extra_vars_from_data:
+      alert_name:    "alertname"
+      alert_summary: "summary"
+
+  # ── Generic deploy event from internal CI ──────────────────────────────────
+  - name: "Internal CI deploy event"
+    match:
+      source: "ci"
+      action: "deploy"
+    job_template_id: 7
+    extra_vars_from_data:
+      environment: "data.env"
+      application: "data.app"
+
+  # ── Catch-all: any event from monitoring systems ───────────────────────────
+  - name: "Any monitoring event → audit job"
+    match:
+      source: "monitoring"
+    job_template_id: 12       # replace with your Audit template ID
+    extra_vars_from_data:
+      alert_name: "alertname"

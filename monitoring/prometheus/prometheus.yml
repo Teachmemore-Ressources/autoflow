@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────
+# Prometheus – Scrape Configuration for Autoflow
+# ─────────────────────────────────────────────────────────────
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+  external_labels:
+    environment: autoflow
+
+# ── Alerting ──────────────────────────────────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# ── Rule files ────────────────────────────────────────────────
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# ── Scrape jobs ───────────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Autoflow FastAPI – exposes /metrics via prometheus-fastapi-instrumentator
+  - job_name: autoflow_api
+    static_configs:
+      - targets: ['api:8000']
+    metrics_path: /metrics
+
+  # Autoflow Event Engine
+  - job_name: event_engine
+    static_configs:
+      - targets: ['event_engine:8001']
+    metrics_path: /metrics
+
+  # PostgreSQL exporter
+  # (awx_web intentionally omitted — AWX does not expose a /metrics endpoint)
+  - job_name: postgres
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+
+  # Redis exporter
+  - job_name: redis
+    static_configs:
+      - targets: ['redis_exporter:9121']
+
+  # Grafana self-monitoring
+  - job_name: grafana
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: /metrics
+
+  # Alertmanager self-monitoring
+  - job_name: alertmanager
+    static_configs:
+      - targets: ['alertmanager:9093']
+    metrics_path: /metrics

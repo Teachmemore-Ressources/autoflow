@@ -1,0 +1,174 @@
+groups:
+
+  # ── Autoflow API ─────────────────────────────────────────────────────────────
+  - name: autoflow_api
+    interval: 30s
+    rules:
+
+      - alert: AutoflowAPIDown
+        expr: up{job="autoflow_api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Autoflow API is down"
+          description: "The Autoflow FastAPI service has been unreachable for more than 1 minute."
+
+      - alert: AutoflowAPIHighErrorRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{job="autoflow_api", status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_request_duration_seconds_count{job="autoflow_api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Autoflow API high error rate (>5%)"
+          description: "More than 5% of requests to the Autoflow API are returning 5xx errors over the last 5 minutes."
+
+      - alert: AutoflowAPISlowResponses
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="autoflow_api"}[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Autoflow API p95 latency above 2s"
+          description: "The 95th percentile response time of the Autoflow API has exceeded 2 seconds for 5 minutes."
+
+  # ── AWX Web ──────────────────────────────────────────────────────────────────
+  - name: awx
+    interval: 30s
+    rules:
+
+      - alert: AWXWebDown
+        expr: up{job="awx_web"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AWX web service is down"
+          description: "AWX web has been unreachable for more than 2 minutes. Automation is impaired."
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  - name: postgresql
+    interval: 30s
+    rules:
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter is down"
+          description: "Cannot scrape PostgreSQL metrics. The database may be down."
+
+      - alert: PostgreSQLTooManyConnections
+        expr: |
+          pg_stat_activity_count{datname!~"template.*|postgres"}
+          > pg_settings_max_connections * 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections above 80% of max"
+          description: "{{ $value }} active connections — close to the max_connections limit."
+
+      - alert: PostgreSQLHighReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag > 30s"
+          description: "Replication lag is {{ $value }}s."
+
+      - alert: PostgreSQLDeadlocks
+        expr: rate(pg_stat_database_deadlocks{datname!~"template.*|postgres"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "Database {{ $labels.datname }} is experiencing deadlocks."
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - name: redis
+    interval: 30s
+    rules:
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis exporter is down"
+          description: "Cannot scrape Redis metrics. AWX task queuing may be impaired."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 85%"
+          description: "Redis is using {{ $value | humanizePercentage }} of its max memory."
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is rejecting connections"
+          description: "Redis rejected {{ $value }} connection(s) in the last 5 minutes."
+
+  # ── Host / Node ───────────────────────────────────────────────────────────────
+  - name: host
+    interval: 60s
+    rules:
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage has been above 90% for 10 minutes."
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 90% ({{ $value | humanizePercentage }})."
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} has less than 15% free."
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} has less than 5% free — immediate action required."

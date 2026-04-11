@@ -1,17 +1,18 @@
-# ─────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Autoflow – Makefile
-# ─────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 COMPOSE   = docker compose
 SERVICES  =
 
-.PHONY: help start stop restart logs status build pull setup
+.PHONY: help start stop restart logs status build pull setup \
+        backup restore monitoring-up monitoring-down
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-# ── Lifecycle ────────────────────────────────────────────
+# ── Lifecycle ────────────────────────────────────────────────
 
 start:          ## Start all services in detached mode
 	$(COMPOSE) up -d $(SERVICES)
@@ -22,7 +23,7 @@ stop:           ## Stop all services
 restart:        ## Restart all (or specific) services  (e.g. make restart SERVICES=api)
 	$(COMPOSE) restart $(SERVICES)
 
-# ── Build / Update ───────────────────────────────────────
+# ── Build / Update ───────────────────────────────────────────
 
 build:          ## Rebuild images (without cache)
 	$(COMPOSE) build --no-cache $(SERVICES)
@@ -30,7 +31,7 @@ build:          ## Rebuild images (without cache)
 pull:           ## Pull latest upstream images
 	$(COMPOSE) pull
 
-# ── Observability ────────────────────────────────────────
+# ── Observability ────────────────────────────────────────────
 
 logs:           ## Tail logs for all (or specific) services  (e.g. make logs SERVICES=api)
 	$(COMPOSE) logs -f --tail=100 $(SERVICES)
@@ -38,7 +39,28 @@ logs:           ## Tail logs for all (or specific) services  (e.g. make logs SER
 status:         ## Show running containers and health
 	$(COMPOSE) ps
 
-# ── Setup ────────────────────────────────────────────────
+monitoring-up:  ## Start only the monitoring stack (Prometheus + Grafana + Alertmanager + exporters)
+	$(COMPOSE) up -d prometheus grafana alertmanager postgres_exporter redis_exporter
+
+monitoring-down: ## Stop the monitoring stack
+	$(COMPOSE) stop prometheus grafana alertmanager postgres_exporter redis_exporter
+
+# ── Backup / Restore ─────────────────────────────────────────
+
+backup:         ## Backup PostgreSQL and Redis data  (output: ./backups/<timestamp>/)
+	@bash scripts/backup.sh
+
+restore:        ## Restore from a backup  (e.g. make restore BACKUP=./backups/2024-01-01_12-00-00)
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "Usage: make restore BACKUP=./backups/<timestamp>"; \
+		echo ""; \
+		echo "Available backups:"; \
+		ls -1t backups/ 2>/dev/null | head -20 | sed 's/^/  /' || echo "  (none)"; \
+	else \
+		bash scripts/restore.sh "$(BACKUP)"; \
+	fi
+
+# ── Setup ────────────────────────────────────────────────────
 
 setup:          ## Bootstrap: copy .env.example → .env (skips if .env already exists)
 	@if [ ! -f .env ]; then \
@@ -51,7 +73,7 @@ setup:          ## Bootstrap: copy .env.example → .env (skips if .env already 
 		echo "  .env already exists – skipping."; \
 	fi
 
-# ── Utilities ────────────────────────────────────────────
+# ── Utilities ────────────────────────────────────────────────
 
 shell:          ## Open a shell in a running container  (e.g. make shell SERVICES=api)
 	$(COMPOSE) exec $(or $(SERVICES),api) /bin/sh
