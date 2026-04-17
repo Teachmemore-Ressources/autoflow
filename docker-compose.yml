@@ -8,6 +8,7 @@ networks:
     name: autoflow_net
 
 volumes:
+  pki_data:
   postgres_data:
   redis_data:
   awx_projects:
@@ -721,3 +722,80 @@ services:
         reservations:
           cpus: '0.01'
           memory: 16M
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Autoflow PKI Service — Add to your docker-compose.yml
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 1. Copy the `services/pki/` directory alongside your existing services/
+# 2. Add the block below to your docker-compose.yml `services:` section
+# 3. Add `pki_data:` to your `volumes:` section
+# 4. Add the Prometheus scrape job (see prometheus-scrape-job.yml)
+# 5. Copy the Grafana dashboard files to your monitoring/ tree
+# 6. Add PKI_PORT to your .env (default 8004)
+# ─────────────────────────────────────────────────────────────────────────────
+
+  # ── Autoflow PKI (Certificate Authority) ────────────────────────────────
+  # Self-hosted PKI with web UI, REST API, wildcard cert support,
+  # expiry tracking, revocation, renewal and Prometheus metrics.
+  # Web UI:  http://localhost:<PKI_PORT>/ui
+  # API:     http://localhost:<PKI_PORT>/api/
+  # Metrics: http://localhost:<PKI_PORT>/metrics
+  pki:
+    build:
+      context: ./services/pki
+      dockerfile: Dockerfile
+    container_name: autoflow_pki
+    restart: unless-stopped
+    environment:
+      PKI_DATA_DIR:   /data/pki
+      LOG_LEVEL:      ${LOG_LEVEL:-info}
+    volumes:
+      - pki_data:/data/pki
+    ports:
+      - "${PKI_PORT:-8004}:8004"
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Add to your volumes: section
+# ─────────────────────────────────────────────────────────────────────────────
+# volumes:
+#   pki_data:          # PKI certificates, keys and database
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Add to your .env file
+# ─────────────────────────────────────────────────────────────────────────────
+# PKI_PORT=8004
+
+# ─────────────────────────────────────────────────────────────────────────────
+# prometheus-scrape-job.yml — add to monitoring/prometheus/prometheus.yml
+# under the `scrape_configs:` section
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   - job_name: 'autoflow-pki'
+#     static_configs:
+#       - targets: ['pki:8004']
+#     metrics_path: /metrics
+#     scrape_interval: 30s
+

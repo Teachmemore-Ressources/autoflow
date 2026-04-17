@@ -80,3 +80,9 @@ scrape_configs:
     static_configs:
       - targets: ['ee_builder:8003']
     metrics_path: /metrics
+
+# metric for pki
+  - job_name: 'autoflow-pki'
+    static_configs:
+      - targets: ['pki:8004']
+    metrics_path: /metrics

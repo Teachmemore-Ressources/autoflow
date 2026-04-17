@@ -1,0 +1,707 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "Source de données Prometheus autoflow",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    },
+    {
+      "name": "DS_POSTGRESQL",
+      "label": "PostgreSQL PKI",
+      "description": "Base de données PKI",
+      "type": "datasource",
+      "pluginId": "postgres",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "datasource", "id": "postgres", "name": "PostgreSQL", "version": "1.0.0" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "table", "name": "Table", "version": "" },
+    { "type": "panel", "id": "gauge", "name": "Gauge", "version": "" },
+    { "type": "panel", "id": "barchart", "name": "Bar chart", "version": "" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "text", "name": "Text", "version": "" }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Monitoring PKI — Inventaire des certificats, expirations, révocations et santé de la CA",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "📊 Synthèse globale",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT total_active AS \"Certificats actifs\" FROM v_dashboard_stats",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Certificats actifs",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT expiring_7d AS \"Expirent dans 7j\" FROM v_dashboard_stats",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "⚠️ Expirent dans 7 jours",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT expiring_30d AS \"Expirent dans 30j\" FROM v_dashboard_stats",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Expirent dans 30 jours",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT total_revoked AS \"Révoqués\" FROM v_dashboard_stats",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Révoqués (total)",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT issued_last_24h AS \"Émis (24h)\" FROM v_dashboard_stats",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Émis dernières 24h",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 95 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "x509_cert_expiry_seconds{filepath=~\".*ca.*\"} / (365*24*3600) * 100",
+          "refId": "A",
+          "legendFormat": "CA Root"
+        }
+      ],
+      "title": "Santé CA (durée vie restante)",
+      "type": "stat"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "🚨 Certificats critiques — action requise",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": { "type": "auto" },
+            "filterable": true,
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Jours restants" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "orange", "value": 7 },
+                    { "color": "yellow", "value": 14 },
+                    { "color": "green", "value": 30 }
+                  ]
+                }
+              },
+              { "id": "unit", "value": "d" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "État" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "critical": { "color": "red", "index": 0, "text": "🔴 Critique" } }, "type": "value" },
+                  { "options": { "warning": { "color": "orange", "index": 1, "text": "🟠 Attention" } }, "type": "value" },
+                  { "options": { "soon": { "color": "yellow", "index": 2, "text": "🟡 Bientôt" } }, "type": "value" },
+                  { "options": { "ok": { "color": "green", "index": 3, "text": "🟢 OK" } }, "type": "value" },
+                  { "options": { "expired": { "color": "dark-red", "index": 4, "text": "💀 Expiré" } }, "type": "value" }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-text" }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "Jours restants" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  common_name AS \"Nom commun\",\n  array_to_string(subject_alt_names, ', ') AS \"SANs\",\n  ROUND(days_remaining::numeric, 1) AS \"Jours restants\",\n  expiry_state AS \"État\",\n  not_after AS \"Expire le\",\n  cert_type AS \"Type\",\n  COALESCE(team, '—') AS \"Équipe\",\n  COALESCE(environment, '—') AS \"Environnement\",\n  COALESCE(service, '—') AS \"Service\",\n  COALESCE(owner, '—') AS \"Propriétaire\",\n  CASE WHEN auto_renew THEN '✅' ELSE '—' END AS \"Auto-renouvellement\"\nFROM v_certificates_expiry\nWHERE expiry_state IN ('critical', 'warning', 'expired', 'soon')\nORDER BY days_remaining ASC\nLIMIT 100",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Certificats arrivant à expiration (≤ 90 jours)",
+      "type": "table"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 102,
+      "title": "�� Inventaire complet",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": { "type": "auto" },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Jours restants" },
+            "properties": [
+              { "id": "unit", "value": "d" },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "basic" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "dark-red", "value": null },
+                    { "color": "red", "value": 0 },
+                    { "color": "orange", "value": 7 },
+                    { "color": "yellow", "value": 30 },
+                    { "color": "green", "value": 90 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 17 },
+      "id": 11,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": true, "fields": "", "reducer": ["sum"], "show": true },
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "Jours restants" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  common_name AS \"Nom commun\",\n  cert_type AS \"Type\",\n  status AS \"Statut\",\n  ROUND(days_remaining::numeric, 0) AS \"Jours restants\",\n  not_before AS \"Valide depuis\",\n  not_after AS \"Expire le\",\n  COALESCE(team, '—') AS \"Équipe\",\n  COALESCE(environment, '—') AS \"Env\",\n  COALESCE(service, '—') AS \"Service\",\n  template_name AS \"Template\",\n  issued_by_name AS \"Émis par\"\nFROM v_certificates_expiry\nWHERE ($__timeFilter(not_after) OR $__timeFilter(not_before))\nORDER BY days_remaining ASC",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Inventaire complet des certificats",
+      "type": "table"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 103,
+      "title": "📈 Tendances et activité",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "auto"
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "id": 20,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('day', issued_at) AS time,\n  COUNT(*) AS \"Certificats émis\"\nFROM certificates\nWHERE $__timeFilter(issued_at)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "title": "Émissions de certificats dans le temps",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 80 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "id": 21,
+      "options": {
+        "barRadius": 0.1,
+        "groupWidth": 0.7,
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "orientation": "auto",
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COALESCE(environment, 'non défini') AS \"Environnement\",\n  COUNT(*) FILTER (WHERE expiry_state = 'ok')       AS \"OK\",\n  COUNT(*) FILTER (WHERE expiry_state = 'soon')     AS \"Bientôt (< 90j)\",\n  COUNT(*) FILTER (WHERE expiry_state = 'warning')  AS \"Attention (< 30j)\",\n  COUNT(*) FILTER (WHERE expiry_state = 'critical') AS \"Critique (< 7j)\",\n  COUNT(*) FILTER (WHERE expiry_state = 'expired')  AS \"Expiré\"\nFROM v_certificates_expiry\nGROUP BY 1\nORDER BY 1",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "État par environnement",
+      "type": "barchart"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "auto"
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
+      "id": 22,
+      "options": {
+        "legend": { "calcs": ["min"], "displayMode": "table", "placement": "right" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "x509_cert_expiry_seconds",
+          "legendFormat": "{{ filepath }} / {{ subject_CN }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Secondes avant expiration (Prometheus exporter)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 80 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
+      "id": 23,
+      "options": {
+        "barRadius": 0.1,
+        "groupWidth": 0.7,
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "orientation": "horizontal",
+        "tooltip": { "mode": "single", "sort": "none" },
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COALESCE(team, 'non attribué') AS \"Équipe\",\n  COUNT(*) AS \"Certificats actifs\"\nFROM v_certificates_expiry\nWHERE expiry_state != 'expired'\nGROUP BY 1\nORDER BY 2 DESC\nLIMIT 15",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Répartition par équipe",
+      "type": "barchart"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "id": 104,
+      "title": "🔍 Journal d'audit",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": { "type": "auto" },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Action" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "cert_issued":    { "color": "green",  "index": 0, "text": "✅ Émission" } }, "type": "value" },
+                  { "options": { "cert_revoked":   { "color": "red",    "index": 1, "text": "🚫 Révocation" } }, "type": "value" },
+                  { "options": { "cert_renewed":   { "color": "blue",   "index": 2, "text": "🔄 Renouvellement" } }, "type": "value" },
+                  { "options": { "cert_downloaded":{ "color": "purple", "index": 3, "text": "⬇️  Téléchargement" } }, "type": "value" },
+                  { "options": { "user_login":     { "color": "text",   "index": 4, "text": "🔐 Connexion" } }, "type": "value" }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Succès" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "true":  { "color": "green", "index": 0, "text": "✅" } }, "type": "value" },
+                  { "options": { "false": { "color": "red",   "index": 1, "text": "❌" } }, "type": "value" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 47 },
+      "id": 30,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Date" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawQuery": true,
+          "rawSql": "SELECT\n  created_at AS \"Date\",\n  action AS \"Action\",\n  COALESCE(actor_name, 'système') AS \"Acteur\",\n  resource_type AS \"Ressource\",\n  resource_name AS \"Nom\",\n  success AS \"Succès\",\n  COALESCE(error_message, '—') AS \"Erreur\",\n  ip_address::text AS \"IP\"\nFROM audit_log\nWHERE $__timeFilter(created_at)\nORDER BY created_at DESC\nLIMIT 200",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "title": "Journal d'audit — actions récentes",
+      "type": "table"
+    }
+
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "tags": ["pki", "certificates", "security", "autoflow"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+        "definition": "SELECT DISTINCT COALESCE(environment, 'non défini') FROM certificates ORDER BY 1",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "environment",
+        "options": [],
+        "query": "SELECT DISTINCT COALESCE(environment, 'non défini') FROM certificates ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "label": "Environnement",
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+        "definition": "SELECT DISTINCT COALESCE(team, 'non attribué') FROM certificates ORDER BY 1",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "team",
+        "options": [],
+        "query": "SELECT DISTINCT COALESCE(team, 'non attribué') FROM certificates ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "label": "Équipe",
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "cert_type",
+        "options": [
+          { "selected": true, "text": "All", "value": "$__all" },
+          { "selected": false, "text": "server", "value": "server" },
+          { "selected": false, "text": "client", "value": "client" },
+          { "selected": false, "text": "code_signing", "value": "code_signing" }
+        ],
+        "query": "server,client,code_signing,email",
+        "label": "Type",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-30d", "to": "now+90d" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PKI — Certificate Management",
+  "uid": "autoflow-pki-certs",
+  "version": 1,
+  "weekStart": "monday"
+}

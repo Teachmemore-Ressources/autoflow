@@ -1,0 +1,58 @@
+groups:
+  - name: pki_alerts
+    interval: 60s
+    rules:
+
+      # ── Certificate expiry ────────────────────────────────────────────────
+      - alert: PKICertificateExpiringSoon7d
+        expr: pki_certificates_expiring_7d > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: pki
+        annotations:
+          summary: "🔴 {{ $value }} certificate(s) expire within 7 days"
+          description: "Immediate renewal required. Check the PKI dashboard."
+          runbook_url: "http://localhost:{{ PKI_PORT | default('8004') }}/ui"
+
+      - alert: PKICertificateExpiringSoon30d
+        expr: pki_certificates_expiring_30d > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: pki
+        annotations:
+          summary: "🟡 {{ $value }} certificate(s) expire within 30 days"
+          description: "Plan renewal for certificates expiring within 30 days."
+
+      - alert: PKICertificateExpiringSoon90d
+        expr: pki_certificates_expiring_90d > 0
+        for: 30m
+        labels:
+          severity: info
+          service: pki
+        annotations:
+          summary: "🔵 {{ $value }} certificate(s) expire within 90 days"
+          description: "Schedule renewal for certificates expiring within 90 days."
+
+      # ── CA expiry ─────────────────────────────────────────────────────────
+      - alert: PKICAExpiringSoon
+        expr: pki_ca_expiry_days < 365
+        for: 5m
+        labels:
+          severity: critical
+          service: pki
+        annotations:
+          summary: "🚨 CA '{{ $labels.ca_name }}' expires in {{ $value }} days"
+          description: "Root CA renewal is complex — plan well in advance."
+
+      # ── Service health ────────────────────────────────────────────────────
+      - alert: PKIServiceDown
+        expr: up{job="autoflow-pki"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pki
+        annotations:
+          summary: "PKI service is down"
+          description: "The Autoflow PKI service is not responding."

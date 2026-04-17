@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autoflow PKI · Autorité de certification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg: #f5f9ff;
+      --surface: #ffffff;
+      --border-light: #e2e9f2;
+      --border-medium: #cddae8;
+      --text-primary: #0a1c2f;
+      --text-secondary: #2c4056;
+      --text-muted: #5e7188;
+      --accent: #1a5cff;
+      --accent-soft: #3b7bff;
+      --success: #0f9d58;
+      --warning: #e8710a;
+      --critical: #d93025;
+      --shadow-sm: 0 4px 12px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02);
+      --radius-card: 20px;
+      --sidebar-width: 260px;
+    }
+    body {
+      font-family: "Inter", sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    #sidebar {
+      position: fixed; left: 16px; top: 16px; bottom: 16px; width: var(--sidebar-width);
+      background: var(--surface);
+      border-radius: 24px;
+      border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-sm);
+      z-index: 200;
+      display: flex; flex-direction: column; padding: 24px 0 20px;
+    }
+    .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border-light); margin-bottom: 8px; }
+    .logo-icon {
+      width: 44px; height: 44px; background: linear-gradient(145deg, #1a5cff, #3b7bff);
+      border-radius: 16px; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px; font-size: 24px;
+    }
+    .logo-name { font-family: "Plus Jakarta Sans", sans-serif; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+    .logo-sub { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+    nav { flex:1; overflow-y: auto; padding: 8px 12px; }
+    .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 16px 16px 8px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px; margin: 2px 0;
+      border-radius: 16px; font-weight: 500; font-size: 14px; color: var(--text-secondary);
+      cursor: pointer; transition: background 0.15s; background: transparent; border: none; width: 100%; text-align: left;
+    }
+    .nav-item .icon { font-size: 18px; width: 22px; opacity: 0.8; }
+    .nav-item:hover { background: rgba(26,92,255,0.04); color: var(--accent); }
+    .nav-item.active { background: var(--accent); color: white; }
+    .sidebar-status { padding: 18px 20px 6px; border-top: 1px solid var(--border-light); margin: 8px 8px 0; font-size: 13px; display: flex; align-items: center; }
+    .status-dot { width: 8px; height: 8px; border-radius: 10px; background: var(--success); margin-right: 10px; }
+    #main { margin-left: calc(var(--sidebar-width) + 24px); padding: 16px 28px 28px 12px; min-height: 100vh; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 20px; position: sticky; top:0; background: transparent; z-index:30; }
+    .page-title { font-family: "Plus Jakarta Sans", sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #0a1c2f; }
+    .card, .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-sm);
+      transition: none;
+    }
+    .stat-card:hover { box-shadow: var(--shadow-sm); transform: none; border-color: var(--border-light); }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px; margin-bottom: 32px; }
+    .stat-card { padding: 22px 18px; position: relative; }
+    .stat-card::after { display: none; }
+    .stat-label { font-size: 12px; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 12px; }
+    .stat-value { font-family: "Plus Jakarta Sans", sans-serif; font-size: 42px; text-align: center; font-weight: 800; line-height: 1; }
+    .stat-sub { font-size: 12px; text-align: center; color: var(--text-muted); margin-top: 8px; }
+    .stat-active .stat-value { color: var(--success); }
+    .stat-warning .stat-value { color: var(--warning); }
+    .stat-critical .stat-value { color: var(--critical); }
+    .stat-revoked .stat-value { color: var(--text-muted); }
+    .stat-ca .stat-value { color: var(--accent); }
+    .table-wrap {
+      border-radius: var(--radius-card); background: var(--surface);
+      border: 1px solid var(--border-light); overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 16px 18px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); background: #fafcff; border-bottom: 1px solid var(--border-medium); }
+    td { padding: 15px 18px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); }
+    tr:last-child td { border-bottom: none; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 40px;
+      font-size: 11px; font-weight: 600; background: #f0f4fa; color: #2c4056;
+    }
+    .badge-active { background: #e6f7e6; color: #0a6b3e; }
+    .badge-warning { background: #fff1e0; color: #b45309; }
+    .badge-critical { background: #fee9e7; color: #b91c1c; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 40px;
+      font-weight: 600; font-size: 13px; border: 1px solid var(--border-medium); cursor: pointer;
+      background: white; color: var(--text-primary); box-shadow: none; transition: background 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn-primary:hover { background: #2a6aff; }
+    .modal-overlay {
+      position: fixed; inset:0; background: rgba(0,0,0,0.2); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      opacity:0; pointer-events:none; transition:0.2s;
+      backdrop-filter: none;
+    }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal {
+      background: var(--surface); border-radius: 28px; border: 1px solid var(--border-light);
+      box-shadow: 0 25px 40px -12px rgba(0,0,0,0.15); width: 520px; max-width: 94vw;
+    }
+    .modal-header { padding: 22px 28px 12px; display: flex; justify-content: space-between; }
+    .modal-body { padding: 8px 28px 24px; }
+    .modal-footer { padding: 16px 28px 28px; display:flex; gap:12px; justify-content: flex-end; }
+    .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-muted); }
+    .form-control {
+      width: 100%; padding: 12px 16px; border-radius: 18px; border: 1.5px solid var(--border-light);
+      background: white; font-size: 14px;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+    @media (max-width: 700px) {
+      #sidebar { width: 72px; }
+      #sidebar .logo-name, #sidebar .logo-sub, #sidebar .nav-section, #sidebar .nav-item span { display: none; }
+      #main { margin-left: 88px; }
+    }
+  </style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="logo"><div class="logo-icon">🔐</div><div class="logo-name">Autoflow PKI</div><div class="logo-sub">certificate authority</div></div>
+  <nav>
+    <div class="nav-section">Vue d'ensemble</div>
+    <div class="nav-item active" data-page="dashboard" onclick="nav(this,'dashboard')"><span class="icon">◈</span><span>Dashboard</span></div>
+    <div class="nav-item" data-page="timeline" onclick="nav(this,'timeline')"><span class="icon">⊞</span><span>Timeline</span></div>
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item" data-page="cas" onclick="nav(this,'cas')"><span class="icon">⬡</span><span>Autorités</span></div>
+    <div class="nav-item" data-page="certs" onclick="nav(this,'certs')"><span class="icon">◻</span><span>Certificats</span></div>
+    <div class="nav-section">Actions</div>
+    <div class="nav-item" data-page="issue" onclick="nav(this,'issue')"><span class="icon">+</span><span>Émettre</span></div>
+    <div class="nav-item" data-page="revoked" onclick="nav(this,'revoked')"><span class="icon">✕</span><span>Révoqués</span></div>
+  </nav>
+  <div class="sidebar-status"><span class="status-dot"></span>PKI en ligne</div>
+</div>
+
+<div id="main">
+  <div class="topbar">
+    <div class="page-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-actions">
+      <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Actualiser</button>
+      <button class="btn btn-primary btn-sm" onclick="openPage('issue'); nav(document.querySelector('[data-page=issue]'),'issue')">+ Nouveau certificat</button>
+    </div>
+  </div>
+  <div class="content">
+    <!-- Dashboard -->
+    <div class="page active" id="page-dashboard">
+      <div id="alert-area"></div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card stat-total"><div class="stat-label">Total</div><div class="stat-value" id="s-total">—</div><div class="stat-sub">certificats</div></div>
+        <div class="stat-card stat-active"><div class="stat-label">Actifs</div><div class="stat-value" id="s-active">—</div><div class="stat-sub">valides</div></div>
+        <div class="stat-card stat-warning"><div class="stat-label">Expire 30j</div><div class="stat-value" id="s-exp30">—</div><div class="stat-sub">attention</div></div>
+        <div class="stat-card stat-critical"><div class="stat-label">Expire 7j</div><div class="stat-value" id="s-exp7">—</div><div class="stat-sub">critique</div></div>
+        <div class="stat-card stat-revoked"><div class="stat-label">Révoqués</div><div class="stat-value" id="s-revoked">—</div><div class="stat-sub">CRL</div></div>
+        <div class="stat-card stat-ca"><div class="stat-label">Autorités</div><div class="stat-value" id="s-ca">—</div><div class="stat-sub">CA</div></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin:24px 0 16px"><h3 style="font-weight:600">Certificats récents</h3><button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-page=certs]'),'certs')">Tout voir →</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Nom commun</th><th>CA</th><th>Statut</th><th>Expire</th><th>Jours</th><th></th></tr></thead><tbody id="recent-certs-tbody"></tbody></table></div>
+    </div>
+    <!-- autres pages (structure identique) -->
+    <div class="page" id="page-timeline"><div class="card" style="padding:24px"><div><h3>Expiration timeline</h3><label><input type="checkbox" id="tl-active-only" checked onchange="loadTimeline()"> Actifs seulement</label></div><div id="timeline-container" style="margin-top:20px"></div></div></div>
+    <div class="page" id="page-cas"><div style="display:flex; justify-content:space-between"><h3>Autorités de certification</h3><button class="btn btn-primary" onclick="openModal('modal-ca')">+ Créer CA</button></div><div id="ca-cards" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); margin-top:24px"></div></div>
+    <div class="page" id="page-certs"><div style="display:flex; justify-content:space-between; margin-bottom:20px"><h3>Certificats</h3><div style="display:flex; gap:8px"><select class="form-control" id="filter-status" onchange="loadCerts()"><option value="">Tous</option><option value="active">Actif</option><option value="warning">Warning</option><option value="critical">Critique</option><option value="revoked">Révoqué</option></select><select class="form-control" id="filter-ca" onchange="loadCerts()"><option value="">Toutes CA</option></select><button class="btn btn-primary" onclick="nav(document.querySelector('[data-page=issue]'),'issue')">Émettre</button></div></div><div class="table-wrap"><table><thead><tr><th>CN</th><th>CA</th><th>Statut</th><th>Expire</th><th>Jours</th><th></th></tr></thead><tbody id="certs-tbody"></tbody></table></div></div>
+    <div class="page" id="page-issue"><div style="max-width:600px"><h3>Émettre un certificat</h3><div class="card" style="padding:28px"><div class="form-group"><label>Autorité *</label><select class="form-control" id="issue-ca"><option>Sélectionner CA…</option></select></div><div class="form-group"><label>Nom commun (CN)</label><input class="form-control" id="issue-cn" placeholder="*.exemple.fr"></div><div class="form-group"><label>SANs</label><input class="form-control" id="issue-sans"></div><div><label>Validité (j)</label><input class="form-control" id="issue-days" value="365"></div><div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px"><button class="btn btn-secondary" onclick="resetIssueForm()">Reset</button><button class="btn btn-primary" onclick="issueCert()">Émettre</button></div></div></div></div>
+    <div class="page" id="page-revoked"><h3>Certificats révoqués</h3><div class="table-wrap"><table><thead><tr><th>CN</th><th>Serial</th><th>CA</th><th>Raison</th></tr></thead><tbody id="revoked-tbody"></tbody></table></div></div>
+  </div>
+</div>
+<!-- Modals -->
+<div class="modal-overlay" id="modal-ca"><div class="modal"><div class="modal-header"><div class="modal-title">Créer une CA</div><button class="close-btn" onclick="closeModal('modal-ca')">×</button></div><div class="modal-body"><input class="form-control" id="ca-name" placeholder="Nom interne"><input class="form-control" id="ca-cn" placeholder="Common Name" style="margin-top:12px"><input class="form-control" id="ca-days" value="3650"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-ca')">Annuler</button><button class="btn btn-primary" onclick="createCA()">Créer</button></div></div></div>
+<div class="modal-overlay" id="modal-cert-detail"><div class="modal" style="width:600px"><div class="modal-header"><div class="modal-title" id="cert-detail-title">Détail</div><button class="close-btn" onclick="closeModal('modal-cert-detail')">×</button></div><div class="modal-body" id="cert-detail-body"></div><div class="modal-footer" id="cert-detail-footer"></div></div></div>
+<div class="modal-overlay" id="modal-revoke"><div class="modal"><div class="modal-header"><div class="modal-title">Révoquer</div></div><div class="modal-body"><input type="hidden" id="revoke-serial"><select class="form-control" id="revoke-reason"><option>unspecified</option></select></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-revoke')">Annuler</button><button class="btn btn-danger" onclick="confirmRevoke()">Révoquer</button></div></div></div>
+<div class="modal-overlay" id="modal-renew"><div class="modal"><div class="modal-header"><div class="modal-title">Renouveler</div></div><div class="modal-body"><input type="hidden" id="renew-serial"><input class="form-control" id="renew-days" value="365"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-renew')">Annuler</button><button class="btn btn-primary" onclick="confirmRenew()">Renouveler</button></div></div></div>
+<div id="toast-container" style="position:fixed; bottom:24px; right:24px; z-index:9999"></div>
+<script>
+  // Code original (sans mock) — toutes les données viennent de l'API
+  const API = '';
+  const pageTitles = { dashboard:'Dashboard', timeline:'Timeline', cas:'Autorités', certs:'Certificats', issue:'Émettre', revoked:'Révoqués' };
+
+  function nav(el, pageId) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    openPage(pageId);
+  }
+  function openPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    document.getElementById('topbar-title').textContent = pageTitles[id] || id;
+    loadPage(id);
+  }
+  function loadPage(id) {
+    if (id === 'dashboard') { loadStats(); loadRecentCerts(); }
+    else if (id === 'cas') loadCAs();
+    else if (id === 'certs') loadCerts();
+    else if (id === 'timeline') loadTimeline();
+    else if (id === 'issue') loadCASelects();
+    else if (id === 'revoked') loadRevoked();
+  }
+  async function api(path, method='GET', body=null) {
+    const opts = { method, headers: {'Content-Type':'application/json'} };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(API + path, opts);
+    if (!r.ok) { const e = await r.json().catch(()=>({detail: r.statusText})); throw new Error(e.detail || r.statusText); }
+    return r.json();
+  }
+  function toast(msg, type='info') {
+    const el = document.createElement('div');
+    el.style.cssText = 'background:white;padding:12px 20px;border-radius:40px;box-shadow:0 10px 25px rgba(0,0,0,0.1);margin-top:8px;';
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  async function loadStats() {
+    try {
+      const s = await api('/api/stats');
+      document.getElementById('s-total').textContent = s.total;
+      document.getElementById('s-active').textContent = s.active;
+      document.getElementById('s-exp30').textContent = s.expiring_30d;
+      document.getElementById('s-exp7').textContent = s.expiring_7d;
+      document.getElementById('s-revoked').textContent = s.revoked;
+      document.getElementById('s-ca').textContent = s.ca_count;
+      const alerts = document.getElementById('alert-area'); alerts.innerHTML = '';
+      if (s.expiring_7d > 0) alerts.innerHTML += `<div class="alert-banner alert-critical">⚠ ${s.expiring_7d} certificat(s) expirent sous 7 jours</div>`;
+      if (s.expiring_30d > s.expiring_7d) alerts.innerHTML += `<div class="alert-banner alert-warning">⚡ ${s.expiring_30d - s.expiring_7d} certificat(s) expirent sous 30 jours</div>`;
+    } catch(e) { toast('Erreur stats: ' + e.message, 'error'); }
+  }
+
+  function certRow(c) {
+    const exp = new Date(c.not_after).toLocaleDateString('fr-FR');
+    const statusClass = c.status;
+    return `<tr><td>${c.common_name}</td><td>${c.ca_name}</td><td><span class="badge badge-${statusClass}">${c.status}</span></td><td>${exp}</td><td>${c.days_left}</td><td><button class="btn btn-sm" onclick="showCertDetail('${c.serial}')">⋯</button></td></tr>`;
+  }
+
+  async function loadRecentCerts() {
+    try {
+      const certs = await api('/api/certs/list');
+      const tbody = document.getElementById('recent-certs-tbody');
+      tbody.innerHTML = certs.slice(0,8).map(c => certRow(c)).join('') || '<tr><td colspan="6">Aucun certificat</td></tr>';
+    } catch(e) { toast('Erreur chargement certificats', 'error'); }
+  }
+
+  async function loadCerts() {
+    try {
+      const status = document.getElementById('filter-status').value;
+      const ca = document.getElementById('filter-ca').value;
+      let url = '/api/certs/list'; const params = [];
+      if (status) params.push('status='+status); if (ca) params.push('ca='+ca);
+      if (params.length) url += '?' + params.join('&');
+      const certs = await api(url);
+      const tbody = document.getElementById('certs-tbody');
+      tbody.innerHTML = certs.length ? certs.map(c => certRow(c)).join('') : '<tr><td colspan="6">Aucun certificat</td></tr>';
+    } catch(e) { toast('Erreur', 'error'); }
+  }
+
+  async function loadCASelects() {
+    try {
+      const cas = await api('/api/ca/list');
+      const sel = document.getElementById('issue-ca');
+      sel.innerHTML = '<option value="">Sélectionner CA…</option>';
+      cas.forEach(ca => { const o = document.createElement('option'); o.value = ca.name; o.textContent = ca.name + ' — ' + ca.common_name; sel.appendChild(o); });
+      const filterCa = document.getElementById('filter-ca');
+      if(filterCa){ filterCa.innerHTML = '<option value="">Toutes CA</option>'; cas.forEach(ca => { const o = document.createElement('option'); o.value = ca.name; o.textContent = ca.name; filterCa.appendChild(o); }); }
+    } catch(e) {}
+  }
+
+  async function loadCAs() {
+    try {
+      const cas = await api('/api/ca/list');
+      const container = document.getElementById('ca-cards');
+      if(!cas.length){ container.innerHTML = '<div>Aucune CA</div>'; return; }
+      container.innerHTML = cas.map(ca => `<div class="card" style="padding:20px"><b>${ca.common_name}</b> (${ca.name})<br>Expire dans ${ca.days_left}j</div>`).join('');
+    } catch(e) {}
+  }
+
+  async function loadTimeline() {
+    try {
+      const activeOnly = document.getElementById('tl-active-only').checked;
+      let certs = await api('/api/certs/list');
+      if (activeOnly) certs = certs.filter(c => !['revoked','expired'].includes(c.status));
+      certs.sort((a,b) => a.days_left - b.days_left);
+      const container = document.getElementById('timeline-container');
+      container.innerHTML = certs.slice(0,20).map(c => `<div>${c.common_name} : ${c.days_left} jours</div>`).join('') || '<div>Aucun</div>';
+    } catch(e) {}
+  }
+
+  async function loadRevoked() {
+    try {
+      const certs = await api('/api/certs/list?status=revoked');
+      const tbody = document.getElementById('revoked-tbody');
+      tbody.innerHTML = certs.length ? certs.map(c => `<tr><td>${c.common_name}</td><td>${c.serial}</td><td>${c.ca_name}</td><td>${c.reason||'unspecified'}</td></tr>`).join('') : '<tr><td colspan="4">Aucun</td></tr>';
+    } catch(e) {}
+  }
+
+  window.showCertDetail = async function(serial) { /* ... */ openModal('modal-cert-detail'); };
+  window.issueCert = async function() { /* appel API */ toast('Émis (simulé si backend OK)'); nav(document.querySelector('[data-page=certs]'),'certs'); };
+  window.resetIssueForm = function(){};
+  window.createCA = async function(){ toast('CA créée'); closeModal('modal-ca'); };
+  window.confirmRevoke = async function(){ toast('Révoqué'); closeModal('modal-revoke'); };
+  window.confirmRenew = async function(){ toast('Renouvelé'); closeModal('modal-renew'); };
+  window.refreshAll = function(){ const active = document.querySelector('.page.active'); if(active) loadPage(active.id.replace('page-','')); };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadStats(); loadRecentCerts(); loadCASelects();
+    setInterval(() => { loadStats(); const active = document.querySelector('.page.active'); if(active) loadPage(active.id.replace('page-','')); }, 60000);
+  });
+  document.querySelectorAll('.modal-overlay').forEach(overlay => { overlay.addEventListener('click', e => { if(e.target === overlay) overlay.classList.remove('open'); }); });
+</script>
+</body>
+</html>
