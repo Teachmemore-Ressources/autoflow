@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Traefik dynamic configuration – reusable middlewares
+# ─────────────────────────────────────────────────────────────────────────────
+
+http:
+  middlewares:
+
+    # Strip /api prefix when routing to the Autoflow API (not needed here since
+    # the API is routed by hostname, kept as example)
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+    # Common security headers added to every response
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
+          Server: ""
+
+    # Rate-limit by IP: 100 req/s average, burst up to 200
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200

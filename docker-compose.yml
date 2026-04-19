@@ -55,6 +55,46 @@ x-log-heavy: &log-heavy
 
 services:
 
+  # ── Traefik (Reverse Proxy) ──────────────────
+  # Single ingress point for all HTTP services.
+  # Dashboard: http://localhost:8080
+  # Routes by subdomain: <service>.${DOMAIN:-localhost}
+  traefik:
+    image: traefik:v2.11
+    container_name: autoflow_traefik
+    restart: unless-stopped
+    environment:
+      DOCKER_API_VERSION: "1.41"
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+      - "${GITEA_SSH_PORT:-2222}:2222"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/etc/traefik/certs:ro
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    <<: *log-default
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
   # ── PostgreSQL ───────────────────────────────
   postgres:
     image: postgres:15.17-alpine  # pinned: was 15-alpine (9 HIGH CVEs fixed)
@@ -171,8 +211,15 @@ services:
       - ./awx/nginx.default.d.conf:/etc/nginx/default.d/awx.conf:ro
       - awx_projects:/var/lib/awx/projects
       - awx_receptor:/var/lib/awx/receptor
-    ports:
-      - "${AWX_HTTP_PORT:-80}:80"
+      - ./awx/custom/index.html:/var/lib/awx/venv/awx/lib/python3.11/site-packages/awx/ui/build/index.html:ro
+      - ./awx/custom:/var/lib/awx/public/static/custom:ro
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.awx.rule=Host(`awx.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.awx.entrypoints=web,websecure"
+      - "traefik.http.routers.awx.tls=true"
+      - "traefik.http.services.awx.loadbalancer.server.port=80"
     networks:
       - autoflow
     healthcheck:
@@ -296,8 +343,12 @@ services:
     depends_on:
       awx_web:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-8000}:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.api.entrypoints=web,websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
     networks:
       - autoflow
     healthcheck:
@@ -342,8 +393,12 @@ services:
     depends_on:
       awx_web:
         condition: service_healthy
-    ports:
-      - "${EVENT_ENGINE_PORT:-8001}:8001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.events.rule=Host(`events.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.events.entrypoints=web,websecure"
+      - "traefik.http.routers.events.tls=true"
+      - "traefik.http.services.events.loadbalancer.server.port=8001"
     networks:
       - autoflow
     healthcheck:
@@ -378,8 +433,12 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.prometheus.entrypoints=web,websecure"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
     networks:
       - autoflow
     healthcheck:
@@ -407,7 +466,7 @@ services:
       GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change_me_grafana}
       GF_USERS_ALLOW_SIGN_UP:     "false"
-      GF_SERVER_ROOT_URL:         "%(protocol)s://%(domain)s:%(http_port)s/"
+      GF_SERVER_ROOT_URL:         "http://grafana.${DOMAIN:-localhost}/"
       GF_LOG_LEVEL:               ${LOG_LEVEL:-info}
     volumes:
       - grafana_data:/var/lib/grafana
@@ -416,8 +475,12 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.grafana.entrypoints=web,websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     networks:
       - autoflow
     healthcheck:
@@ -524,8 +587,12 @@ services:
       - trivy_db:/home/autoflow/.cache/trivy
     group_add:
       - "${DOCKER_GID:-998}"
-    ports:
-      - "${SECURITY_SCANNER_PORT:-8002}:8002"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scanner.rule=Host(`scanner.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.scanner.entrypoints=web,websecure"
+      - "traefik.http.routers.scanner.tls=true"
+      - "traefik.http.services.scanner.loadbalancer.server.port=8002"
     networks:
       - autoflow
     healthcheck:
@@ -624,9 +691,17 @@ services:
       GITEA__log__LEVEL:             ${GITEA_LOG_LEVEL:-Warn}
     volumes:
       - gitea_data:/var/lib/gitea
-    ports:
-      - "${GITEA_HTTP_PORT:-3001}:3001"
-      - "${GITEA_SSH_PORT:-2222}:2222"
+    labels:
+      - "traefik.enable=true"
+      # HTTP router
+      - "traefik.http.routers.gitea.rule=Host(`git.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.gitea.entrypoints=web,websecure"
+      - "traefik.http.routers.gitea.tls=true"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3001"
+      # SSH TCP passthrough (port 2222 → gitea:2222)
+      - "traefik.tcp.routers.gitea-ssh.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.gitea-ssh.entrypoints=gitea-ssh"
+      - "traefik.tcp.services.gitea-ssh.loadbalancer.server.port=2222"
     networks:
       - autoflow
     healthcheck:
@@ -669,8 +744,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     group_add:
       - "${DOCKER_GID:-998}"
-    ports:
-      - "${EE_BUILDER_PORT:-8003}:8003"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ee-builder.rule=Host(`ee.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.ee-builder.entrypoints=web,websecure"
+      - "traefik.http.routers.ee-builder.tls=true"
+      - "traefik.http.services.ee-builder.loadbalancer.server.port=8003"
     networks:
       - autoflow
     healthcheck:
@@ -703,8 +782,12 @@ services:
       - --cluster.listen-address=        # single-instance mode, disable mesh
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alertmanager.rule=Host(`alerts.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.alertmanager.entrypoints=web,websecure"
+      - "traefik.http.routers.alertmanager.tls=true"
+      - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
     networks:
       - autoflow
     healthcheck:
@@ -749,12 +832,22 @@ services:
     container_name: autoflow_pki
     restart: unless-stopped
     environment:
-      PKI_DATA_DIR:   /data/pki
-      LOG_LEVEL:      ${LOG_LEVEL:-info}
+      PKI_DATA_DIR:        /data/pki
+      PKI_JWT_SECRET:      ${PKI_JWT_SECRET}
+      PKI_ADMIN_USER:      ${PKI_ADMIN_USER:-admin}
+      PKI_ADMIN_PASSWORD:  ${PKI_ADMIN_PASSWORD}
+      PKI_KEY_PASSPHRASE:  ${PKI_KEY_PASSPHRASE:-}
+      PKI_ALLOWED_ORIGINS: ${PKI_ALLOWED_ORIGINS:-}
+      PKI_BASE_URL:        ${PKI_BASE_URL:-http://localhost:8004}
+      LOG_LEVEL:           ${LOG_LEVEL:-info}
     volumes:
       - pki_data:/data/pki
-    ports:
-      - "${PKI_PORT:-8004}:8004"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pki.rule=Host(`pki.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.pki.entrypoints=web,websecure"
+      - "traefik.http.routers.pki.tls=true"
+      - "traefik.http.services.pki.loadbalancer.server.port=8004"
     networks:
       - autoflow
     healthcheck:

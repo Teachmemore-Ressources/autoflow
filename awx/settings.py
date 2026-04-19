@@ -93,3 +93,8 @@ BROADCAST_WEBSOCKET_VERIFY_CERT = False
 
 # Base URL used for email notifications and internal links.
 TOWER_URL_BASE = 'http://awxweb'
+
+# ── Branding / Login-Logout redirects ─────────────────────────────────────────
+# Après logout, renvoyer vers / (notre page custom) au lieu de /api/
+LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = '/'

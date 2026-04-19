@@ -9,133 +9,197 @@
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     :root {
-      --bg: #f5f9ff;
-      --surface: #ffffff;
-      --border-light: #e2e9f2;
-      --border-medium: #cddae8;
-      --text-primary: #0a1c2f;
-      --text-secondary: #2c4056;
-      --text-muted: #5e7188;
-      --accent: #1a5cff;
-      --accent-soft: #3b7bff;
-      --success: #0f9d58;
-      --warning: #e8710a;
-      --critical: #d93025;
+      --bg: #f5f9ff; --surface: #ffffff;
+      --border-light: #e2e9f2; --border-medium: #cddae8;
+      --text-primary: #0a1c2f; --text-secondary: #2c4056; --text-muted: #5e7188;
+      --accent: #1a5cff; --accent-soft: #3b7bff;
+      --success: #0f9d58; --warning: #e8710a; --critical: #d93025;
       --shadow-sm: 0 4px 12px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02);
-      --radius-card: 20px;
-      --sidebar-width: 260px;
+      --radius-card: 20px; --sidebar-width: 260px;
     }
-    body {
-      font-family: "Inter", sans-serif;
-      background: var(--bg);
-      color: var(--text-primary);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
+    body { font-family:"Inter",sans-serif; background:var(--bg); color:var(--text-primary); min-height:100vh; -webkit-font-smoothing:antialiased; }
+
+    /* ── Login overlay ── */
+    #login-overlay {
+      display:none; position:fixed; inset:0; background:linear-gradient(135deg,#0a1c2f,#1a3a5c);
+      z-index:9999; align-items:center; justify-content:center;
     }
+    #login-overlay.show { display:flex; }
+    #login-box {
+      background:white; border-radius:28px; padding:40px; width:380px; max-width:94vw;
+      box-shadow:0 40px 80px rgba(0,0,0,0.3);
+    }
+    #login-box .logo-icon { width:52px;height:52px;background:linear-gradient(145deg,#1a5cff,#3b7bff);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:20px; }
+    #login-box h2 { font-family:"Plus Jakarta Sans",sans-serif;font-size:22px;font-weight:700;margin-bottom:4px; }
+    #login-box p { font-size:13px;color:var(--text-muted);margin-bottom:28px; }
+    #login-error { color:var(--critical);font-size:13px;margin-top:12px;min-height:18px; }
+    #login-box .btn-login { width:100%;padding:13px;border-radius:40px;background:var(--accent);color:white;font-weight:600;font-size:14px;border:none;cursor:pointer;margin-top:16px; }
+    #login-box .btn-login:hover { background:#2a6aff; }
+
+    /* ── Sidebar ── */
     #sidebar {
-      position: fixed; left: 16px; top: 16px; bottom: 16px; width: var(--sidebar-width);
-      background: var(--surface);
-      border-radius: 24px;
-      border: 1px solid var(--border-light);
-      box-shadow: var(--shadow-sm);
-      z-index: 200;
-      display: flex; flex-direction: column; padding: 24px 0 20px;
+      position:fixed;left:16px;top:16px;bottom:16px;width:var(--sidebar-width);
+      background:var(--surface);border-radius:24px;border:1px solid var(--border-light);
+      box-shadow:var(--shadow-sm);z-index:200;display:flex;flex-direction:column;padding:24px 0 20px;
     }
-    .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border-light); margin-bottom: 8px; }
-    .logo-icon {
-      width: 44px; height: 44px; background: linear-gradient(145deg, #1a5cff, #3b7bff);
-      border-radius: 16px; display: flex; align-items: center; justify-content: center;
-      margin-bottom: 14px; font-size: 24px;
-    }
-    .logo-name { font-family: "Plus Jakarta Sans", sans-serif; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
-    .logo-sub { font-size: 12px; font-weight: 500; color: var(--text-muted); }
-    nav { flex:1; overflow-y: auto; padding: 8px 12px; }
-    .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 16px 16px 8px; }
+    .logo { padding:0 20px 24px;border-bottom:1px solid var(--border-light);margin-bottom:8px; }
+    .logo-icon { width:44px;height:44px;background:linear-gradient(145deg,#1a5cff,#3b7bff);border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:24px; }
+    .logo-name { font-family:"Plus Jakarta Sans",sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em; }
+    .logo-sub { font-size:12px;font-weight:500;color:var(--text-muted); }
+    nav { flex:1;overflow-y:auto;padding:8px 12px; }
+    .nav-section { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);padding:16px 16px 8px; }
     .nav-item {
-      display: flex; align-items: center; gap: 12px; padding: 10px 16px; margin: 2px 0;
-      border-radius: 16px; font-weight: 500; font-size: 14px; color: var(--text-secondary);
-      cursor: pointer; transition: background 0.15s; background: transparent; border: none; width: 100%; text-align: left;
+      display:flex;align-items:center;gap:12px;padding:10px 16px;margin:2px 0;
+      border-radius:16px;font-weight:500;font-size:14px;color:var(--text-secondary);
+      cursor:pointer;transition:background 0.15s;background:transparent;border:none;width:100%;text-align:left;
     }
-    .nav-item .icon { font-size: 18px; width: 22px; opacity: 0.8; }
-    .nav-item:hover { background: rgba(26,92,255,0.04); color: var(--accent); }
-    .nav-item.active { background: var(--accent); color: white; }
-    .sidebar-status { padding: 18px 20px 6px; border-top: 1px solid var(--border-light); margin: 8px 8px 0; font-size: 13px; display: flex; align-items: center; }
-    .status-dot { width: 8px; height: 8px; border-radius: 10px; background: var(--success); margin-right: 10px; }
-    #main { margin-left: calc(var(--sidebar-width) + 24px); padding: 16px 28px 28px 12px; min-height: 100vh; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 20px; position: sticky; top:0; background: transparent; z-index:30; }
-    .page-title { font-family: "Plus Jakarta Sans", sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #0a1c2f; }
-    .card, .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-sm);
-      transition: none;
-    }
-    .stat-card:hover { box-shadow: var(--shadow-sm); transform: none; border-color: var(--border-light); }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px; margin-bottom: 32px; }
-    .stat-card { padding: 22px 18px; position: relative; }
-    .stat-card::after { display: none; }
-    .stat-label { font-size: 12px; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 12px; }
-    .stat-value { font-family: "Plus Jakarta Sans", sans-serif; font-size: 42px; text-align: center; font-weight: 800; line-height: 1; }
-    .stat-sub { font-size: 12px; text-align: center; color: var(--text-muted); margin-top: 8px; }
-    .stat-active .stat-value { color: var(--success); }
-    .stat-warning .stat-value { color: var(--warning); }
-    .stat-critical .stat-value { color: var(--critical); }
-    .stat-revoked .stat-value { color: var(--text-muted); }
-    .stat-ca .stat-value { color: var(--accent); }
-    .table-wrap {
-      border-radius: var(--radius-card); background: var(--surface);
-      border: 1px solid var(--border-light); overflow: hidden;
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 16px 18px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); background: #fafcff; border-bottom: 1px solid var(--border-medium); }
-    td { padding: 15px 18px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); }
-    tr:last-child td { border-bottom: none; }
-    .badge {
-      display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 40px;
-      font-size: 11px; font-weight: 600; background: #f0f4fa; color: #2c4056;
-    }
-    .badge-active { background: #e6f7e6; color: #0a6b3e; }
-    .badge-warning { background: #fff1e0; color: #b45309; }
-    .badge-critical { background: #fee9e7; color: #b91c1c; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 40px;
-      font-weight: 600; font-size: 13px; border: 1px solid var(--border-medium); cursor: pointer;
-      background: white; color: var(--text-primary); box-shadow: none; transition: background 0.15s;
-    }
-    .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
-    .btn-primary:hover { background: #2a6aff; }
-    .modal-overlay {
-      position: fixed; inset:0; background: rgba(0,0,0,0.2); z-index: 1000;
-      display: flex; align-items: center; justify-content: center;
-      opacity:0; pointer-events:none; transition:0.2s;
-      backdrop-filter: none;
-    }
-    .modal-overlay.open { opacity:1; pointer-events:all; }
-    .modal {
-      background: var(--surface); border-radius: 28px; border: 1px solid var(--border-light);
-      box-shadow: 0 25px 40px -12px rgba(0,0,0,0.15); width: 520px; max-width: 94vw;
-    }
-    .modal-header { padding: 22px 28px 12px; display: flex; justify-content: space-between; }
-    .modal-body { padding: 8px 28px 24px; }
-    .modal-footer { padding: 16px 28px 28px; display:flex; gap:12px; justify-content: flex-end; }
-    .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-muted); }
-    .form-control {
-      width: 100%; padding: 12px 16px; border-radius: 18px; border: 1.5px solid var(--border-light);
-      background: white; font-size: 14px;
-    }
-    .page { display: none; }
-    .page.active { display: block; }
-    @media (max-width: 700px) {
-      #sidebar { width: 72px; }
-      #sidebar .logo-name, #sidebar .logo-sub, #sidebar .nav-section, #sidebar .nav-item span { display: none; }
-      #main { margin-left: 88px; }
+    .nav-item .icon { font-size:18px;width:22px;opacity:0.8; }
+    .nav-item:hover { background:rgba(26,92,255,0.04);color:var(--accent); }
+    .nav-item.active { background:var(--accent);color:white; }
+    .sidebar-bottom { padding:12px 20px 0;border-top:1px solid var(--border-light);margin:8px 8px 0; }
+    .user-info { display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px; }
+    .user-avatar { width:32px;height:32px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0; }
+    .user-name { font-weight:600;color:var(--text-primary); }
+    .user-role { font-size:11px;color:var(--text-muted);text-transform:capitalize; }
+    .btn-logout { display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;border-radius:12px;background:transparent;border:1px solid var(--border-light);cursor:pointer;font-size:13px;color:var(--text-muted);margin-top:8px; }
+    .btn-logout:hover { background:#fee9e7;color:var(--critical);border-color:var(--critical); }
+    .status-dot { width:8px;height:8px;border-radius:10px;background:var(--success);margin-right:10px; }
+
+    /* ── Main ── */
+    #main { margin-left:calc(var(--sidebar-width) + 24px);padding:16px 28px 28px 12px;min-height:100vh; }
+    .topbar { display:flex;align-items:center;justify-content:space-between;padding:8px 0 20px;position:sticky;top:0;background:transparent;z-index:30; }
+    .page-title { font-family:"Plus Jakarta Sans",sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0a1c2f; }
+    .topbar-actions { display:flex;gap:8px; }
+
+    /* ── Cards & Tables ── */
+    .card,.stat-card { background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-card);box-shadow:var(--shadow-sm); }
+    .stats-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px;margin-bottom:32px; }
+    .stat-card { padding:22px 18px; }
+    .stat-label { font-size:12px;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.03em;color:var(--text-muted);margin-bottom:12px; }
+    .stat-value { font-family:"Plus Jakarta Sans",sans-serif;font-size:42px;text-align:center;font-weight:800;line-height:1; }
+    .stat-sub { font-size:12px;text-align:center;color:var(--text-muted);margin-top:8px; }
+    .stat-active .stat-value { color:var(--success); }
+    .stat-warning .stat-value { color:var(--warning); }
+    .stat-critical .stat-value { color:var(--critical); }
+    .stat-revoked .stat-value { color:var(--text-muted); }
+    .stat-ca .stat-value { color:var(--accent); }
+    .table-wrap { border-radius:var(--radius-card);background:var(--surface);border:1px solid var(--border-light);overflow:hidden; }
+    table { width:100%;border-collapse:collapse;font-size:13px; }
+    th { text-align:left;padding:16px 18px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);background:#fafcff;border-bottom:1px solid var(--border-medium); }
+    td { padding:15px 18px;border-bottom:1px solid var(--border-light);color:var(--text-secondary); }
+    tr:last-child td { border-bottom:none; }
+    .badge { display:inline-flex;align-items:center;padding:4px 12px;border-radius:40px;font-size:11px;font-weight:600;background:#f0f4fa;color:#2c4056; }
+    .badge-active { background:#e6f7e6;color:#0a6b3e; }
+    .badge-warning { background:#fff1e0;color:#b45309; }
+    .badge-critical { background:#fee9e7;color:#b91c1c; }
+    .badge-revoked { background:#f0f0f0;color:#666; }
+    .badge-expired { background:#f5e6e6;color:#8b0000; }
+    .badge-admin { background:#e8f0fe;color:#1a5cff; }
+    .badge-operator { background:#e6f7e6;color:#0a6b3e; }
+    .badge-viewer { background:#f0f4fa;color:#5e7188; }
+
+    /* ── Buttons ── */
+    .btn { display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:40px;font-weight:600;font-size:13px;border:1px solid var(--border-medium);cursor:pointer;background:white;color:var(--text-primary);transition:background 0.15s; }
+    .btn-primary { background:var(--accent);color:white;border-color:var(--accent); }
+    .btn-primary:hover { background:#2a6aff; }
+    .btn-danger { background:var(--critical);color:white;border-color:var(--critical); }
+    .btn-danger:hover { background:#c0392b; }
+    .btn-sm { padding:6px 14px;font-size:12px; }
+
+    /* ── Modals ── */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.2);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:0.2s; }
+    .modal-overlay.open { opacity:1;pointer-events:all; }
+    .modal { background:var(--surface);border-radius:28px;border:1px solid var(--border-light);box-shadow:0 25px 40px -12px rgba(0,0,0,0.15);width:520px;max-width:94vw;max-height:90vh;overflow-y:auto; }
+    .modal-header { padding:22px 28px 12px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:white;z-index:1; }
+    .modal-title { font-family:"Plus Jakarta Sans",sans-serif;font-size:18px;font-weight:700; }
+    .modal-body { padding:8px 28px 24px; }
+    .modal-footer { padding:16px 28px 28px;display:flex;gap:12px;justify-content:flex-end; }
+    .close-btn { background:none;border:none;font-size:28px;cursor:pointer;color:var(--text-muted);line-height:1; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom:16px; }
+    .form-group label { display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.03em; }
+    .form-control { width:100%;padding:12px 16px;border-radius:18px;border:1.5px solid var(--border-light);background:white;font-size:14px;color:var(--text-primary);outline:none;transition:border-color 0.15s; }
+    .form-control:focus { border-color:var(--accent); }
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-hint { font-size:11px;color:var(--text-muted);margin-top:4px; }
+    .checkbox-row { display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-secondary);cursor:pointer; }
+    .checkbox-row input { width:16px;height:16px;cursor:pointer; }
+
+    /* ── Alert banners ── */
+    .alert-banner { padding:12px 18px;border-radius:14px;margin-bottom:12px;font-size:13px;font-weight:500; }
+    .alert-critical { background:#fee9e7;color:#b91c1c;border:1px solid #fecaca; }
+    .alert-warning { background:#fff1e0;color:#b45309;border:1px solid #fde68a; }
+
+    /* ── CA cards ── */
+    .ca-card { padding:24px;border-radius:var(--radius-card);background:var(--surface);border:1px solid var(--border-light); }
+    .ca-card-title { font-weight:700;font-size:16px;margin-bottom:4px; }
+    .ca-card-sub { font-size:12px;color:var(--text-muted);margin-bottom:16px; }
+    .ca-card-meta { display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px; }
+    .ca-meta-item { display:flex;flex-direction:column;gap:2px; }
+    .ca-meta-label { color:var(--text-muted);font-weight:600; }
+    .ca-meta-value { color:var(--text-primary); }
+    .ca-card-actions { display:flex;gap:8px;margin-top:16px;flex-wrap:wrap; }
+
+    /* ── Timeline ── */
+    .timeline-bar { height:8px;border-radius:8px;background:#e2e9f2;margin-top:6px;overflow:hidden; }
+    .timeline-fill { height:100%;border-radius:8px;background:var(--success);transition:width 0.3s; }
+    .timeline-fill.warn { background:var(--warning); }
+    .timeline-fill.crit { background:var(--critical); }
+    .timeline-item { padding:12px 18px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:16px; }
+    .timeline-item:last-child { border-bottom:none; }
+
+    /* ── Detail view ── */
+    .detail-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .detail-item { background:#fafcff;border-radius:12px;padding:12px 16px; }
+    .detail-label { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-bottom:4px; }
+    .detail-value { font-size:13px;color:var(--text-primary);word-break:break-all; }
+    .detail-full { grid-column:1/-1; }
+    .download-links { display:flex;gap:8px;flex-wrap:wrap;margin-top:16px; }
+
+    /* ── Pages ── */
+    .page { display:none; }
+    .page.active { display:block; }
+
+    /* ── Spinner ── */
+    .spinner { display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    @media (max-width:700px) {
+      #sidebar { width:72px; }
+      #sidebar .logo-name,#sidebar .logo-sub,#sidebar .nav-section,#sidebar .nav-item span { display:none; }
+      #main { margin-left:88px; }
     }
   </style>
 </head>
 <body>
+
+<!-- ── Login overlay ── -->
+<div id="login-overlay">
+  <div id="login-box">
+    <div class="logo-icon">🔐</div>
+    <h2>Autoflow PKI</h2>
+    <p>Authentifiez-vous pour accéder à la console</p>
+    <div class="form-group">
+      <label>Utilisateur</label>
+      <input class="form-control" id="login-user" type="text" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <input class="form-control" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error"></div>
+    <button class="btn-login" id="login-btn" onclick="doLogin()">Se connecter</button>
+  </div>
+</div>
+
+<!-- ── Sidebar ── -->
 <div id="sidebar">
-  <div class="logo"><div class="logo-icon">🔐</div><div class="logo-name">Autoflow PKI</div><div class="logo-sub">certificate authority</div></div>
+  <div class="logo">
+    <div class="logo-icon">🔐</div>
+    <div class="logo-name">Autoflow PKI</div>
+    <div class="logo-sub">certificate authority</div>
+  </div>
   <nav>
     <div class="nav-section">Vue d'ensemble</div>
     <div class="nav-item active" data-page="dashboard" onclick="nav(this,'dashboard')"><span class="icon">◈</span><span>Dashboard</span></div>
@@ -146,23 +210,38 @@
     <div class="nav-section">Actions</div>
     <div class="nav-item" data-page="issue" onclick="nav(this,'issue')"><span class="icon">+</span><span>Émettre</span></div>
     <div class="nav-item" data-page="revoked" onclick="nav(this,'revoked')"><span class="icon">✕</span><span>Révoqués</span></div>
+    <div class="nav-item admin-only" data-page="users" onclick="nav(this,'users')" style="display:none"><span class="icon">👤</span><span>Utilisateurs</span></div>
   </nav>
-  <div class="sidebar-status"><span class="status-dot"></span>PKI en ligne</div>
+  <div class="sidebar-bottom">
+    <div class="user-info">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <div>
+        <div class="user-name" id="user-name">—</div>
+        <div class="user-role" id="user-role">—</div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="logout()">⎋ Déconnexion</button>
+    <div style="display:flex;align-items:center;padding:10px 0 4px;font-size:12px;color:var(--text-muted);">
+      <span class="status-dot"></span>PKI en ligne
+    </div>
+  </div>
 </div>
 
+<!-- ── Main ── -->
 <div id="main">
   <div class="topbar">
     <div class="page-title" id="topbar-title">Dashboard</div>
     <div class="topbar-actions">
-      <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Actualiser</button>
-      <button class="btn btn-primary btn-sm" onclick="openPage('issue'); nav(document.querySelector('[data-page=issue]'),'issue')">+ Nouveau certificat</button>
+      <button class="btn btn-sm" onclick="refreshAll()">↻ Actualiser</button>
+      <button class="btn btn-primary btn-sm" onclick="nav(document.querySelector('[data-page=issue]'),'issue')">+ Nouveau certificat</button>
     </div>
   </div>
   <div class="content">
+
     <!-- Dashboard -->
     <div class="page active" id="page-dashboard">
       <div id="alert-area"></div>
-      <div class="stats-grid" id="stats-grid">
+      <div class="stats-grid">
         <div class="stat-card stat-total"><div class="stat-label">Total</div><div class="stat-value" id="s-total">—</div><div class="stat-sub">certificats</div></div>
         <div class="stat-card stat-active"><div class="stat-label">Actifs</div><div class="stat-value" id="s-active">—</div><div class="stat-sub">valides</div></div>
         <div class="stat-card stat-warning"><div class="stat-label">Expire 30j</div><div class="stat-value" id="s-exp30">—</div><div class="stat-sub">attention</div></div>
@@ -170,158 +249,783 @@
         <div class="stat-card stat-revoked"><div class="stat-label">Révoqués</div><div class="stat-value" id="s-revoked">—</div><div class="stat-sub">CRL</div></div>
         <div class="stat-card stat-ca"><div class="stat-label">Autorités</div><div class="stat-value" id="s-ca">—</div><div class="stat-sub">CA</div></div>
       </div>
-      <div style="display:flex; justify-content:space-between; margin:24px 0 16px"><h3 style="font-weight:600">Certificats récents</h3><button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-page=certs]'),'certs')">Tout voir →</button></div>
+      <div style="display:flex;justify-content:space-between;margin:24px 0 16px">
+        <h3 style="font-weight:600">Certificats récents</h3>
+        <button class="btn btn-sm" onclick="nav(document.querySelector('[data-page=certs]'),'certs')">Tout voir →</button>
+      </div>
       <div class="table-wrap"><table><thead><tr><th>Nom commun</th><th>CA</th><th>Statut</th><th>Expire</th><th>Jours</th><th></th></tr></thead><tbody id="recent-certs-tbody"></tbody></table></div>
     </div>
-    <!-- autres pages (structure identique) -->
-    <div class="page" id="page-timeline"><div class="card" style="padding:24px"><div><h3>Expiration timeline</h3><label><input type="checkbox" id="tl-active-only" checked onchange="loadTimeline()"> Actifs seulement</label></div><div id="timeline-container" style="margin-top:20px"></div></div></div>
-    <div class="page" id="page-cas"><div style="display:flex; justify-content:space-between"><h3>Autorités de certification</h3><button class="btn btn-primary" onclick="openModal('modal-ca')">+ Créer CA</button></div><div id="ca-cards" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); margin-top:24px"></div></div>
-    <div class="page" id="page-certs"><div style="display:flex; justify-content:space-between; margin-bottom:20px"><h3>Certificats</h3><div style="display:flex; gap:8px"><select class="form-control" id="filter-status" onchange="loadCerts()"><option value="">Tous</option><option value="active">Actif</option><option value="warning">Warning</option><option value="critical">Critique</option><option value="revoked">Révoqué</option></select><select class="form-control" id="filter-ca" onchange="loadCerts()"><option value="">Toutes CA</option></select><button class="btn btn-primary" onclick="nav(document.querySelector('[data-page=issue]'),'issue')">Émettre</button></div></div><div class="table-wrap"><table><thead><tr><th>CN</th><th>CA</th><th>Statut</th><th>Expire</th><th>Jours</th><th></th></tr></thead><tbody id="certs-tbody"></tbody></table></div></div>
-    <div class="page" id="page-issue"><div style="max-width:600px"><h3>Émettre un certificat</h3><div class="card" style="padding:28px"><div class="form-group"><label>Autorité *</label><select class="form-control" id="issue-ca"><option>Sélectionner CA…</option></select></div><div class="form-group"><label>Nom commun (CN)</label><input class="form-control" id="issue-cn" placeholder="*.exemple.fr"></div><div class="form-group"><label>SANs</label><input class="form-control" id="issue-sans"></div><div><label>Validité (j)</label><input class="form-control" id="issue-days" value="365"></div><div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px"><button class="btn btn-secondary" onclick="resetIssueForm()">Reset</button><button class="btn btn-primary" onclick="issueCert()">Émettre</button></div></div></div></div>
-    <div class="page" id="page-revoked"><h3>Certificats révoqués</h3><div class="table-wrap"><table><thead><tr><th>CN</th><th>Serial</th><th>CA</th><th>Raison</th></tr></thead><tbody id="revoked-tbody"></tbody></table></div></div>
+
+    <!-- Timeline -->
+    <div class="page" id="page-timeline">
+      <div class="card" style="padding:24px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <h3 style="font-weight:600">Expiration timeline</h3>
+          <label class="checkbox-row"><input type="checkbox" id="tl-active-only" checked onchange="loadTimeline()"> Actifs seulement</label>
+        </div>
+        <div id="timeline-container"></div>
+      </div>
+    </div>
+
+    <!-- CAs -->
+    <div class="page" id="page-cas">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+        <h3 style="font-weight:600">Autorités de certification</h3>
+        <button class="btn btn-primary admin-only" onclick="openModal('modal-ca')">+ Créer CA</button>
+      </div>
+      <div id="ca-cards" style="display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))"></div>
+    </div>
+
+    <!-- Certificats -->
+    <div class="page" id="page-certs">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <h3 style="font-weight:600">Certificats</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select class="form-control" id="filter-status" onchange="loadCerts()" style="width:140px;border-radius:40px;padding:8px 14px">
+            <option value="">Tous statuts</option>
+            <option value="active">Actif</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critique</option>
+            <option value="expired">Expiré</option>
+            <option value="revoked">Révoqué</option>
+          </select>
+          <select class="form-control" id="filter-ca" onchange="loadCerts()" style="width:160px;border-radius:40px;padding:8px 14px">
+            <option value="">Toutes CA</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="nav(document.querySelector('[data-page=issue]'),'issue')">+ Émettre</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>CN</th><th>CA</th><th>Type</th><th>Statut</th><th>Expire</th><th>Jours</th><th></th></tr></thead><tbody id="certs-tbody"></tbody></table></div>
+    </div>
+
+    <!-- Émettre -->
+    <div class="page" id="page-issue">
+      <div style="max-width:640px">
+        <h3 style="font-weight:600;margin-bottom:20px">Émettre un certificat</h3>
+        <div class="card" style="padding:32px">
+          <div class="form-group">
+            <label>Autorité de certification *</label>
+            <select class="form-control" id="issue-ca"><option value="">Sélectionner une CA…</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nom commun (CN) *</label>
+              <input class="form-control" id="issue-cn" placeholder="service.exemple.fr">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select class="form-control" id="issue-cert-type">
+                <option value="server">Serveur</option>
+                <option value="client">Client</option>
+                <option value="both">Serveur + Client</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Domaines SAN</label>
+            <input class="form-control" id="issue-sans" placeholder="api.exemple.fr, www.exemple.fr">
+            <div class="form-hint">Séparés par des virgules</div>
+          </div>
+          <div class="form-group">
+            <label>IPs SAN</label>
+            <input class="form-control" id="issue-ips" placeholder="192.168.1.10, 10.0.0.1">
+            <div class="form-hint">Séparées par des virgules</div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Validité (jours)</label>
+              <input class="form-control" id="issue-days" type="number" value="365" min="1" max="825">
+            </div>
+            <div class="form-group">
+              <label>Taille de clé</label>
+              <select class="form-control" id="issue-key-size">
+                <option value="2048">2048 bits</option>
+                <option value="3072">3072 bits</option>
+                <option value="4096">4096 bits</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" id="issue-wildcard">
+              Certificat wildcard (ajoute *.CN automatiquement)
+            </label>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px">
+            <button class="btn" onclick="resetIssueForm()">Réinitialiser</button>
+            <button class="btn btn-primary" id="issue-btn" onclick="issueCert()">Émettre le certificat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Révoqués -->
+    <div class="page" id="page-revoked">
+      <h3 style="font-weight:600;margin-bottom:20px">Certificats révoqués</h3>
+      <div class="table-wrap">
+        <table><thead><tr><th>CN</th><th>Serial</th><th>CA</th><th>Raison</th><th>Révoqué le</th></tr></thead>
+        <tbody id="revoked-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- Utilisateurs -->
+    <div class="page" id="page-users">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+        <h3 style="font-weight:600">Gestion des utilisateurs</h3>
+        <button class="btn btn-primary" onclick="openModal('modal-user')">+ Créer utilisateur</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Créé le</th><th></th></tr></thead>
+        <tbody id="users-tbody"></tbody></table>
+      </div>
+    </div>
+
   </div>
 </div>
-<!-- Modals -->
-<div class="modal-overlay" id="modal-ca"><div class="modal"><div class="modal-header"><div class="modal-title">Créer une CA</div><button class="close-btn" onclick="closeModal('modal-ca')">×</button></div><div class="modal-body"><input class="form-control" id="ca-name" placeholder="Nom interne"><input class="form-control" id="ca-cn" placeholder="Common Name" style="margin-top:12px"><input class="form-control" id="ca-days" value="3650"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-ca')">Annuler</button><button class="btn btn-primary" onclick="createCA()">Créer</button></div></div></div>
-<div class="modal-overlay" id="modal-cert-detail"><div class="modal" style="width:600px"><div class="modal-header"><div class="modal-title" id="cert-detail-title">Détail</div><button class="close-btn" onclick="closeModal('modal-cert-detail')">×</button></div><div class="modal-body" id="cert-detail-body"></div><div class="modal-footer" id="cert-detail-footer"></div></div></div>
-<div class="modal-overlay" id="modal-revoke"><div class="modal"><div class="modal-header"><div class="modal-title">Révoquer</div></div><div class="modal-body"><input type="hidden" id="revoke-serial"><select class="form-control" id="revoke-reason"><option>unspecified</option></select></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-revoke')">Annuler</button><button class="btn btn-danger" onclick="confirmRevoke()">Révoquer</button></div></div></div>
-<div class="modal-overlay" id="modal-renew"><div class="modal"><div class="modal-header"><div class="modal-title">Renouveler</div></div><div class="modal-body"><input type="hidden" id="renew-serial"><input class="form-control" id="renew-days" value="365"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-renew')">Annuler</button><button class="btn btn-primary" onclick="confirmRenew()">Renouveler</button></div></div></div>
-<div id="toast-container" style="position:fixed; bottom:24px; right:24px; z-index:9999"></div>
-<script>
-  // Code original (sans mock) — toutes les données viennent de l'API
-  const API = '';
-  const pageTitles = { dashboard:'Dashboard', timeline:'Timeline', cas:'Autorités', certs:'Certificats', issue:'Émettre', revoked:'Révoqués' };
 
-  function nav(el, pageId) {
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    el.classList.add('active');
-    openPage(pageId);
+<!-- ── Modals ── -->
+
+<!-- Créer CA -->
+<div class="modal-overlay" id="modal-ca">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Créer une autorité de certification</div>
+      <button class="close-btn" onclick="closeModal('modal-ca')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nom interne *</label><input class="form-control" id="ca-name" placeholder="autoflow-root"></div>
+      <div class="form-group"><label>Common Name *</label><input class="form-control" id="ca-cn" placeholder="Autoflow Root CA"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Organisation</label><input class="form-control" id="ca-org" value="Autoflow"></div>
+        <div class="form-group"><label>Pays</label><input class="form-control" id="ca-country" value="FR" maxlength="2"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Validité (jours)</label><input class="form-control" id="ca-days" type="number" value="3650"></div>
+        <div class="form-group"><label>Taille de clé</label>
+          <select class="form-control" id="ca-key-size">
+            <option value="4096" selected>4096 bits</option>
+            <option value="3072">3072 bits</option>
+            <option value="2048">2048 bits</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ca')">Annuler</button>
+      <button class="btn btn-primary" id="ca-create-btn" onclick="createCA()">Créer la CA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Détail certificat -->
+<div class="modal-overlay" id="modal-cert-detail">
+  <div class="modal" style="width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="cert-detail-title">Détail du certificat</div>
+      <button class="close-btn" onclick="closeModal('modal-cert-detail')">×</button>
+    </div>
+    <div class="modal-body" id="cert-detail-body"></div>
+    <div class="modal-footer" id="cert-detail-footer"></div>
+  </div>
+</div>
+
+<!-- Révoquer -->
+<div class="modal-overlay" id="modal-revoke">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Révoquer le certificat</div>
+      <button class="close-btn" onclick="closeModal('modal-revoke')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Cette action est irréversible. Le certificat sera ajouté à la CRL.</p>
+      <input type="hidden" id="revoke-serial">
+      <div class="form-group">
+        <label>Raison</label>
+        <select class="form-control" id="revoke-reason">
+          <option value="unspecified">Non spécifiée</option>
+          <option value="key_compromise">Compromission de clé</option>
+          <option value="superseded">Remplacé</option>
+          <option value="cessation_of_operation">Arrêt d'activité</option>
+          <option value="affiliation_changed">Changement d'affiliation</option>
+          <option value="privilege_withdrawn">Privilège retiré</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-revoke')">Annuler</button>
+      <button class="btn btn-danger" id="revoke-btn" onclick="confirmRevoke()">Révoquer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Renouveler -->
+<div class="modal-overlay" id="modal-renew">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Renouveler le certificat</div>
+      <button class="close-btn" onclick="closeModal('modal-renew')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Un nouveau certificat sera émis. L'ancien sera révoqué avec la raison "superseded".</p>
+      <input type="hidden" id="renew-serial">
+      <div class="form-group">
+        <label>Nouvelle durée de validité (jours)</label>
+        <input class="form-control" id="renew-days" type="number" value="365" min="1" max="825">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-renew')">Annuler</button>
+      <button class="btn btn-primary" id="renew-btn" onclick="confirmRenew()">Renouveler</button>
+    </div>
+  </div>
+</div>
+
+<!-- Créer utilisateur -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Créer un utilisateur</div>
+      <button class="close-btn" onclick="closeModal('modal-user')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nom d'utilisateur *</label><input class="form-control" id="new-user-name" placeholder="operateur1"></div>
+      <div class="form-group"><label>Mot de passe *</label><input class="form-control" id="new-user-pass" type="password" placeholder="••••••••"></div>
+      <div class="form-group">
+        <label>Rôle</label>
+        <select class="form-control" id="new-user-role">
+          <option value="viewer">Viewer — lecture seule</option>
+          <option value="operator">Operator — émettre/révoquer</option>
+          <option value="admin">Admin — accès complet</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-user')">Annuler</button>
+      <button class="btn btn-primary" id="user-create-btn" onclick="createUser()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px"></div>
+
+<script>
+  const API = '';
+  let currentUser = null;
+
+  const pageTitles = {
+    dashboard:'Dashboard', timeline:'Timeline', cas:'Autorités de certification',
+    certs:'Certificats', issue:'Émettre un certificat', revoked:'Certificats révoqués',
+    users:'Gestion des utilisateurs',
+  };
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  function getToken() { return sessionStorage.getItem('pki_token'); }
+  function setToken(t) { sessionStorage.setItem('pki_token', t); }
+  function clearToken() { sessionStorage.removeItem('pki_token'); }
+
+  function showLogin() {
+    document.getElementById('login-overlay').classList.add('show');
+    document.getElementById('login-user').focus();
   }
-  function openPage(id) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('page-' + id).classList.add('active');
-    document.getElementById('topbar-title').textContent = pageTitles[id] || id;
-    loadPage(id);
+  function hideLogin() { document.getElementById('login-overlay').classList.remove('show'); }
+
+  async function doLogin() {
+    const username = document.getElementById('login-user').value.trim();
+    const password = document.getElementById('login-pass').value;
+    const btn      = document.getElementById('login-btn');
+    const errEl    = document.getElementById('login-error');
+    if (!username || !password) { errEl.textContent = 'Remplissez tous les champs'; return; }
+    btn.innerHTML = '<span class="spinner"></span> Connexion…';
+    btn.disabled  = true;
+    errEl.textContent = '';
+    try {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username, password}),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || 'Identifiants invalides');
+      }
+      const data = await r.json();
+      setToken(data.access_token);
+      currentUser = {username: data.username, role: data.role};
+      hideLogin();
+      updateSidebarUser();
+      initApp();
+    } catch(e) {
+      errEl.textContent = e.message;
+    } finally {
+      btn.innerHTML = 'Se connecter';
+      btn.disabled  = false;
+    }
   }
-  function loadPage(id) {
-    if (id === 'dashboard') { loadStats(); loadRecentCerts(); }
-    else if (id === 'cas') loadCAs();
-    else if (id === 'certs') loadCerts();
-    else if (id === 'timeline') loadTimeline();
-    else if (id === 'issue') loadCASelects();
-    else if (id === 'revoked') loadRevoked();
+
+  function logout() {
+    clearToken();
+    currentUser = null;
+    showLogin();
+    document.getElementById('login-pass').value = '';
   }
+
+  function updateSidebarUser() {
+    if (!currentUser) return;
+    document.getElementById('user-name').textContent   = currentUser.username;
+    document.getElementById('user-role').textContent   = currentUser.role;
+    document.getElementById('user-avatar').textContent = currentUser.username[0].toUpperCase();
+    // Show admin-only nav items
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = currentUser.role === 'admin' ? '' : 'none';
+    });
+  }
+
+  // ── API helper ────────────────────────────────────────────────────────────
   async function api(path, method='GET', body=null) {
-    const opts = { method, headers: {'Content-Type':'application/json'} };
-    if (body) opts.body = JSON.stringify(body);
+    const token = getToken();
+    const opts  = { method, headers: {'Content-Type':'application/json'} };
+    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+    if (body)  opts.body = JSON.stringify(body);
     const r = await fetch(API + path, opts);
-    if (!r.ok) { const e = await r.json().catch(()=>({detail: r.statusText})); throw new Error(e.detail || r.statusText); }
+    if (r.status === 401) { logout(); throw new Error('Session expirée'); }
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(e.detail || r.statusText);
+    }
     return r.json();
   }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
   function toast(msg, type='info') {
     const el = document.createElement('div');
-    el.style.cssText = 'background:white;padding:12px 20px;border-radius:40px;box-shadow:0 10px 25px rgba(0,0,0,0.1);margin-top:8px;';
+    const colors = {info:'#fff',error:'#fee9e7',success:'#e6f7e6',warn:'#fff1e0'};
+    el.style.cssText = `background:${colors[type]||colors.info};padding:12px 20px;border-radius:40px;box-shadow:0 10px 25px rgba(0,0,0,0.12);font-size:13px;font-weight:500;max-width:340px;`;
     el.textContent = msg;
     document.getElementById('toast-container').appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    setTimeout(() => el.remove(), 4500);
   }
-  function openModal(id) { document.getElementById(id).classList.add('open'); }
+
+  // ── Modals ────────────────────────────────────────────────────────────────
+  function openModal(id)  { document.getElementById(id).classList.add('open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+  document.addEventListener('click', e => {
+    if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
+  });
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  function nav(el, pageId) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + pageId).classList.add('active');
+    document.getElementById('topbar-title').textContent = pageTitles[pageId] || pageId;
+    loadPage(pageId);
+  }
+
+  function loadPage(id) {
+    if (id === 'dashboard') { loadStats(); loadRecentCerts(); }
+    else if (id === 'cas')      loadCAs();
+    else if (id === 'certs')    loadCerts();
+    else if (id === 'timeline') loadTimeline();
+    else if (id === 'issue')    loadCASelects();
+    else if (id === 'revoked')  loadRevoked();
+    else if (id === 'users')    loadUsers();
+  }
+
+  function refreshAll() {
+    const active = document.querySelector('.page.active');
+    if (active) loadPage(active.id.replace('page-', ''));
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtDate(iso) { return new Date(iso).toLocaleDateString('fr-FR'); }
+  function fmtDateTime(iso) { return new Date(iso).toLocaleString('fr-FR'); }
+  function statusBadge(s) { return `<span class="badge badge-${s}">${s}</span>`; }
+
+  function certRow(c, actions=true) {
+    const act = actions
+      ? `<button class="btn btn-sm" onclick="showCertDetail('${c.serial}')">⋯</button>`
+      : '';
+    return `<tr>
+      <td><b>${c.common_name}</b></td>
+      <td>${c.ca_name}</td>
+      <td><span style="font-size:11px;color:var(--text-muted)">${c.cert_type||'server'}</span></td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${fmtDate(c.not_after)}</td>
+      <td>${c.days_left}</td>
+      <td>${act}</td>
+    </tr>`;
+  }
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
   async function loadStats() {
     try {
       const s = await api('/api/stats');
-      document.getElementById('s-total').textContent = s.total;
-      document.getElementById('s-active').textContent = s.active;
+      ['total','active','revoked'].forEach(k => document.getElementById('s-'+k).textContent = s[k]);
       document.getElementById('s-exp30').textContent = s.expiring_30d;
-      document.getElementById('s-exp7').textContent = s.expiring_7d;
-      document.getElementById('s-revoked').textContent = s.revoked;
-      document.getElementById('s-ca').textContent = s.ca_count;
-      const alerts = document.getElementById('alert-area'); alerts.innerHTML = '';
-      if (s.expiring_7d > 0) alerts.innerHTML += `<div class="alert-banner alert-critical">⚠ ${s.expiring_7d} certificat(s) expirent sous 7 jours</div>`;
-      if (s.expiring_30d > s.expiring_7d) alerts.innerHTML += `<div class="alert-banner alert-warning">⚡ ${s.expiring_30d - s.expiring_7d} certificat(s) expirent sous 30 jours</div>`;
+      document.getElementById('s-exp7').textContent  = s.expiring_7d;
+      document.getElementById('s-ca').textContent    = s.ca_count;
+      const alerts = document.getElementById('alert-area');
+      alerts.innerHTML = '';
+      if (s.expiring_7d > 0)
+        alerts.innerHTML += `<div class="alert-banner alert-critical">⚠ ${s.expiring_7d} certificat(s) expirent dans moins de 7 jours</div>`;
+      if (s.expiring_30d - s.expiring_7d > 0)
+        alerts.innerHTML += `<div class="alert-banner alert-warning">⚡ ${s.expiring_30d - s.expiring_7d} certificat(s) expirent dans moins de 30 jours</div>`;
     } catch(e) { toast('Erreur stats: ' + e.message, 'error'); }
-  }
-
-  function certRow(c) {
-    const exp = new Date(c.not_after).toLocaleDateString('fr-FR');
-    const statusClass = c.status;
-    return `<tr><td>${c.common_name}</td><td>${c.ca_name}</td><td><span class="badge badge-${statusClass}">${c.status}</span></td><td>${exp}</td><td>${c.days_left}</td><td><button class="btn btn-sm" onclick="showCertDetail('${c.serial}')">⋯</button></td></tr>`;
   }
 
   async function loadRecentCerts() {
     try {
-      const certs = await api('/api/certs/list');
+      const certs = await api('/api/certs/list?limit=8');
       const tbody = document.getElementById('recent-certs-tbody');
-      tbody.innerHTML = certs.slice(0,8).map(c => certRow(c)).join('') || '<tr><td colspan="6">Aucun certificat</td></tr>';
-    } catch(e) { toast('Erreur chargement certificats', 'error'); }
+      tbody.innerHTML = certs.length ? certs.map(c => certRow(c)).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px">Aucun certificat</td></tr>';
+    } catch(e) {}
   }
 
+  // ── Certificats ───────────────────────────────────────────────────────────
   async function loadCerts() {
     try {
       const status = document.getElementById('filter-status').value;
-      const ca = document.getElementById('filter-ca').value;
-      let url = '/api/certs/list'; const params = [];
-      if (status) params.push('status='+status); if (ca) params.push('ca='+ca);
-      if (params.length) url += '?' + params.join('&');
+      const ca     = document.getElementById('filter-ca').value;
+      let url = '/api/certs/list?limit=200';
+      if (status) url += '&status=' + encodeURIComponent(status);
+      if (ca)     url += '&ca='     + encodeURIComponent(ca);
       const certs = await api(url);
       const tbody = document.getElementById('certs-tbody');
-      tbody.innerHTML = certs.length ? certs.map(c => certRow(c)).join('') : '<tr><td colspan="6">Aucun certificat</td></tr>';
-    } catch(e) { toast('Erreur', 'error'); }
+      tbody.innerHTML = certs.length ? certs.map(c => certRow(c)).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px">Aucun certificat</td></tr>';
+    } catch(e) { toast('Erreur chargement: ' + e.message, 'error'); }
+  }
+
+  // ── CA management ─────────────────────────────────────────────────────────
+  async function loadCAs() {
+    try {
+      const cas = await api('/api/ca/list');
+      const container = document.getElementById('ca-cards');
+      if (!cas.length) { container.innerHTML = '<div style="color:var(--text-muted);padding:20px">Aucune CA configurée</div>'; return; }
+      container.innerHTML = cas.map(ca => {
+        const status = ca.days_left < 30 ? 'critical' : ca.days_left < 90 ? 'warning' : 'active';
+        return `<div class="ca-card">
+          <div class="ca-card-title">${ca.common_name}</div>
+          <div class="ca-card-sub">${ca.name} · ${statusBadge(status)}</div>
+          <div class="ca-card-meta">
+            <div class="ca-meta-item"><span class="ca-meta-label">Organisation</span><span class="ca-meta-value">${ca.organization||'—'}</span></div>
+            <div class="ca-meta-item"><span class="ca-meta-label">Pays</span><span class="ca-meta-value">${ca.country||'—'}</span></div>
+            <div class="ca-meta-item"><span class="ca-meta-label">Expire</span><span class="ca-meta-value">${fmtDate(ca.not_after)}</span></div>
+            <div class="ca-meta-item"><span class="ca-meta-label">Jours restants</span><span class="ca-meta-value">${ca.days_left}</span></div>
+          </div>
+          <div class="ca-card-actions">
+            <a class="btn btn-sm" href="/api/ca/${ca.name}/cert.pem" target="_blank" download>⬇ Certificat</a>
+            <a class="btn btn-sm" href="/api/ca/${ca.name}/crl.der" target="_blank" download>⬇ CRL</a>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { toast('Erreur CAs: ' + e.message, 'error'); }
   }
 
   async function loadCASelects() {
     try {
       const cas = await api('/api/ca/list');
       const sel = document.getElementById('issue-ca');
-      sel.innerHTML = '<option value="">Sélectionner CA…</option>';
-      cas.forEach(ca => { const o = document.createElement('option'); o.value = ca.name; o.textContent = ca.name + ' — ' + ca.common_name; sel.appendChild(o); });
+      sel.innerHTML = '<option value="">Sélectionner une CA…</option>';
+      cas.forEach(ca => {
+        const o = document.createElement('option');
+        o.value = ca.name; o.textContent = `${ca.name} — ${ca.common_name}`;
+        sel.appendChild(o);
+      });
       const filterCa = document.getElementById('filter-ca');
-      if(filterCa){ filterCa.innerHTML = '<option value="">Toutes CA</option>'; cas.forEach(ca => { const o = document.createElement('option'); o.value = ca.name; o.textContent = ca.name; filterCa.appendChild(o); }); }
+      if (filterCa) {
+        filterCa.innerHTML = '<option value="">Toutes CA</option>';
+        cas.forEach(ca => {
+          const o = document.createElement('option'); o.value = ca.name; o.textContent = ca.name; filterCa.appendChild(o);
+        });
+      }
     } catch(e) {}
   }
 
-  async function loadCAs() {
+  async function createCA() {
+    const btn  = document.getElementById('ca-create-btn');
+    const name = document.getElementById('ca-name').value.trim();
+    const cn   = document.getElementById('ca-cn').value.trim();
+    const org  = document.getElementById('ca-org').value.trim() || 'Autoflow';
+    const country = document.getElementById('ca-country').value.trim() || 'FR';
+    const days = parseInt(document.getElementById('ca-days').value) || 3650;
+    const keySize = parseInt(document.getElementById('ca-key-size').value) || 4096;
+    if (!name) { toast('Le nom interne est requis', 'error'); return; }
+    if (!cn)   { toast('Le Common Name est requis', 'error'); return; }
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
     try {
-      const cas = await api('/api/ca/list');
-      const container = document.getElementById('ca-cards');
-      if(!cas.length){ container.innerHTML = '<div>Aucune CA</div>'; return; }
-      container.innerHTML = cas.map(ca => `<div class="card" style="padding:20px"><b>${ca.common_name}</b> (${ca.name})<br>Expire dans ${ca.days_left}j</div>`).join('');
-    } catch(e) {}
+      const r = await api('/api/ca/create', 'POST', {name, common_name:cn, organization:org, country, validity_days:days, key_size:keySize});
+      toast(`CA "${name}" créée avec succès`, 'success');
+      closeModal('modal-ca');
+      ['ca-name','ca-cn'].forEach(id => document.getElementById(id).value = '');
+      loadCAs();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+    finally { btn.innerHTML = 'Créer la CA'; btn.disabled = false; }
   }
 
+  // ── Émettre ───────────────────────────────────────────────────────────────
+  async function issueCert() {
+    const btn      = document.getElementById('issue-btn');
+    const ca       = document.getElementById('issue-ca').value;
+    const cn       = document.getElementById('issue-cn').value.trim();
+    const sansRaw  = document.getElementById('issue-sans').value.trim();
+    const ipsRaw   = document.getElementById('issue-ips').value.trim();
+    const days     = parseInt(document.getElementById('issue-days').value) || 365;
+    const certType = document.getElementById('issue-cert-type').value;
+    const wildcard = document.getElementById('issue-wildcard').checked;
+    const keySize  = parseInt(document.getElementById('issue-key-size').value) || 2048;
+    if (!ca) { toast('Sélectionnez une CA', 'error'); return; }
+    if (!cn) { toast('Le nom commun est requis', 'error'); return; }
+    const domains = sansRaw ? sansRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const ips     = ipsRaw  ? ipsRaw.split(',').map(s => s.trim()).filter(Boolean)  : [];
+    btn.innerHTML = '<span class="spinner"></span> Émission…'; btn.disabled = true;
+    try {
+      const r = await api('/api/certs/issue', 'POST', {
+        ca_name: ca, common_name: cn, domains, ips,
+        validity_days: days, cert_type: certType, wildcard, key_size: keySize,
+      });
+      toast(`Certificat émis : ${r.serial.substring(0,12)}…`, 'success');
+      nav(document.querySelector('[data-page=certs]'), 'certs');
+      resetIssueForm();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+    finally { btn.innerHTML = 'Émettre le certificat'; btn.disabled = false; }
+  }
+
+  function resetIssueForm() {
+    ['issue-cn','issue-sans','issue-ips'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('issue-days').value     = '365';
+    document.getElementById('issue-cert-type').value = 'server';
+    document.getElementById('issue-key-size').value  = '2048';
+    document.getElementById('issue-wildcard').checked = false;
+    document.getElementById('issue-ca').selectedIndex = 0;
+  }
+
+  // ── Détail certificat ─────────────────────────────────────────────────────
+  window.showCertDetail = async function(serial) {
+    try {
+      const certs = await api(`/api/certs/list`);
+      const cert  = certs.find(c => c.serial === serial);
+      if (!cert) { toast('Certificat introuvable', 'error'); return; }
+
+      document.getElementById('cert-detail-title').textContent = cert.common_name;
+      const body = document.getElementById('cert-detail-body');
+      const status = `<span class="badge badge-${cert.status}">${cert.status}</span>`;
+      body.innerHTML = `
+        <div class="detail-grid">
+          <div class="detail-item"><div class="detail-label">Common Name</div><div class="detail-value">${cert.common_name}</div></div>
+          <div class="detail-item"><div class="detail-label">Statut</div><div class="detail-value">${status}</div></div>
+          <div class="detail-item"><div class="detail-label">CA</div><div class="detail-value">${cert.ca_name}</div></div>
+          <div class="detail-item"><div class="detail-label">Type</div><div class="detail-value">${cert.cert_type}</div></div>
+          <div class="detail-item"><div class="detail-label">Valide dès</div><div class="detail-value">${fmtDate(cert.not_before)}</div></div>
+          <div class="detail-item"><div class="detail-label">Expire le</div><div class="detail-value">${fmtDate(cert.not_after)} (${cert.days_left}j)</div></div>
+          <div class="detail-item"><div class="detail-label">Organisation</div><div class="detail-value">${cert.organization||'—'}</div></div>
+          <div class="detail-item"><div class="detail-label">Émis par</div><div class="detail-value">${cert.issued_by||'—'}</div></div>
+          <div class="detail-item detail-full"><div class="detail-label">Serial</div><div class="detail-value" style="font-family:monospace;font-size:12px">${cert.serial}</div></div>
+          <div class="detail-item detail-full"><div class="detail-label">SANs</div><div class="detail-value">${(cert.sans||[]).join(', ') || '—'}</div></div>
+          <div class="detail-item detail-full"><div class="detail-label">Empreinte SHA-256</div><div class="detail-value" style="font-family:monospace;font-size:11px;word-break:break-all">${cert.fingerprint_sha256||'—'}</div></div>
+        </div>
+        <div class="download-links">
+          <a class="btn btn-sm" href="/api/certs/${serial}/cert.pem" download onclick="addAuthToLink(event, this)">⬇ Certificat PEM</a>
+          <a class="btn btn-sm" href="/api/certs/${serial}/bundle.pem" download onclick="addAuthToLink(event, this)">⬇ Bundle (cert + CA)</a>
+          ${currentUser && currentUser.role === 'admin'
+            ? `<button class="btn btn-sm" onclick="downloadKey('${serial}')">⬇ Clé privée (admin)</button>`
+            : ''}
+        </div>
+      `;
+
+      const footer = document.getElementById('cert-detail-footer');
+      const isRevoked = cert.status === 'revoked';
+      footer.innerHTML = isRevoked ? '' : `
+        <button class="btn" onclick="closeModal('modal-cert-detail');openRevoke('${serial}')">Révoquer</button>
+        <button class="btn btn-primary" onclick="closeModal('modal-cert-detail');openRenew('${serial}')">Renouveler</button>
+      `;
+      openModal('modal-cert-detail');
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+  };
+
+  async function downloadKey(serial) {
+    const reason = prompt('Raison du téléchargement de la clé privée (requis) :');
+    if (reason === null) return;
+    try {
+      const token = getToken();
+      const r = await fetch(`/api/certs/${serial}/key.pem`, {
+        headers: {'Authorization': `Bearer ${token}`, 'X-Request-Reason': reason || 'admin download'}
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail||'Erreur'); }
+      const pem  = await r.text();
+      const blob = new Blob([pem], {type:'application/x-pem-file'});
+      const a    = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `${serial}.key.pem`; a.click();
+    } catch(e) { toast('Erreur clé: ' + e.message, 'error'); }
+  }
+
+  function addAuthToLink(e, link) {
+    e.preventDefault();
+    const token = getToken();
+    fetch(link.href, {headers: {'Authorization': `Bearer ${token}`}})
+      .then(r => { if (!r.ok) throw new Error('Erreur'); return r.blob(); })
+      .then(blob => {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = link.href.split('/').pop(); a.click();
+      }).catch(err => toast('Erreur téléchargement: ' + err.message, 'error'));
+  }
+
+  // ── Révoquer ──────────────────────────────────────────────────────────────
+  function openRevoke(serial) {
+    document.getElementById('revoke-serial').value = serial;
+    openModal('modal-revoke');
+  }
+
+  window.confirmRevoke = async function() {
+    const btn    = document.getElementById('revoke-btn');
+    const serial = document.getElementById('revoke-serial').value;
+    const reason = document.getElementById('revoke-reason').value;
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    try {
+      await api('/api/certs/revoke', 'POST', {serial, reason});
+      toast('Certificat révoqué', 'success');
+      closeModal('modal-revoke');
+      loadCerts();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+    finally { btn.innerHTML = 'Révoquer'; btn.disabled = false; }
+  };
+
+  // ── Renouveler ────────────────────────────────────────────────────────────
+  function openRenew(serial) {
+    document.getElementById('renew-serial').value = serial;
+    openModal('modal-renew');
+  }
+
+  window.confirmRenew = async function() {
+    const btn    = document.getElementById('renew-btn');
+    const serial = document.getElementById('renew-serial').value;
+    const days   = parseInt(document.getElementById('renew-days').value) || 365;
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    try {
+      const r = await api('/api/certs/renew', 'POST', {serial, validity_days:days});
+      toast(`Renouvelé → ${r.serial.substring(0,12)}…`, 'success');
+      closeModal('modal-renew');
+      loadCerts();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+    finally { btn.innerHTML = 'Renouveler'; btn.disabled = false; }
+  };
+
+  // ── Timeline ──────────────────────────────────────────────────────────────
   async function loadTimeline() {
     try {
       const activeOnly = document.getElementById('tl-active-only').checked;
-      let certs = await api('/api/certs/list');
+      let certs = await api('/api/certs/list?limit=200');
       if (activeOnly) certs = certs.filter(c => !['revoked','expired'].includes(c.status));
       certs.sort((a,b) => a.days_left - b.days_left);
+      const maxDays = Math.max(...certs.map(c => c.days_left), 365);
       const container = document.getElementById('timeline-container');
-      container.innerHTML = certs.slice(0,20).map(c => `<div>${c.common_name} : ${c.days_left} jours</div>`).join('') || '<div>Aucun</div>';
-    } catch(e) {}
+      if (!certs.length) { container.innerHTML = '<div style="color:var(--text-muted);padding:20px">Aucun certificat</div>'; return; }
+      container.innerHTML = certs.slice(0,50).map(c => {
+        const pct   = Math.min(100, (c.days_left / maxDays) * 100);
+        const cls   = c.days_left <= 7 ? 'crit' : c.days_left <= 30 ? 'warn' : '';
+        return `<div class="timeline-item">
+          <div style="min-width:200px;font-weight:500">${c.common_name}</div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted)"><span>${fmtDate(c.not_after)}</span><span>${c.days_left}j</span></div>
+            <div class="timeline-bar"><div class="timeline-fill ${cls}" style="width:${pct}%"></div></div>
+          </div>
+          <div>${statusBadge(c.status)}</div>
+        </div>`;
+      }).join('');
+    } catch(e) { toast('Erreur timeline: ' + e.message, 'error'); }
   }
 
+  // ── Révoqués ──────────────────────────────────────────────────────────────
   async function loadRevoked() {
     try {
-      const certs = await api('/api/certs/list?status=revoked');
+      const certs = await api('/api/certs/list?status=revoked&limit=200');
       const tbody = document.getElementById('revoked-tbody');
-      tbody.innerHTML = certs.length ? certs.map(c => `<tr><td>${c.common_name}</td><td>${c.serial}</td><td>${c.ca_name}</td><td>${c.reason||'unspecified'}</td></tr>`).join('') : '<tr><td colspan="4">Aucun</td></tr>';
+      tbody.innerHTML = certs.length
+        ? certs.map(c => `<tr>
+            <td><b>${c.common_name}</b></td>
+            <td style="font-family:monospace;font-size:11px">${c.serial.substring(0,16)}…</td>
+            <td>${c.ca_name}</td>
+            <td>${c.revocation_reason||'unspecified'}</td>
+            <td>${c.revoked_at ? fmtDateTime(c.revoked_at) : '—'}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px">Aucun certificat révoqué</td></tr>';
     } catch(e) {}
   }
 
-  window.showCertDetail = async function(serial) { /* ... */ openModal('modal-cert-detail'); };
-  window.issueCert = async function() { /* appel API */ toast('Émis (simulé si backend OK)'); nav(document.querySelector('[data-page=certs]'),'certs'); };
-  window.resetIssueForm = function(){};
-  window.createCA = async function(){ toast('CA créée'); closeModal('modal-ca'); };
-  window.confirmRevoke = async function(){ toast('Révoqué'); closeModal('modal-revoke'); };
-  window.confirmRenew = async function(){ toast('Renouvelé'); closeModal('modal-renew'); };
-  window.refreshAll = function(){ const active = document.querySelector('.page.active'); if(active) loadPage(active.id.replace('page-','')); };
+  // ── Utilisateurs ──────────────────────────────────────────────────────────
+  async function loadUsers() {
+    try {
+      const users = await api('/api/users');
+      const tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = users.map(u => `<tr>
+        <td><b>${u.username}</b></td>
+        <td><span class="badge badge-${u.role}">${u.role}</span></td>
+        <td>${u.created_at ? fmtDate(u.created_at) : '—'}</td>
+        <td>${u.username !== currentUser?.username
+          ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.username}')">Supprimer</button>`
+          : '<span style="font-size:12px;color:var(--text-muted)">(vous)</span>'}</td>
+      </tr>`).join('');
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+  }
+
+  async function createUser() {
+    const btn      = document.getElementById('user-create-btn');
+    const username = document.getElementById('new-user-name').value.trim();
+    const password = document.getElementById('new-user-pass').value;
+    const role     = document.getElementById('new-user-role').value;
+    if (!username || !password) { toast('Remplissez tous les champs', 'error'); return; }
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    try {
+      await api('/api/users', 'POST', {username, password, role});
+      toast(`Utilisateur "${username}" créé`, 'success');
+      closeModal('modal-user');
+      document.getElementById('new-user-name').value = '';
+      document.getElementById('new-user-pass').value = '';
+      loadUsers();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+    finally { btn.innerHTML = 'Créer'; btn.disabled = false; }
+  }
+
+  async function deleteUser(username) {
+    if (!confirm(`Supprimer l'utilisateur "${username}" ?`)) return;
+    try {
+      await api(`/api/users/${username}`, 'DELETE');
+      toast(`Utilisateur "${username}" supprimé`, 'success');
+      loadUsers();
+    } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  function initApp() {
+    updateSidebarUser();
+    loadStats(); loadRecentCerts(); loadCASelects();
+    setInterval(() => {
+      loadStats();
+      const active = document.querySelector('.page.active');
+      if (active) loadPage(active.id.replace('page-', ''));
+    }, 60000);
+  }
+
+  // Keyboard support for login form
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('login-overlay').classList.contains('show')) {
+      doLogin();
+    }
+  });
 
   document.addEventListener('DOMContentLoaded', () => {
-    loadStats(); loadRecentCerts(); loadCASelects();
-    setInterval(() => { loadStats(); const active = document.querySelector('.page.active'); if(active) loadPage(active.id.replace('page-','')); }, 60000);
+    const token = getToken();
+    if (!token) { showLogin(); return; }
+    // Verify token by calling /api/auth/me
+    fetch('/api/auth/me', {headers:{'Authorization':`Bearer ${token}`}})
+      .then(r => { if (!r.ok) throw new Error('invalid'); return r.json(); })
+      .then(data => {
+        currentUser = {username: data.username, role: data.role};
+        initApp();
+      })
+      .catch(() => { clearToken(); showLogin(); });
   });
-  document.querySelectorAll('.modal-overlay').forEach(overlay => { overlay.addEventListener('click', e => { if(e.target === overlay) overlay.classList.remove('open'); }); });
 </script>
 </body>
 </html>
