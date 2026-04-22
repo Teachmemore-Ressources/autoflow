@@ -26,9 +26,11 @@ body{background:var(--bg);color:var(--text);font:14px/1.5 'Inter',system-ui,sans
 
 /* ── Sidebar ── */
 .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.sb-head{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sb-head img{width:36px;height:36px;border-radius:8px;object-fit:contain;background:#fff;flex-shrink:0}
+.sb-head-text{}
 .sb-head h1{font-size:15px;font-weight:700;color:var(--accent)}
-.sb-head p{font-size:11px;color:var(--muted);margin-top:3px}
+.sb-head p{font-size:11px;color:var(--muted);margin-top:2px}
 .sb-nav{flex:1;overflow-y:auto;padding:6px 0}
 .sb-nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer;transition:.12s;user-select:none}
 .sb-nav a:hover{background:var(--surface2);color:var(--text)}
@@ -144,8 +146,11 @@ select option{background:var(--surface2)}
 <!-- ── Sidebar ─────────────────────────────────── -->
 <aside class="sidebar">
   <div class="sb-head">
-    <h1>Autoflow</h1>
-    <p>Deploy Wizard</p>
+    <img src="/logo.png" alt="Autoflow"/>
+    <div class="sb-head-text">
+      <h1>Autoflow</h1>
+      <p>Deploy Wizard</p>
+    </div>
   </div>
   <nav class="sb-nav" id="nav">
     <a id="nav-preflight" onclick="activateSection('preflight')" class="active">Pre-flight</a>
