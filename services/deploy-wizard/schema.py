@@ -213,6 +213,21 @@ FIELDS = [
         "description": "Gitea public URL — auto-derived from Infrastructure > Domain",
     },
     {
+        "key": "GITEA_ADMIN_USER", "label": "Admin Username", "section": "gitea",
+        "type": "text", "default": "admin", "required": True,
+        "description": "Gitea admin account username (created on first start)",
+    },
+    {
+        "key": "GITEA_ADMIN_PASSWORD", "label": "Admin Password", "section": "gitea",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
+        "description": "Gitea admin account password (created on first start)",
+    },
+    {
+        "key": "GITEA_ADMIN_EMAIL", "label": "Admin Email", "section": "gitea",
+        "type": "text", "default": "admin@localhost",
+        "description": "Gitea admin account email address",
+    },
+    {
         "key": "GITEA_DB_NAME", "label": "DB Name", "section": "gitea",
         "type": "text", "default": "gitea",
         "description": "Gitea PostgreSQL database name",
