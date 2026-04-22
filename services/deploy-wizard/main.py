@@ -101,9 +101,6 @@ def save_config(data: dict):
     # ── Write .env preserving template structure ───────────────────
     _write_env(merged)
 
-    # ── Update tls.yml if domain changed ──────────────────────────
-    _update_tls_yml(domain)
-
     # ── Regenerate monitoring_users (bcrypt for Traefik BasicAuth) ─
     pwd  = merged.get("MONITORING_ADMIN_PASSWORD", "")
     user = merged.get("MONITORING_ADMIN_USER", "admin")
@@ -543,9 +540,7 @@ async def generate_cert():
         yield _sse(f"  traefik/certs/wildcard.{domain}.key  — private key (600)")
         yield _sse(f"  traefik/certs/ca.{domain}.crt        — Root CA ← import this in browser/OS")
 
-        # ── 6. Update tls.yml ─────────────────────────────────────────────
-        _update_tls_yml(domain)
-        yield _sse("traefik/dynamic/tls.yml updated with new paths.")
+        yield _sse("traefik/dynamic/tls.yml uses {{ env \"DOMAIN\" }} — no update needed.")
         yield _sse("")
         yield _sse("[SUCCESS] PKI setup complete!")
         yield _sse(f"  Import traefik/certs/ca.{domain}.crt into your browser/OS to trust all Autoflow services.")

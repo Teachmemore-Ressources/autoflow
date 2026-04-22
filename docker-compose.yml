@@ -72,6 +72,7 @@ services:
     restart: unless-stopped
     environment:
       DOCKER_API_VERSION: "1.41"
+      DOMAIN: ${DOMAIN:-localhost}
     command:
       - --configFile=/etc/traefik/traefik.yml
     ports:
