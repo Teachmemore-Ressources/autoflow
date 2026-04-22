@@ -3,13 +3,13 @@
 .env
 
 # Deploy wizard virtualenv
-.wizard-venv/
+#.wizard-venv/
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
+#.venv/
 dist/
 build/
 
