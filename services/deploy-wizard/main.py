@@ -72,36 +72,40 @@ def get_config():
 
 @app.post("/api/config")
 def save_config(data: dict):
-    # Start from existing .env to preserve unmanaged keys
-    existing: dict[str, str] = {}
+    # Load current .env to compute diff BEFORE merging
+    old: dict[str, str] = {}
     if ENV_FILE.exists():
-        existing = {k: v or "" for k, v in dotenv_values(ENV_FILE).items()}
+        old = {k: v or "" for k, v in dotenv_values(ENV_FILE).items()}
 
-    # Merge incoming data
-    existing.update({k: v for k, v in data.items() if v is not None})
+    # Keys whose value actually changed
+    changed = [k for k, v in data.items() if v is not None and old.get(k, "") != str(v)]
+
+    # Merge incoming data on top of existing
+    merged = {**old}
+    merged.update({k: v for k, v in data.items() if v is not None})
 
     # ── Auto-derive values from DOMAIN ─────────────────────────────
-    domain = existing.get("DOMAIN", "localhost")
-    if not existing.get("GITEA_DOMAIN"):
-        existing["GITEA_DOMAIN"] = domain
-    if not existing.get("GITEA_ROOT_URL"):
-        existing["GITEA_ROOT_URL"] = f"https://git.{domain}"
-    if not existing.get("PKI_BASE_URL"):
-        existing["PKI_BASE_URL"] = f"https://pki.{domain}"
-    if not existing.get("CORS_ORIGINS"):
-        existing["CORS_ORIGINS"] = (
+    domain = merged.get("DOMAIN", "localhost")
+    if not merged.get("GITEA_DOMAIN"):
+        merged["GITEA_DOMAIN"] = domain
+    if not merged.get("GITEA_ROOT_URL"):
+        merged["GITEA_ROOT_URL"] = f"https://git.{domain}"
+    if not merged.get("PKI_BASE_URL"):
+        merged["PKI_BASE_URL"] = f"https://pki.{domain}"
+    if not merged.get("CORS_ORIGINS"):
+        merged["CORS_ORIGINS"] = (
             f"https://awx.{domain},https://api.{domain},https://pki.{domain}"
         )
 
     # ── Write .env preserving template structure ───────────────────
-    _write_env(existing)
+    _write_env(merged)
 
     # ── Update tls.yml if domain changed ──────────────────────────
     _update_tls_yml(domain)
 
     # ── Regenerate monitoring_users (bcrypt for Traefik BasicAuth) ─
-    pwd  = existing.get("MONITORING_ADMIN_PASSWORD", "")
-    user = existing.get("MONITORING_ADMIN_USER", "admin")
+    pwd  = merged.get("MONITORING_ADMIN_PASSWORD", "")
+    user = merged.get("MONITORING_ADMIN_USER", "admin")
     if pwd:
         hashed = bcrypt.hashpw(pwd.encode(), bcrypt.gensalt(12)).decode()
         hashed = hashed.replace("$2b$", "$2y$")  # Traefik requires $2y$
@@ -109,7 +113,45 @@ def save_config(data: dict):
         MONITORING_USERS.write_text(f"{user}:{hashed}\n")
         MONITORING_USERS.chmod(0o600)
 
-    return {"status": "saved"}
+    # ── Compute affected services and warnings ─────────────────────
+    services: set[str] = set()
+    for key in changed:
+        services.update(KEY_TO_SERVICES.get(key, []))
+
+    warnings: list[dict] = []
+    first_start_hits = [k for k in changed if k in FIRST_START_ONLY]
+    needs_recreate   = any(k in NEEDS_RECREATE for k in changed)
+
+    if first_start_hits:
+        warnings.append({
+            "type": "first_start_only",
+            "message": (
+                "These values are only read on first container start — "
+                "restart has no effect, update manually in the service UI: "
+                + ", ".join(first_start_hits)
+            ),
+        })
+    if "DOMAIN" in changed:
+        warnings.append({
+            "type": "domain_changed",
+            "message": "Domain changed — regenerate the TLS certificate in Pre-flight.",
+        })
+    if needs_recreate:
+        warnings.append({
+            "type": "needs_recreate",
+            "message": (
+                "Port or DOCKER_GID changes require container recreation. "
+                "Use 'Save & Deploy' (docker compose up -d) instead of restart."
+            ),
+        })
+
+    return {
+        "status":            "saved",
+        "changed":           changed,
+        "affected_services": sorted(services),
+        "needs_recreate":    needs_recreate,
+        "warnings":          warnings,
+    }
 
 
 def _write_env(values: dict[str, str]) -> None:
@@ -177,6 +219,63 @@ def encrypt_env():
     return {"status": "encrypted", "path": str(ENV_ENC_FILE)}
 
 
+# ── Service restart map ───────────────────────────────────────────────────────
+
+KEY_TO_SERVICES: dict[str, list[str]] = {
+    "DOMAIN":                     ["traefik"],
+    "TRAEFIK_HTTP_PORT":          ["traefik"],
+    "TRAEFIK_HTTPS_PORT":         ["traefik"],
+    "GITEA_SSH_PORT":             ["traefik", "gitea"],
+    "POSTGRES_PASSWORD":          ["postgres", "awx", "awx_task", "awx_ee"],
+    "REDIS_PASSWORD":             ["redis", "awx", "awx_task", "awx_ee", "event_engine"],
+    "AWX_TOKEN":                  ["event_engine"],
+    "AWX_JOB_TEMPLATE_ID":        ["event_engine"],
+    "API_SECRET_KEY":             ["api"],
+    "API_USERNAME":               ["api"],
+    "API_PASSWORD":               ["api"],
+    "CORS_ORIGINS":               ["api"],
+    "RATE_LIMIT":                 ["api"],
+    "JWT_SECRET_KEY":             ["api"],
+    "JWT_EXPIRE_MINUTES":         ["api"],
+    "GRAFANA_ADMIN_PASSWORD":     ["grafana"],
+    "PROMETHEUS_RETENTION":       ["prometheus"],
+    "MONITORING_ADMIN_USER":      ["traefik"],
+    "MONITORING_ADMIN_PASSWORD":  ["traefik"],
+    "DEDUP_TTL":                  ["event_engine"],
+    "GITHUB_WEBHOOK_SECRET":      ["event_engine"],
+    "EVENT_ENGINE_ADMIN_TOKEN":   ["event_engine"],
+    "NOTIFICATION_WEBHOOK_URL":   ["event_engine"],
+    "NOTIFICATION_SLACK_WEBHOOK": ["event_engine"],
+    "JOB_WATCHER_INTERVAL":       ["event_engine"],
+    "GITEA_DOMAIN":               ["gitea"],
+    "GITEA_ROOT_URL":             ["gitea"],
+    "GITEA_DB_PASSWORD":          ["gitea_postgres", "gitea"],
+    "GITEA_METRICS_TOKEN":        ["gitea", "prometheus"],
+    "GITEA_WEBHOOK_SECRET":       ["gitea"],
+    "GITEA_REGISTRY_TOKEN":       ["gitea"],
+    "GITEA_LOG_LEVEL":            ["gitea"],
+    "PKI_ADMIN_PASSWORD":         ["pki"],
+    "PKI_JWT_SECRET":             ["pki"],
+    "LOG_LEVEL":                  ["api", "event_engine"],
+    "AWX_METRICS_INTERVAL":       ["event_engine"],
+    "SCAN_INTERVAL":              ["api"],
+}
+
+# Keys consumed only on first container start — changing them has no effect after init
+FIRST_START_ONLY: frozenset[str] = frozenset({
+    "AWX_ADMIN_USER", "AWX_ADMIN_PASSWORD", "AWX_ADMIN_EMAIL", "AWX_SECRET_KEY",
+    "GITEA_ADMIN_USER", "GITEA_ADMIN_PASSWORD", "GITEA_ADMIN_EMAIL",
+    "GITEA_SECRET_KEY", "GITEA_INTERNAL_TOKEN",
+    "POSTGRES_DB", "POSTGRES_USER",
+    "GITEA_DB_NAME", "GITEA_DB_USER",
+    "GRAFANA_ADMIN_USER", "PKI_JWT_SECRET",
+})
+
+# Keys that require container recreation (not just restart)
+NEEDS_RECREATE: frozenset[str] = frozenset({
+    "DOCKER_GID", "TRAEFIK_HTTP_PORT", "TRAEFIK_HTTPS_PORT", "GITEA_SSH_PORT",
+})
+
 # ── Docker Compose deployment ─────────────────────────────────────────────────
 
 @app.get("/api/deploy")
@@ -221,6 +320,39 @@ async def deploy(encrypt: bool = False):
 
 def _sse(msg: str) -> str:
     return f"data: {msg}\n\n"
+
+
+# ── Targeted service restart ───────────────────────────────────────────────────
+
+@app.get("/api/restart")
+async def restart_services(services: str = ""):
+    """SSE: docker compose restart <services>."""
+    service_list = [s.strip() for s in services.split(",") if s.strip()]
+
+    async def stream():
+        if not service_list:
+            yield _sse("[ERROR] No services specified")
+            yield _sse("[DONE]")
+            return
+        yield _sse(f"Restarting: {', '.join(service_list)}")
+        process = await asyncio.create_subprocess_exec(
+            "docker", "compose", "--env-file", str(ENV_FILE),
+            "restart", *service_list,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(ROOT),
+        )
+        async for line in process.stdout:
+            yield _sse(line.decode().rstrip())
+        await process.wait()
+        if process.returncode == 0:
+            yield _sse(f"[SUCCESS] Restarted: {', '.join(service_list)}")
+        else:
+            yield _sse(f"[ERROR] docker compose restart exited with code {process.returncode}")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ── PKI constants ─────────────────────────────────────────────────────────────

@@ -109,6 +109,15 @@ select option{background:var(--surface2)}
 .divider{height:1px;background:var(--border);margin:24px 0}
 .hint{font-size:11px;color:var(--warning);display:flex;align-items:center;gap:4px;margin-top:4px}
 
+/* ── Apply banner ── */
+#apply-banner{display:none;background:rgba(245,158,11,.08);border-bottom:1px solid rgba(245,158,11,.35);padding:9px 24px;flex-shrink:0;align-items:center;gap:10px;flex-wrap:wrap}
+#apply-banner.show{display:flex}
+.ab-label{color:var(--warning);font-weight:700;font-size:13px;flex-shrink:0}
+.ab-chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;flex:1}
+.ab-chip{background:rgba(245,158,11,.2);color:var(--warning);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:600}
+.ab-recreate{font-size:11px;color:var(--danger);font-style:italic}
+#apply-warnings{display:none;padding:7px 24px;background:rgba(239,68,68,.07);border-bottom:1px solid rgba(239,68,68,.25);font-size:12px;color:#fca5a5;line-height:1.8}
+
 /* ── Pre-flight ── */
 .preflight-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
 .pf-item{display:flex;align-items:flex-start;gap:14px;padding:14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
@@ -161,6 +170,13 @@ select option{background:var(--surface2)}
       <span id="stext">Checking stack…</span>
     </div>
   </div>
+  <div id="apply-banner">
+    <span class="ab-label">⚡ Unsaved changes applied</span>
+    <div class="ab-chips" id="ab-chips"></div>
+    <button class="btn btn-sm" style="background:var(--warning);color:#000;font-weight:700;flex-shrink:0" onclick="applyChanges()">🔄 Restart affected services</button>
+    <button class="btn-icon btn-sm" onclick="hideBanner()" title="Dismiss">✕</button>
+  </div>
+  <div id="apply-warnings"></div>
   <div class="content" id="content"></div>
   <div class="log-panel" id="log-panel">
     <div class="log-head">
@@ -179,6 +195,7 @@ select option{background:var(--surface2)}
 let SCHEMA = null;
 let CONFIG = {};
 let currentSection = null;
+let pendingServices = [];
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 async function boot() {
@@ -513,11 +530,67 @@ async function saveConfig() {
     body: JSON.stringify(CONFIG),
   });
   if (res.ok) {
+    const data = await res.json();
     toast('Configuration saved', 'ok');
+    showApplyBanner(data);
   } else {
     const err = await res.json().catch(() => ({}));
     toast(err.detail || 'Save failed', 'err');
   }
+}
+
+function showApplyBanner(data) {
+  const banner   = document.getElementById('apply-banner');
+  const warnDiv  = document.getElementById('apply-warnings');
+  const chipsDiv = document.getElementById('ab-chips');
+
+  pendingServices = data.affected_services || [];
+
+  if (pendingServices.length > 0) {
+    let chips = pendingServices.map(s => `<span class="ab-chip">${s}</span>`).join('');
+    if (data.needs_recreate) {
+      chips += `<span class="ab-recreate">⚠ requires recreate — use "Save &amp; Deploy" instead</span>`;
+    }
+    chipsDiv.innerHTML = chips;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+
+  if (data.warnings && data.warnings.length > 0) {
+    warnDiv.innerHTML = data.warnings.map(w => `<div>⚠ ${w.message}</div>`).join('');
+    warnDiv.style.display = 'block';
+  } else {
+    warnDiv.style.display = 'none';
+  }
+}
+
+function hideBanner() {
+  document.getElementById('apply-banner').classList.remove('show');
+  document.getElementById('apply-warnings').style.display = 'none';
+  pendingServices = [];
+}
+
+function applyChanges() {
+  if (!pendingServices.length) return;
+  openLog();
+  logLine(`Restarting: ${pendingServices.join(', ')}`, 'info');
+  const evts = new EventSource(`/api/restart?services=${encodeURIComponent(pendingServices.join(','))}`);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') {
+      evts.close();
+      hideBanner();
+      pollStatus();
+      return;
+    }
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[SUCCESS]') ? 'ok' : '';
+    logLine(msg, cls);
+  };
+  evts.onerror = () => {
+    logLine('[ERROR] Connection to restart stream lost', 'err');
+    evts.close();
+  };
 }
 
 function validateAll() {
