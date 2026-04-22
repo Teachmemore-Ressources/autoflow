@@ -8,8 +8,6 @@ Supports two mechanisms simultaneously — backward-compatible:
 
 JWT tokens are issued via POST /auth/token (OAuth2 password flow).
 """
-from __future__ import annotations
-
 import hmac
 from datetime import datetime, timedelta, timezone
 
