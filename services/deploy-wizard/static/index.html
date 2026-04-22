@@ -143,9 +143,12 @@ select option{background:var(--surface2)}
   </nav>
   <div class="sb-foot">
     <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">⚙ Generate all secrets</button>
-    <button class="btn btn-primary btn-block" onclick="saveConfig()">Save config</button>
-    <button class="btn btn-success btn-block" onclick="deploy(false)">Save &amp; Deploy</button>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">Save, Encrypt &amp; Deploy</button>
+    <button class="btn btn-primary btn-block" onclick="saveConfig()">💾 Save config</button>
+    <button class="btn btn-success btn-block" onclick="deploy(false)" id="btn-deploy">🚀 Save &amp; Deploy</button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">🔐 Save, Encrypt &amp; Deploy</button>
+    <div id="preflight-warn" style="display:none;font-size:11px;color:var(--warning);text-align:center;padding:4px 0">
+      ⚠ Complete Pre-flight first
+    </div>
   </div>
 </aside>
 
@@ -278,6 +281,11 @@ async function checkPreflightStatus() {
   setStatus('awx', awx.exists,
     awx.exists ? `${awx.tag} found in Docker` : 'Image not found — build required'
   );
+
+  // Warn on deploy buttons if pre-flight incomplete
+  const preflightOk = certOk && awx.exists;
+  document.getElementById('preflight-warn').style.display = preflightOk ? 'none' : 'block';
+  document.getElementById('btn-deploy').style.opacity     = preflightOk ? '1' : '0.6';
 }
 
 function setStatus(id, ok, text) {
@@ -523,6 +531,25 @@ function validateAll() {
 // ── Deploy ─────────────────────────────────────────────────────────────────
 async function deploy(withEncrypt) {
   if (!validateAll()) return;
+
+  // ── Pre-flight gate ───────────────────────────────────────
+  const [cert, awx] = await Promise.all([
+    fetch('/api/cert-status').then(r => r.json()),
+    fetch('/api/awx-image-status').then(r => r.json()),
+  ]);
+  const missing = [];
+  if (!cert.exists || !cert.ca_exists) missing.push('TLS certificate (Pre-flight → Setup PKI & Generate cert)');
+  if (!awx.exists)                      missing.push('AWX image (Pre-flight → Build AWX image)');
+  if (missing.length) {
+    toast('Pre-flight incomplete — see Pre-flight section', 'err');
+    activateSection('preflight');
+    openLog();
+    logLine('⛔ Deployment blocked — complete pre-flight first:', 'err');
+    missing.forEach(m => logLine('   • ' + m, 'err'));
+    return;
+  }
+  // ─────────────────────────────────────────────────────────
+
   await saveConfig();
   openLog();
   logLine('Starting deployment…', 'info');
