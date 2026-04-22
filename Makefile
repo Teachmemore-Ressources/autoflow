@@ -15,10 +15,17 @@ VERSION  ?= latest
 REGISTRY ?= localhost:3001
 GITEA_USER ?= admin
 
+# ── AWX image config ─────────────────────────────────────────────────────────
+AWX_VERSION  ?= $(shell grep '^AWX_VERSION=' .env 2>/dev/null | cut -d= -f2 || echo "24.6.1")
+AWX_IMAGE    ?= autoflow/awx-patched
+# Set GITEA_REGISTRY to push to Gitea: make awx-push GITEA_REGISTRY=git.domain/admin
+GITEA_REGISTRY ?= localhost:3001/admin
+
 .PHONY: help start stop restart logs status build pull setup \
         backup restore monitoring-up monitoring-down \
         ee-build ee-push ee-build-push ee-list \
-        secrets-encrypt secrets-decrypt secrets-edit secrets-check
+        secrets-encrypt secrets-decrypt secrets-edit secrets-check \
+        awx-build awx-push awx-pull awx-tag images-update
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -157,6 +164,55 @@ secrets-decrypt: ## Decrypt .env.enc → .env
 
 secrets-edit:    ## Edit secrets in-place (re-encrypts automatically on save)
 	@sops --input-type dotenv --output-type dotenv .env.enc
+
+images-update:   ## Show pinned public images with available upstream versions
+	@echo "Checking upstream versions for pinned public images…"
+	@echo ""
+	@for img in \
+	    "traefik:v2.11" \
+	    "postgres:15.17-alpine" \
+	    "redis:7.4.8-alpine" \
+	    "prom/prometheus:v3.11.1" \
+	    "grafana/grafana:12.4.2" \
+	    "prom/alertmanager:v0.32.0" \
+	    "oliver006/redis_exporter:v1.82.0" \
+	    "prometheuscommunity/postgres-exporter:v0.19.1" \
+	    "gitea/gitea:1.23-rootless" \
+	    "quay.io/ansible/receptor:1.6.4"; do \
+	    echo "  $$img"; \
+	done
+	@echo ""
+	@echo "Update versions in docker-compose.yml, then: make pull && make restart"
+
+# ── AWX custom image ─────────────────────────────────────────
+
+awx-build:       ## Build the patched AWX image  (e.g. make awx-build AWX_VERSION=24.7.0)
+	@echo "Building $(AWX_IMAGE):$(AWX_VERSION) from awx/Dockerfile.patched…"
+	docker build \
+		-f awx/Dockerfile.patched \
+		--build-arg AWX_VERSION=$(AWX_VERSION) \
+		-t $(AWX_IMAGE):$(AWX_VERSION) \
+		awx/
+	@echo ""
+	@echo "  Built: $(AWX_IMAGE):$(AWX_VERSION)"
+	@echo "  To push to Gitea: make awx-push"
+
+awx-tag:         ## Tag AWX image for the Gitea registry  (GITEA_REGISTRY=git.domain/admin)
+	docker tag $(AWX_IMAGE):$(AWX_VERSION) $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION)
+	docker tag $(AWX_IMAGE):$(AWX_VERSION) $(GITEA_REGISTRY)/awx-patched:latest
+	@echo "  Tagged: $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION)"
+
+awx-push:        ## Build, tag and push AWX image to Gitea registry
+	$(MAKE) awx-build
+	$(MAKE) awx-tag
+	docker push $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION)
+	docker push $(GITEA_REGISTRY)/awx-patched:latest
+	@echo "  Pushed to $(GITEA_REGISTRY)"
+
+awx-pull:        ## Pull AWX image from Gitea registry (faster than rebuilding)
+	docker pull $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION)
+	docker tag  $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION) $(AWX_IMAGE):$(AWX_VERSION)
+	@echo "  Pulled and tagged as $(AWX_IMAGE):$(AWX_VERSION)"
 
 secrets-check:   ## Verify the Age key is present and .env.enc is decryptable
 	@echo "  Checking Age key at $(SOPS_AGE_KEY_FILE)..."
