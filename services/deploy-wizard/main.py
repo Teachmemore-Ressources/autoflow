@@ -637,6 +637,140 @@ def awx_image_status():
     return {"tag": tag, "exists": r.returncode == 0}
 
 
+# ── Post-deploy setup ─────────────────────────────────────────────────────────
+
+@app.get("/api/init-gitea")
+async def init_gitea():
+    """SSE: create the Gitea admin user via 'gitea admin user create'."""
+
+    async def stream():
+        config   = _load_env()
+        username = config.get("GITEA_ADMIN_USER", "admin")
+        password = config.get("GITEA_ADMIN_PASSWORD", "")
+        email    = config.get("GITEA_ADMIN_EMAIL", f"{username}@localhost")
+
+        if not password:
+            yield _sse("[ERROR] GITEA_ADMIN_PASSWORD is not set. Fill in the Gitea section first.")
+            yield _sse("[DONE]")
+            return
+
+        # Check the container is running
+        check = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_gitea"],
+            capture_output=True, text=True,
+        )
+        if check.stdout.strip() != "true":
+            yield _sse("[ERROR] Container 'autoflow_gitea' is not running. Deploy the stack first.")
+            yield _sse("[DONE]")
+            return
+
+        yield _sse(f"Creating Gitea admin user '{username}'…")
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "exec", "autoflow_gitea",
+            "gitea", "admin", "user", "create",
+            "--username", username,
+            "--password", password,
+            "--email",    email,
+            "--admin",
+            "--must-change-password=false",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        async for line in proc.stdout:
+            yield _sse(line.decode().rstrip())
+        await proc.wait()
+
+        if proc.returncode == 0:
+            yield _sse(f"[SUCCESS] Admin user '{username}' created — you can now log in.")
+        else:
+            yield _sse("[ERROR] User creation failed (may already exist — try logging in).")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/init-gitea-status")
+def init_gitea_status():
+    """Check whether the Gitea admin user already exists."""
+    config   = _load_env()
+    username = config.get("GITEA_ADMIN_USER", "admin")
+    result   = subprocess.run(
+        ["docker", "exec", "autoflow_gitea",
+         "gitea", "admin", "user", "list", "--admin"],
+        capture_output=True, text=True,
+    )
+    exists = username in result.stdout if result.returncode == 0 else False
+    running = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_gitea"],
+        capture_output=True, text=True,
+    ).stdout.strip() == "true"
+    return {"username": username, "exists": exists, "running": running}
+
+
+@app.get("/api/init-awx-token")
+async def init_awx_token():
+    """SSE: create an AWX API token and save it to .env + restart event_engine."""
+
+    async def stream():
+        config       = _load_env()
+        awx_user     = config.get("AWX_ADMIN_USER", "admin")
+        awx_password = config.get("AWX_ADMIN_PASSWORD", "")
+        domain       = config.get("DOMAIN", "localhost")
+        awx_url      = f"https://awx.{domain}"
+
+        if not awx_password:
+            yield _sse("[ERROR] AWX_ADMIN_PASSWORD is not set.")
+            yield _sse("[DONE]")
+            return
+
+        import httpx as _httpx
+        yield _sse(f"Requesting AWX token from {awx_url}…")
+        try:
+            async with _httpx.AsyncClient(verify=False) as c:
+                r = await c.post(
+                    f"{awx_url}/api/v2/tokens/",
+                    auth=(awx_user, awx_password),
+                    json={"description": "Autoflow Event Engine", "application": None, "scope": "write"},
+                    timeout=15.0,
+                )
+        except Exception as e:
+            yield _sse(f"[ERROR] Could not reach AWX: {e}")
+            yield _sse("[DONE]")
+            return
+
+        if r.status_code not in (200, 201):
+            yield _sse(f"[ERROR] AWX returned {r.status_code}: {r.text[:200]}")
+            yield _sse("[DONE]")
+            return
+
+        token = r.json().get("token", "")
+        if not token:
+            yield _sse("[ERROR] AWX response had no token field.")
+            yield _sse("[DONE]")
+            return
+
+        yield _sse(f"Token created (id={r.json().get('id')}). Writing to .env…")
+        current = _load_env()
+        current["AWX_TOKEN"] = token
+        _write_env(current)
+        yield _sse("AWX_TOKEN written to .env.")
+
+        yield _sse("Restarting event_engine to pick up new token…")
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "compose", "--env-file", str(ENV_FILE), "restart", "event_engine",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, cwd=str(ROOT),
+        )
+        async for line in proc.stdout:
+            yield _sse(line.decode().rstrip())
+        await proc.wait()
+        yield _sse("[SUCCESS] AWX token configured and event_engine restarted.")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 # ── Stack status ──────────────────────────────────────────────────────────────
 
 @app.get("/api/status")

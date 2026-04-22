@@ -230,13 +230,28 @@ async function checkPreflightStatus() {
         ? 'Server cert OK but Root CA missing — re-run setup'
         : `Certificate not found — run "Setup PKI & Generate cert"`
   );
-  // Show CA download button and import hint if CA cert exists
   document.getElementById('btn-dl-ca').style.display    = cert.ca_exists ? 'inline-flex' : 'none';
   document.getElementById('ca-import-hint').style.display = cert.ca_exists ? 'block' : 'none';
 
   document.getElementById('awx-tag').textContent = awx.tag;
   setStatus('awx', awx.exists,
     awx.exists ? `${awx.tag} found in Docker` : 'Image not found — build required'
+  );
+
+  // Post-deploy: Gitea admin
+  const gitea = await fetch('/api/init-gitea-status').then(r => r.json()).catch(() => ({}));
+  if (!gitea.running) {
+    setStatus('gitea', false, 'Stack not running — deploy first');
+  } else {
+    setStatus('gitea', gitea.exists,
+      gitea.exists ? `Admin '${gitea.username}' exists` : `User '${gitea.username}' not found — click "Create Gitea admin"`
+    );
+  }
+
+  // Post-deploy: AWX token
+  const hasToken = !!(CONFIG.AWX_TOKEN || '').trim();
+  setStatus('awxtoken', hasToken,
+    hasToken ? 'AWX_TOKEN is set in .env' : 'Token not set — click "Generate AWX token" after AWX starts'
   );
 
   // Warn on deploy buttons if pre-flight incomplete
@@ -275,6 +290,28 @@ function runPreflight(id) {
 
   const url = id === 'cert' ? '/api/generate-cert' : '/api/build-awx';
   const evts = new EventSource(url);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') { evts.close(); checkPreflightStatus(); return; }
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[SUCCESS]') ? 'ok' : '';
+    pfLog(id, msg, cls);
+  };
+  evts.onerror = () => {
+    pfLog(id, '[ERROR] Stream lost', 'err');
+    evts.close();
+    checkPreflightStatus();
+  };
+}
+
+function runPostDeploy(id) {
+  const dot = document.getElementById(`${id}-dot`);
+  const txt = document.getElementById(`${id}-status-text`);
+  dot.className = 'pf-dot running';
+  txt.textContent = 'Running…';
+  document.getElementById(`pf-log-${id}`).innerHTML = '';
+
+  const urlMap = { gitea: '/api/init-gitea', awxtoken: '/api/init-awx-token' };
+  const evts = new EventSource(urlMap[id]);
   evts.onmessage = e => {
     const msg = e.data;
     if (msg === '[DONE]') { evts.close(); checkPreflightStatus(); return; }
@@ -368,6 +405,54 @@ function buildSections() {
               <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">📋 Logs</button>
             </div>
             <div class="pf-log" id="pf-log-awx"></div>
+          </div>
+        </div>
+
+        <div class="pf-item" style="border-top:1px dashed var(--border);margin-top:4px;padding-top:18px">
+          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;width:100%;margin-bottom:10px">
+            Post-deploy — run these after the first <code>docker compose up</code>
+          </div>
+        </div>
+
+        <div class="pf-item">
+          <div class="pf-icon">🦊</div>
+          <div class="pf-body">
+            <div class="pf-title">Gitea Admin Account</div>
+            <div class="pf-desc">
+              Creates the admin user in Gitea. Gitea does not read <code>GITEA_ADMIN_*</code> env vars —
+              the account must be created via CLI after the first start.<br>
+              <em>⚠ Requires the stack to be running.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="gitea-dot"></span>
+              <span id="gitea-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('gitea')">👤 Create Gitea admin</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('gitea')">📋 Logs</button>
+            </div>
+            <div class="pf-log" id="pf-log-gitea"></div>
+          </div>
+        </div>
+
+        <div class="pf-item">
+          <div class="pf-icon">🔑</div>
+          <div class="pf-body">
+            <div class="pf-title">AWX API Token</div>
+            <div class="pf-desc">
+              Generates an AWX API token and writes it to <code>.env</code> as <code>AWX_TOKEN</code>,
+              then restarts <code>event_engine</code> to pick it up.<br>
+              <em>⚠ AWX must be fully started (check <code>docker compose ps</code>).</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="awxtoken-dot"></span>
+              <span id="awxtoken-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('awxtoken')">🔐 Generate AWX token</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awxtoken')">📋 Logs</button>
+            </div>
+            <div class="pf-log" id="pf-log-awxtoken"></div>
           </div>
         </div>
 
