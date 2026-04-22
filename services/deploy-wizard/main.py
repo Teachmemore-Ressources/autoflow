@@ -717,22 +717,29 @@ async def init_awx_token():
         awx_user     = config.get("AWX_ADMIN_USER", "admin")
         awx_password = config.get("AWX_ADMIN_PASSWORD", "")
         domain       = config.get("DOMAIN", "localhost")
-        awx_url      = f"https://awx.{domain}"
+        http_port    = config.get("TRAEFIK_HTTP_PORT", "80")
 
         if not awx_password:
             yield _sse("[ERROR] AWX_ADMIN_PASSWORD is not set.")
             yield _sse("[DONE]")
             return
 
+        # Connect via Traefik on localhost — no DNS required.
+        # The Host header tells Traefik which router to use.
+        awx_local = f"http://localhost:{http_port}"
+        yield _sse(f"Connecting to AWX via Traefik on {awx_local} (Host: awx.{domain})…")
+
         import httpx as _httpx
-        yield _sse(f"Requesting AWX token from {awx_url}…")
         try:
-            async with _httpx.AsyncClient(verify=False) as c:
+            async with _httpx.AsyncClient(
+                headers={"Host": f"awx.{domain}"},
+                follow_redirects=True,
+                timeout=15.0,
+            ) as c:
                 r = await c.post(
-                    f"{awx_url}/api/v2/tokens/",
+                    f"{awx_local}/api/v2/tokens/",
                     auth=(awx_user, awx_password),
                     json={"description": "Autoflow Event Engine", "application": None, "scope": "write"},
-                    timeout=15.0,
                 )
         except Exception as e:
             yield _sse(f"[ERROR] Could not reach AWX: {e}")
