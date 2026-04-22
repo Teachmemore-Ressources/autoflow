@@ -161,67 +161,7 @@ select option{background:var(--surface2)}
       <span id="stext">Checking stack…</span>
     </div>
   </div>
-  <div class="content" id="content">
-    <!-- Pre-flight section (static, not from schema) -->
-    <div class="section active" id="sec-preflight">
-      <div class="sec-title">Pre-flight checks</div>
-      <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
-      <div class="preflight-card">
-
-        <!-- Step 1: PKI + TLS Certificate -->
-        <div class="pf-item">
-          <div class="pf-icon">🔒</div>
-          <div class="pf-body">
-            <div class="pf-title">Root CA + Wildcard Certificate <em style="font-weight:400;font-size:12px;color:var(--muted)">(via PKI service)</em></div>
-            <div class="pf-desc">
-              Starts the PKI service, creates the <strong>Autoflow Root CA</strong>,
-              then issues a wildcard certificate for <strong id="cert-domain">your domain</strong>.<br>
-              Writes <code>traefik/certs/wildcard.&lt;domain&gt;.crt/.key</code> and updates <code>traefik/dynamic/tls.yml</code>.<br>
-              <em>⚠ Requires <strong>PKI_ADMIN_PASSWORD</strong> to be set in the PKI section before running.</em>
-            </div>
-            <div class="pf-status">
-              <span class="pf-dot" id="cert-dot"></span>
-              <span id="cert-status-text">Checking…</span>
-            </div>
-            <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPreflight('cert')">Setup PKI &amp; Generate cert</button>
-              <button class="btn btn-ghost btn-sm" id="btn-dl-ca" style="display:none"
-                onclick="window.location='/api/download-ca'">⬇ Download Root CA (.crt)</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('cert')">Logs</button>
-            </div>
-            <div id="ca-import-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.1);border:1px solid var(--warning);border-radius:6px;font-size:12px;color:var(--warning)">
-              Import <strong>autoflow-root-ca.&lt;domain&gt;.crt</strong> into your OS/browser trust store
-              to avoid SSL warnings on all Autoflow services.
-            </div>
-            <div class="pf-log" id="pf-log-cert"></div>
-          </div>
-        </div>
-
-        <!-- Step 2: AWX custom image -->
-        <div class="pf-item">
-          <div class="pf-icon"></div>
-          <div class="pf-body">
-            <div class="pf-title">AWX Custom Image</div>
-            <div class="pf-desc">
-              Builds <code id="awx-tag">autoflow/awx-patched:…</code> from <code>awx/Dockerfile.patched</code>.<br>
-              This image patches official AWX with security fixes for CVEs.<br>
-              <em>Takes 5–15 min on first run. Cached on subsequent deploys.</em>
-            </div>
-            <div class="pf-status">
-              <span class="pf-dot" id="awx-dot"></span>
-              <span id="awx-status-text">Checking…</span>
-            </div>
-            <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPreflight('awx')">🔨 Build image</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">Logs</button>
-            </div>
-            <div class="pf-log" id="pf-log-awx"></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
+  <div class="content" id="content"></div>
   <div class="log-panel" id="log-panel">
     <div class="log-head">
       <span>Deployment log</span>
@@ -358,18 +298,79 @@ function activateSection(id) {
 // ── Section + Field rendering ──────────────────────────────────────────────
 function buildSections() {
   const content = document.getElementById('content');
-  content.innerHTML = SCHEMA.sections.map(s => {
-    const meta = SCHEMA.sections.find(x => x.id === s.id);
+
+  // ── Pre-flight section (built in JS so it isn't overwritten) ──
+  const preflightHtml = `
+    <div class="section" id="sec-preflight">
+      <div class="sec-title">Pre-flight checks</div>
+      <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
+      <div class="preflight-card">
+
+        <div class="pf-item">
+          <div class="pf-icon">🔒</div>
+          <div class="pf-body">
+            <div class="pf-title">Root CA + Wildcard Certificate <em style="font-weight:400;font-size:12px;color:var(--muted)">(via PKI service)</em></div>
+            <div class="pf-desc">
+              Starts the PKI service, creates the <strong>Autoflow Root CA</strong>,
+              then issues a wildcard certificate for <strong id="cert-domain">your domain</strong>.<br>
+              Writes <code>traefik/certs/wildcard.&lt;domain&gt;.crt/.key</code> and updates <code>traefik/dynamic/tls.yml</code>.<br>
+              <em>⚠ Set <strong>PKI_ADMIN_PASSWORD</strong> in the PKI section before running.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="cert-dot"></span>
+              <span id="cert-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('cert')">🏗 Setup PKI &amp; Generate cert</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-ca" style="display:none"
+                onclick="window.location='/api/download-ca'">⬇ Download Root CA (.crt)</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('cert')">📋 Logs</button>
+            </div>
+            <div id="ca-import-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.1);border:1px solid var(--warning);border-radius:6px;font-size:12px;color:var(--warning)">
+              📥 Import <strong>autoflow-root-ca.crt</strong> into your OS/browser trust store to avoid SSL warnings.
+            </div>
+            <div class="pf-log" id="pf-log-cert"></div>
+          </div>
+        </div>
+
+        <div class="pf-item">
+          <div class="pf-icon">🐳</div>
+          <div class="pf-body">
+            <div class="pf-title">AWX Custom Image</div>
+            <div class="pf-desc">
+              Builds <code id="awx-tag">autoflow/awx-patched:…</code> from <code>awx/Dockerfile.patched</code>.<br>
+              Patches official AWX with security fixes for known CVEs.<br>
+              <em>Takes 5–15 min on first run. Cached on subsequent deploys.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="awx-dot"></span>
+              <span id="awx-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('awx')">🔨 Build AWX image</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">📋 Logs</button>
+            </div>
+            <div class="pf-log" id="pf-log-awx"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+
+  // ── Schema sections ────────────────────────────────────────
+  const sectionsHtml = SCHEMA.sections.map(s => {
     const fields = SCHEMA.fields.filter(f => f.section === s.id);
     return `
       <div class="section" id="sec-${s.id}">
-        <div class="sec-title">${meta.label}</div>
-        <div class="sec-desc">${meta.desc}</div>
+        <div class="sec-title">${s.label}</div>
+        <div class="sec-desc">${s.desc}</div>
         <div class="fields">
           ${fields.map(f => renderField(f)).join('')}
         </div>
       </div>`;
   }).join('');
+
+  content.innerHTML = preflightHtml + sectionsHtml;
 
   // Attach domain-change listener
   const domainInput = document.getElementById('field-DOMAIN');
