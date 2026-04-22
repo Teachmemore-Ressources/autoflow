@@ -21,5 +21,6 @@ build/
 Thumbs.db
 traefik/certs/*.key*
 traefik/dynamic/monitoring_users
-monitoring/prometheus/secrets/
+monitoring/prometheus/secrets/*
+!monitoring/prometheus/secrets/.gitkeep
 backups/
