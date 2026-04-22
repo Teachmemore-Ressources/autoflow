@@ -14,10 +14,11 @@ import hmac
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Security, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.security.api_key import APIKeyHeader
 
+from limiter import limiter
 from settings import settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -123,7 +124,8 @@ curl -X POST http://localhost:8000/auth/token \\
 ```
 """,
 )
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     if (
         form_data.username != settings.api_username
         or form_data.password != settings.effective_api_password

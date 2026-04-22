@@ -5,6 +5,10 @@
 COMPOSE   = docker compose
 SERVICES  =
 
+# ── SOPS / Age secrets ──────────────────────────────────────────────────────
+SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
+export SOPS_AGE_KEY_FILE
+
 # ── EE config (override on CLI: make ee-build EE=security VERSION=1.2.0) ──
 EE       ?= base
 VERSION  ?= latest
@@ -13,7 +17,8 @@ GITEA_USER ?= admin
 
 .PHONY: help start stop restart logs status build pull setup \
         backup restore monitoring-up monitoring-down \
-        ee-build ee-push ee-build-push ee-list
+        ee-build ee-push ee-build-push ee-list \
+        secrets-encrypt secrets-decrypt secrets-edit secrets-check
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -21,7 +26,11 @@ help:           ## Show this help message
 
 # ── Lifecycle ────────────────────────────────────────────────
 
-start:          ## Start all services in detached mode
+start:          ## Start all services (auto-decrypts .env.enc if .env is missing)
+	@if [ ! -f .env ] && [ -f .env.enc ]; then \
+		echo "  [sops] .env not found — decrypting .env.enc..."; \
+		$(MAKE) secrets-decrypt; \
+	fi
 	$(COMPOSE) up -d $(SERVICES)
 
 stop:           ## Stop all services
@@ -69,8 +78,12 @@ restore:        ## Restore from a backup  (e.g. make restore BACKUP=./backups/20
 
 # ── Setup ────────────────────────────────────────────────────
 
-setup:          ## Bootstrap: copy .env.example → .env (skips if .env already exists)
-	@if [ ! -f .env ]; then \
+setup:          ## Bootstrap: decrypt .env.enc → .env  (or copy .env.example if no encrypted file)
+	@if [ -f .env.enc ]; then \
+		echo "  [sops] Decrypting .env.enc → .env"; \
+		$(MAKE) secrets-decrypt; \
+		echo "  .env ready."; \
+	elif [ ! -f .env ]; then \
 		cp .env.example .env; \
 		echo ""; \
 		echo "  .env created from .env.example"; \
@@ -110,3 +123,44 @@ shell:          ## Open a shell in a running container  (e.g. make shell SERVICE
 
 ps:             ## Alias for status
 	$(COMPOSE) ps
+
+# ── Deploy Wizard ────────────────────────────────────────────
+
+WIZARD_VENV := .wizard-venv
+
+wizard:         ## Launch the deployment wizard on http://localhost:9000
+	@[ -d $(WIZARD_VENV) ] || python3 -m venv $(WIZARD_VENV)
+	@$(WIZARD_VENV)/bin/pip install -q -r services/deploy-wizard/requirements.txt
+	@echo ""
+	@echo "  ╔══════════════════════════════════════════╗"
+	@echo "  ║   Autoflow Deploy Wizard                 ║"
+	@echo "  ║   http://localhost:9000                  ║"
+	@echo "  ║   Press Ctrl+C to stop                   ║"
+	@echo "  ╚══════════════════════════════════════════╝"
+	@echo ""
+	@AUTOFLOW_ROOT=$(PWD) $(WIZARD_VENV)/bin/uvicorn main:app \
+		--host 0.0.0.0 --port 9000 \
+		--app-dir services/deploy-wizard \
+		--log-level info
+
+# ── Secrets (SOPS + Age) ─────────────────────────────────────
+
+secrets-encrypt: ## Encrypt .env → .env.enc  (commit .env.enc, never .env)
+	@sops --encrypt --input-type dotenv --output-type dotenv .env > .env.enc
+	@echo "  [sops] .env encrypted → .env.enc"
+	@echo "  Commit .env.enc to git. Never commit .env."
+
+secrets-decrypt: ## Decrypt .env.enc → .env
+	@sops --decrypt --input-type dotenv --output-type dotenv .env.enc > .env
+	@chmod 600 .env
+	@echo "  [sops] .env.enc decrypted → .env"
+
+secrets-edit:    ## Edit secrets in-place (re-encrypts automatically on save)
+	@sops --input-type dotenv --output-type dotenv .env.enc
+
+secrets-check:   ## Verify the Age key is present and .env.enc is decryptable
+	@echo "  Checking Age key at $(SOPS_AGE_KEY_FILE)..."
+	@test -f "$(SOPS_AGE_KEY_FILE)" || (echo "  ERROR: key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
+	@echo "  Verifying .env.enc decryption..."
+	@sops --decrypt --input-type dotenv --output-type dotenv .env.enc > /dev/null
+	@echo "  OK — secrets are accessible."

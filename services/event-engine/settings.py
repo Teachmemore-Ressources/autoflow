@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # ── Deduplication ─────────────────────────────────────────────────────────
     dedup_ttl: int = 60               # Seconds — 0 disables deduplication
 
+    # ── Admin endpoints ───────────────────────────────────────────────────────
+    admin_token: str = ""             # Bearer token pour /admin/* — vide = endpoints bloqués
+
     # ── Webhooks ──────────────────────────────────────────────────────────────
     github_webhook_secret: str = ""   # Leave empty to skip HMAC validation
 

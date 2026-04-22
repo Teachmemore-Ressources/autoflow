@@ -26,13 +26,13 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 
 import notifications
 from awx_metrics import collect_loop as awx_metrics_loop
+from limiter import limiter
 from routers import awx, health
 from routers.auth import router as auth_router
 from routers.jobs_history import router as jobs_history_router
@@ -48,14 +48,6 @@ logging.basicConfig(
 _audit_log = logging.getLogger("audit")
 
 
-# ── Rate limiter ─────────────────────────────────────────────────────────────
-
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=[settings.rate_limit],
-)
-
-
 # ── Lifespan ─────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -65,7 +57,8 @@ async def lifespan(app: FastAPI):
         base_url=settings.awx_url,
         auth=(settings.awx_admin_user, settings.awx_admin_password),
         timeout=30.0,
-        verify=False,  # internal network; adjust if TLS is enabled on AWX
+        # verify=True (défaut) — AWX_URL est http:// en interne donc TLS non applicable.
+        # Si AWX_URL passe en https://, fournir le chemin CA via httpx verify='/path/ca.crt'.
     )
 
     background_tasks: list[asyncio.Task] = []
@@ -143,6 +136,29 @@ _AUDIT_SKIP = frozenset({
     "/metrics", "/health", "/health/ready", "/health/awx",
 })
 
+# Paramètres de query string à masquer pour éviter la fuite de secrets dans les logs
+_SENSITIVE_PARAMS = frozenset({
+    "token", "access_token", "api_key", "apikey", "key",
+    "password", "passwd", "secret", "authorization",
+})
+
+
+def _sanitize_query(query: str) -> str | None:
+    """Remplace la valeur des paramètres sensibles par [REDACTED] dans la query string."""
+    if not query:
+        return None
+    parts = []
+    for param in query.split("&"):
+        if "=" in param:
+            name, _, value = param.partition("=")
+            if name.lower() in _SENSITIVE_PARAMS:
+                parts.append(f"{name}=[REDACTED]")
+            else:
+                parts.append(param)
+        else:
+            parts.append(param)
+    return "&".join(parts) or None
+
 
 @app.middleware("http")
 async def audit_middleware(request: Request, call_next):
@@ -157,7 +173,7 @@ async def audit_middleware(request: Request, call_next):
                     "ts":          datetime.now(timezone.utc).isoformat(),
                     "method":      request.method,
                     "path":        request.url.path,
-                    "query":       str(request.url.query) or None,
+                    "query":       _sanitize_query(str(request.url.query)),
                     "status":      response.status_code,
                     "duration_ms": duration_ms,
                     "client_ip":   request.client.host if request.client else None,

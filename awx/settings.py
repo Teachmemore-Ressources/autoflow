@@ -36,12 +36,13 @@ LISTENER_DATABASES = {
 SECRET_KEY = os.environ['AWX_SECRET_KEY']
 ALLOWED_HOSTS = ['*']
 
-# Disable Secure cookie flags when not running behind HTTPS.
-# AWX production mode sets these to True by default; the browser silently
-# drops Secure cookies on plain HTTP, making login always fail.
-# Set to True (and configure SSL termination in nginx) for production HTTPS.
-CSRF_COOKIE_SECURE    = False
-SESSION_COOKIE_SECURE = False
+# Traefik termine TLS et injecte X-Forwarded-Proto: https.
+# nginx passe ce header via uwsgi_param HTTP_X_FORWARDED_PROTO.
+# Django lit ce header grâce à SECURE_PROXY_SSL_HEADER et active les cookies Secure.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST    = True
+CSRF_COOKIE_SECURE      = True
+SESSION_COOKIE_SECURE   = True
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
 _host     = os.environ.get('REDIS_HOST', 'redis')
@@ -79,11 +80,9 @@ CACHES = {
 RECEPTOR_SOCKET_PATH = '/var/run/receptor/receptor.sock'
 
 # ── HTTP mode overrides ────────────────────────────────────────────────────────
-# AWX production defaults use HTTPS (port 443). Override for plain HTTP.
-
-# Cookies: disable Secure flag so browsers send them over HTTP.
-CSRF_COOKIE_SECURE    = False
-SESSION_COOKIE_SECURE = False
+# AWX production defaults use HTTPS (port 443).
+# TLS est terminé par Traefik — AWX reçoit du HTTP en interne, d'où les overrides ci-dessous.
+# Les cookies Secure sont activés plus haut via SECURE_PROXY_SSL_HEADER.
 
 # WebSocket relay (awx_task → awx_web): use HTTP port 80.
 # Default is https/443 which breaks in docker-compose without TLS termination.

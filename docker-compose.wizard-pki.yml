@@ -1,0 +1,12 @@
+# Override used ONLY by the Deploy Wizard pre-flight to expose the PKI port
+# temporarily on localhost so the wizard can call the PKI API directly.
+#
+# Usage (handled automatically by the wizard):
+#   docker compose -f docker-compose.yml -f docker-compose.wizard-pki.yml up -d --no-deps pki
+#
+# After full deployment (make start / make wizard deploy), this override is NOT
+# used — PKI is only accessible through Traefik as intended.
+services:
+  pki:
+    ports:
+      - "127.0.0.1:8004:8004"

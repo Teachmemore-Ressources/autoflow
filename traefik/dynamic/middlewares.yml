@@ -17,11 +17,23 @@ http:
       headers:
         frameDeny: true
         contentTypeNosniff: true
-        browserXssFilter: true
+        # browserXssFilter retiré — déprécié depuis 2019, remplacé par CSP
         referrerPolicy: "strict-origin-when-cross-origin"
+        # HSTS — force HTTPS pendant 1 an, sous-domaines inclus
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
         customResponseHeaders:
           X-Robots-Tag: "noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
           Server: ""
+          Permissions-Policy: "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
+
+    # BasicAuth pour Prometheus et Alertmanager (accès monitoring)
+    # Identifiants : admin / voir MONITORING_ADMIN_PASSWORD dans .env
+    monitoring-auth:
+      basicAuth:
+        usersFile: /etc/traefik/dynamic/monitoring_users
 
     # Rate-limit by IP: 100 req/s average, burst up to 200
     rate-limit:

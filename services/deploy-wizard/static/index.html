@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autoflow — Deploy Wizard</title>
+<style>
+:root {
+  --bg:       #0f172a;
+  --surface:  #1e293b;
+  --surface2: #263548;
+  --border:   #334155;
+  --text:     #f1f5f9;
+  --muted:    #94a3b8;
+  --accent:   #3b82f6;
+  --acc-h:    #2563eb;
+  --success:  #10b981;
+  --warning:  #f59e0b;
+  --danger:   #ef4444;
+  --radius:   8px;
+  --sw:       230px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 'Inter',system-ui,sans-serif;height:100vh;overflow:hidden;display:grid;grid-template-rows:1fr}
+.layout{display:grid;grid-template-columns:var(--sw) 1fr;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.sb-head h1{font-size:15px;font-weight:700;color:var(--accent)}
+.sb-head p{font-size:11px;color:var(--muted);margin-top:3px}
+.sb-nav{flex:1;overflow-y:auto;padding:6px 0}
+.sb-nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer;transition:.12s;user-select:none}
+.sb-nav a:hover{background:var(--surface2);color:var(--text)}
+.sb-nav a.active{background:var(--surface2);color:var(--accent);border-left:3px solid var(--accent);padding-left:13px;font-weight:600}
+.sb-nav a .badge{margin-left:auto;font-size:10px;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;display:none}
+.sb-nav a.has-errors .badge{display:inline}
+.sb-foot{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px}
+
+/* ── Main ── */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.topbar{padding:11px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
+.tb-title{font-weight:600;font-size:14px}
+.tb-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--border)}
+.sdot.up{background:var(--success);box-shadow:0 0 6px var(--success)}
+
+.content{flex:1;overflow-y:auto;padding:28px 32px}
+.section{display:none}
+.section.active{display:block}
+.sec-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.sec-desc{color:var(--muted);font-size:13px;margin-bottom:24px}
+
+/* ── Fields grid ── */
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.field-wide{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:5px}
+.field label .req{color:var(--danger);font-size:13px}
+.field label .derived-tag{background:rgba(59,130,246,.2);color:var(--accent);font-size:10px;padding:1px 5px;border-radius:4px;text-transform:none;letter-spacing:0;font-weight:600}
+.field-desc{font-size:11px;color:var(--muted);margin-top:1px}
+.iw{display:flex;gap:6px}
+.iw input,.iw select,.iw textarea{flex:1;min-width:0}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 11px;color:var(--text);font:inherit;width:100%;transition:border-color .12s;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input.error,select.error{border-color:var(--danger)}
+input[readonly]{opacity:.55;cursor:not-allowed}
+input[type=number]{-moz-appearance:textfield}
+textarea{resize:vertical;min-height:56px;font-size:13px}
+select option{background:var(--surface2)}
+
+/* ── Buttons ── */
+.btn{padding:8px 14px;border-radius:var(--radius);border:none;cursor:pointer;font:600 13px/1 inherit;transition:.12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--acc-h)}
+.btn-success{background:var(--success);color:#fff}
+.btn-success:hover{background:#059669}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.btn-icon{padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;transition:.12s;font-size:13px}
+.btn-icon:hover{background:var(--surface2);color:var(--text)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-block{width:100%;justify-content:center}
+.btn-danger{background:var(--danger);color:#fff}
+
+/* ── Log panel ── */
+.log-panel{border-top:1px solid var(--border);background:#070d1a;flex-shrink:0;max-height:0;transition:max-height .35s ease;overflow:hidden}
+.log-panel.open{max-height:240px}
+.log-head{display:flex;align-items:center;justify-content:space-between;padding:7px 16px;border-bottom:1px solid var(--border)}
+.log-head span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+#log{padding:10px 16px;height:195px;overflow-y:auto;font:12px/1.7 'Courier New',monospace;color:#7dd3a8}
+#log .err{color:#f87171}
+#log .ok{color:#4ade80;font-weight:700}
+#log .info{color:#60a5fa}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 16px;font-size:13px;box-shadow:0 4px 24px rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform .25s;pointer-events:none}
+#toast.show{transform:translateY(0)}
+#toast.ok{border-color:var(--success);color:var(--success)}
+#toast.err{border-color:var(--danger);color:var(--danger)}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Misc ── */
+.divider{height:1px;background:var(--border);margin:24px 0}
+.hint{font-size:11px;color:var(--warning);display:flex;align-items:center;gap:4px;margin-top:4px}
+
+/* ── Pre-flight ── */
+.preflight-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.pf-item{display:flex;align-items:flex-start;gap:14px;padding:14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
+.pf-icon{font-size:22px;flex-shrink:0;width:32px;text-align:center;margin-top:2px}
+.pf-body{flex:1;min-width:0}
+.pf-title{font-weight:700;font-size:14px;margin-bottom:3px}
+.pf-desc{font-size:12px;color:var(--muted);margin-bottom:10px}
+.pf-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px}
+.pf-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
+.pf-dot.ok{background:var(--success);box-shadow:0 0 5px var(--success)}
+.pf-dot.err{background:var(--danger)}
+.pf-dot.running{background:var(--warning);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.pf-actions{display:flex;gap:8px;flex-wrap:wrap}
+.pf-log{margin-top:10px;background:#070d1a;border-radius:6px;padding:8px 12px;font:11px/1.6 'Courier New',monospace;color:#7dd3a8;max-height:120px;overflow-y:auto;display:none}
+.pf-log.open{display:block}
+.pf-log .err{color:#f87171}
+.pf-log .ok{color:#4ade80;font-weight:700}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ─────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sb-head">
+    <h1>Autoflow</h1>
+    <p>Deploy Wizard</p>
+  </div>
+  <nav class="sb-nav" id="nav">
+    <a id="nav-preflight" onclick="activateSection('preflight')" class="active">Pre-flight</a>
+  </nav>
+  <div class="sb-foot">
+    <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">⚙ Generate all secrets</button>
+    <button class="btn btn-primary btn-block" onclick="saveConfig()">Save config</button>
+    <button class="btn btn-success btn-block" onclick="deploy(false)">Save &amp; Deploy</button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">Save, Encrypt &amp; Deploy</button>
+  </div>
+</aside>
+
+<!-- ── Main ────────────────────────────────────── -->
+<div class="main">
+  <div class="topbar">
+    <div class="tb-title" id="section-label">Loading…</div>
+    <div class="tb-status">
+      <span class="sdot" id="sdot"></span>
+      <span id="stext">Checking stack…</span>
+    </div>
+  </div>
+  <div class="content" id="content">
+    <!-- Pre-flight section (static, not from schema) -->
+    <div class="section active" id="sec-preflight">
+      <div class="sec-title">Pre-flight checks</div>
+      <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
+      <div class="preflight-card">
+
+        <!-- Step 1: PKI + TLS Certificate -->
+        <div class="pf-item">
+          <div class="pf-icon">🔒</div>
+          <div class="pf-body">
+            <div class="pf-title">Root CA + Wildcard Certificate <em style="font-weight:400;font-size:12px;color:var(--muted)">(via PKI service)</em></div>
+            <div class="pf-desc">
+              Starts the PKI service, creates the <strong>Autoflow Root CA</strong>,
+              then issues a wildcard certificate for <strong id="cert-domain">your domain</strong>.<br>
+              Writes <code>traefik/certs/wildcard.&lt;domain&gt;.crt/.key</code> and updates <code>traefik/dynamic/tls.yml</code>.<br>
+              <em>⚠ Requires <strong>PKI_ADMIN_PASSWORD</strong> to be set in the PKI section before running.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="cert-dot"></span>
+              <span id="cert-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('cert')">Setup PKI &amp; Generate cert</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-ca" style="display:none"
+                onclick="window.location='/api/download-ca'">⬇ Download Root CA (.crt)</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('cert')">Logs</button>
+            </div>
+            <div id="ca-import-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.1);border:1px solid var(--warning);border-radius:6px;font-size:12px;color:var(--warning)">
+              Import <strong>autoflow-root-ca.&lt;domain&gt;.crt</strong> into your OS/browser trust store
+              to avoid SSL warnings on all Autoflow services.
+            </div>
+            <div class="pf-log" id="pf-log-cert"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: AWX custom image -->
+        <div class="pf-item">
+          <div class="pf-icon"></div>
+          <div class="pf-body">
+            <div class="pf-title">AWX Custom Image</div>
+            <div class="pf-desc">
+              Builds <code id="awx-tag">autoflow/awx-patched:…</code> from <code>awx/Dockerfile.patched</code>.<br>
+              This image patches official AWX with security fixes for CVEs.<br>
+              <em>Takes 5–15 min on first run. Cached on subsequent deploys.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="awx-dot"></span>
+              <span id="awx-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('awx')">🔨 Build image</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">Logs</button>
+            </div>
+            <div class="pf-log" id="pf-log-awx"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div class="log-panel" id="log-panel">
+    <div class="log-head">
+      <span>Deployment log</span>
+      <button class="btn-icon btn-sm" onclick="toggleLog()">✕</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let SCHEMA = null;
+let CONFIG = {};
+let currentSection = null;
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+async function boot() {
+  const [schema, config] = await Promise.all([
+    fetch('/api/schema').then(r => r.json()),
+    fetch('/api/config').then(r => r.json()),
+  ]);
+  SCHEMA = schema;
+  CONFIG = config;
+  buildNav();
+  buildSections();
+  activateSection('preflight');
+  pollStatus();
+  checkPreflightStatus();
+}
+
+// ── Pre-flight ──────────────────────────────────────────────────────────────
+async function checkPreflightStatus() {
+  const domain = CONFIG.DOMAIN || 'localhost';
+  document.getElementById('cert-domain').textContent = `*.${domain}`;
+
+  const [cert, awx] = await Promise.all([
+    fetch('/api/cert-status').then(r => r.json()),
+    fetch('/api/awx-image-status').then(r => r.json()),
+  ]);
+
+  const certOk = cert.exists && cert.ca_exists;
+  setStatus('cert', certOk,
+    certOk
+      ? `wildcard.${cert.domain}.crt + Root CA ready`
+      : cert.exists
+        ? 'Server cert OK but Root CA missing — re-run setup'
+        : `Certificate not found — run "Setup PKI & Generate cert"`
+  );
+  // Show CA download button and import hint if CA cert exists
+  document.getElementById('btn-dl-ca').style.display    = cert.ca_exists ? 'inline-flex' : 'none';
+  document.getElementById('ca-import-hint').style.display = cert.ca_exists ? 'block' : 'none';
+
+  document.getElementById('awx-tag').textContent = awx.tag;
+  setStatus('awx', awx.exists,
+    awx.exists ? `${awx.tag} found in Docker` : 'Image not found — build required'
+  );
+}
+
+function setStatus(id, ok, text) {
+  const dot = document.getElementById(`${id}-dot`);
+  const txt = document.getElementById(`${id}-status-text`);
+  dot.className = `pf-dot ${ok ? 'ok' : 'err'}`;
+  txt.textContent = text;
+}
+
+function togglePfLog(id) {
+  document.getElementById(`pf-log-${id}`).classList.toggle('open');
+}
+
+function pfLog(id, msg, cls) {
+  const el = document.getElementById(`pf-log-${id}`);
+  el.classList.add('open');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function runPreflight(id) {
+  const dot = document.getElementById(`${id}-dot`);
+  const txt = document.getElementById(`${id}-status-text`);
+  dot.className = 'pf-dot running';
+  txt.textContent = 'Running…';
+  document.getElementById(`pf-log-${id}`).innerHTML = '';
+
+  const url = id === 'cert' ? '/api/generate-cert' : '/api/build-awx';
+  const evts = new EventSource(url);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') { evts.close(); checkPreflightStatus(); return; }
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[SUCCESS]') ? 'ok' : '';
+    pfLog(id, msg, cls);
+  };
+  evts.onerror = () => {
+    pfLog(id, '[ERROR] Stream lost', 'err');
+    evts.close();
+    checkPreflightStatus();
+  };
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function buildNav() {
+  const nav = document.getElementById('nav');
+  // Append schema sections after the static pre-flight entry
+  nav.innerHTML += SCHEMA.sections.map(s => `
+    <a id="nav-${s.id}" onclick="activateSection('${s.id}')">
+      ${s.label}
+      <span class="badge">!</span>
+    </a>`).join('');
+}
+
+function activateSection(id) {
+  currentSection = id;
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sb-nav a').forEach(el => el.classList.remove('active'));
+  const sec = document.getElementById(`sec-${id}`);
+  const navLink = document.getElementById(`nav-${id}`);
+  if (sec) sec.classList.add('active');
+  if (navLink) navLink.classList.add('active');
+  const meta = SCHEMA?.sections?.find(s => s.id === id);
+  document.getElementById('section-label').textContent =
+    id === 'preflight' ? 'Pre-flight checks' : (meta?.label || id);
+}
+
+// ── Section + Field rendering ──────────────────────────────────────────────
+function buildSections() {
+  const content = document.getElementById('content');
+  content.innerHTML = SCHEMA.sections.map(s => {
+    const meta = SCHEMA.sections.find(x => x.id === s.id);
+    const fields = SCHEMA.fields.filter(f => f.section === s.id);
+    return `
+      <div class="section" id="sec-${s.id}">
+        <div class="sec-title">${meta.label}</div>
+        <div class="sec-desc">${meta.desc}</div>
+        <div class="fields">
+          ${fields.map(f => renderField(f)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Attach domain-change listener
+  const domainInput = document.getElementById('field-DOMAIN');
+  if (domainInput) {
+    domainInput.addEventListener('input', e => {
+      debounce(() => deriveDomainFields(e.target.value), 400)();
+    });
+  }
+}
+
+function renderField(f) {
+  const val = CONFIG[f.key] ?? f.default ?? '';
+  const wide = f.wide ? 'field-wide' : '';
+  const derivedTag = f.derived ? '<span class="derived-tag">auto</span>' : '';
+  const reqMark = f.required ? '<span class="req">*</span>' : '';
+
+  let input = '';
+  if (f.type === 'select') {
+    const opts = (f.options || []).map(o =>
+      `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`
+    ).join('');
+    input = `<select id="field-${f.key}" onchange="onFieldChange('${f.key}',this.value)">${opts}</select>`;
+  } else if (f.type === 'textarea') {
+    input = `<textarea id="field-${f.key}" rows="2" oninput="onFieldChange('${f.key}',this.value)">${esc(val)}</textarea>`;
+  } else {
+    const isPass = f.type === 'password';
+    const ro = f.readonly ? 'readonly' : '';
+    input = `<input id="field-${f.key}" type="${isPass ? 'password' : f.type || 'text'}"
+      value="${esc(val)}" ${ro}
+      oninput="onFieldChange('${f.key}',this.value)"
+      placeholder="${esc(f.placeholder || '')}">`;
+  }
+
+  const eyeBtn = f.type === 'password'
+    ? `<button class="btn-icon" title="Show/hide" onclick="togglePass('field-${f.key}')">👁</button>`
+    : '';
+  const genBtn = f.auto_generate
+    ? `<button class="btn-icon" title="Generate" onclick="generateField('${f.key}','${f.generate_type||'hex32'}')">⚡</button>`
+    : '';
+
+  return `
+    <div class="field ${wide}" id="wrap-${f.key}">
+      <label for="field-${f.key}">${f.label} ${reqMark} ${derivedTag}</label>
+      <div class="iw">${input}${eyeBtn}${genBtn}</div>
+      ${f.description ? `<div class="field-desc">${f.description}</div>` : ''}
+    </div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+// ── Field interaction ──────────────────────────────────────────────────────
+function onFieldChange(key, value) {
+  CONFIG[key] = value;
+  validateField(key, value);
+}
+
+function validateField(key, value) {
+  const f = SCHEMA.fields.find(x => x.key === key);
+  const el = document.getElementById(`field-${key}`);
+  if (!f || !el) return true;
+  const ok = !f.required || value.trim().length > 0;
+  el.classList.toggle('error', !ok);
+  updateNavBadges();
+  return ok;
+}
+
+function updateNavBadges() {
+  SCHEMA.sections.forEach(s => {
+    const fields = SCHEMA.fields.filter(f => f.section === s.id && f.required);
+    const hasError = fields.some(f => {
+      const v = CONFIG[f.key] ?? '';
+      return !v.trim();
+    });
+    document.getElementById(`nav-${s.id}`)?.classList.toggle('has-errors', hasError);
+  });
+}
+
+// ── Derived fields from DOMAIN ─────────────────────────────────────────────
+const _timers = {};
+function debounce(fn, ms) {
+  return function() {
+    const k = fn.toString().slice(0,20);
+    clearTimeout(_timers[k]);
+    _timers[k] = setTimeout(fn, ms);
+  };
+}
+
+function deriveDomainFields(domain) {
+  if (!domain) return;
+  const derived = {
+    GITEA_DOMAIN:   domain,
+    GITEA_ROOT_URL: `https://git.${domain}`,
+    PKI_BASE_URL:   `https://pki.${domain}`,
+    CORS_ORIGINS:   `https://awx.${domain},https://api.${domain},https://pki.${domain}`,
+  };
+  for (const [key, val] of Object.entries(derived)) {
+    // Only override if the field is currently empty or still matches the old derived value
+    const el = document.getElementById(`field-${key}`);
+    if (el) {
+      el.value = val;
+      CONFIG[key] = val;
+    }
+  }
+}
+
+// ── Secret generation ──────────────────────────────────────────────────────
+async function generateField(key, type) {
+  const res = await fetch(`/api/generate/${type}`).then(r => r.json());
+  const el = document.getElementById(`field-${key}`);
+  if (el) {
+    el.value = res.value;
+    el.type = 'text';
+    CONFIG[key] = res.value;
+    validateField(key, res.value);
+    setTimeout(() => { if (el.type === 'text') el.type = 'password'; }, 2000);
+  }
+}
+
+async function generateAllSecrets() {
+  const toGenerate = SCHEMA.fields.filter(f => f.auto_generate && !CONFIG[f.key]);
+  for (const f of toGenerate) {
+    await generateField(f.key, f.generate_type || 'hex32');
+  }
+  toast('All missing secrets generated', 'ok');
+}
+
+function togglePass(id) {
+  const el = document.getElementById(id);
+  if (el) el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// ── Save ───────────────────────────────────────────────────────────────────
+async function saveConfig() {
+  if (!validateAll()) return;
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(CONFIG),
+  });
+  if (res.ok) {
+    toast('Configuration saved', 'ok');
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.detail || 'Save failed', 'err');
+  }
+}
+
+function validateAll() {
+  let ok = true;
+  SCHEMA.fields.filter(f => f.required).forEach(f => {
+    if (!validateField(f.key, CONFIG[f.key] ?? '')) ok = false;
+  });
+  if (!ok) toast('Fill in required fields (marked with *)', 'err');
+  return ok;
+}
+
+// ── Deploy ─────────────────────────────────────────────────────────────────
+async function deploy(withEncrypt) {
+  if (!validateAll()) return;
+  await saveConfig();
+  openLog();
+  logLine('Starting deployment…', 'info');
+
+  const evts = new EventSource(`/api/deploy?encrypt=${withEncrypt}`);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') {
+      evts.close();
+      pollStatus();
+      return;
+    }
+    const cls = msg.startsWith('[ERROR]') ? 'err'
+              : msg.startsWith('[SUCCESS]') ? 'ok'
+              : msg.startsWith('[') ? 'info' : '';
+    logLine(msg, cls);
+  };
+  evts.onerror = () => {
+    logLine('[ERROR] Connection to deploy stream lost', 'err');
+    evts.close();
+  };
+}
+
+// ── Log panel ──────────────────────────────────────────────────────────────
+function openLog() {
+  document.getElementById('log-panel').classList.add('open');
+  document.getElementById('log').innerHTML = '';
+}
+
+function toggleLog() {
+  document.getElementById('log-panel').classList.toggle('open');
+}
+
+function logLine(msg, cls) {
+  const log = document.getElementById('log');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── Stack status ───────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const s = await fetch('/api/status').then(r => r.json());
+    const dot = document.getElementById('sdot');
+    const txt = document.getElementById('stext');
+    if (s.running > 0) {
+      dot.classList.add('up');
+      txt.textContent = `${s.running} container(s) running`;
+    } else {
+      dot.classList.remove('up');
+      txt.textContent = 'Stack not running';
+    }
+  } catch {
+    document.getElementById('stext').textContent = 'Docker unavailable';
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'ok' ? '✓ ' : '✗ ') + msg;
+  el.className = `show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+boot();
+setInterval(pollStatus, 30000);
+</script>
+</body>
+</html>

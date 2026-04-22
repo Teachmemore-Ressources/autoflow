@@ -1,0 +1,316 @@
+"""
+Field definitions for the Autoflow Deploy Wizard.
+Each field maps to one .env variable.
+"""
+
+SECTIONS = [
+    {"id": "infrastructure", "label": "Infrastructure",  "desc": "Domain, ports and network topology"},
+    {"id": "postgresql",     "label": "PostgreSQL",       "desc": "Main database credentials"},
+    {"id": "redis",          "label": "Redis",            "desc": "Cache / queue credentials"},
+    {"id": "awx",            "label": "AWX",              "desc": "Automation platform configuration"},
+    {"id": "api",            "label": "Autoflow API",     "desc": "REST API, JWT and rate limiting"},
+    {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting"},
+    {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing"},
+    {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry"},
+    {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority"},
+    {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
+]
+
+# generate_type: hex32 | hex64 | urlsafe32
+FIELDS = [
+    # ── Infrastructure ────────────────────────────────────────────
+    {
+        "key": "DOMAIN", "label": "Domain", "section": "infrastructure",
+        "type": "text", "required": True, "default": "localhost",
+        "description": "Base domain for all services. Subdomains are derived automatically.",
+        "placeholder": "autoflow.example.com",
+        "derive_trigger": True,
+    },
+    {
+        "key": "TRAEFIK_HTTP_PORT", "label": "HTTP Port", "section": "infrastructure",
+        "type": "number", "default": "80", "description": "Traefik HTTP entrypoint port",
+    },
+    {
+        "key": "TRAEFIK_HTTPS_PORT", "label": "HTTPS Port", "section": "infrastructure",
+        "type": "number", "default": "443", "description": "Traefik HTTPS entrypoint port",
+    },
+    {
+        "key": "GITEA_SSH_PORT", "label": "Gitea SSH Port", "section": "infrastructure",
+        "type": "number", "default": "2222", "description": "TCP port exposed for Git-over-SSH",
+    },
+
+    # ── PostgreSQL ─────────────────────────────────────────────────
+    {
+        "key": "POSTGRES_DB", "label": "Database Name", "section": "postgresql",
+        "type": "text", "default": "awx", "description": "AWX PostgreSQL database name",
+    },
+    {
+        "key": "POSTGRES_USER", "label": "Username", "section": "postgresql",
+        "type": "text", "default": "awx", "description": "AWX PostgreSQL username",
+    },
+    {
+        "key": "POSTGRES_PASSWORD", "label": "Password", "section": "postgresql",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Strong password for the AWX database",
+    },
+    {
+        "key": "BACKUP_ENCRYPTION_KEY", "label": "Backup Encryption Key", "section": "postgresql",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "AES-256 key to encrypt database backups. Leave empty to skip encryption.",
+    },
+
+    # ── Redis ──────────────────────────────────────────────────────
+    {
+        "key": "REDIS_PASSWORD", "label": "Password", "section": "redis",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Strong password for Redis",
+    },
+
+    # ── AWX ───────────────────────────────────────────────────────
+    {
+        "key": "AWX_VERSION", "label": "AWX Version", "section": "awx",
+        "type": "text", "default": "24.6.1", "readonly": True,
+        "description": "Pinned AWX version — change only if you know what you are doing",
+    },
+    {
+        "key": "AWX_ADMIN_USER", "label": "Admin Username", "section": "awx",
+        "type": "text", "default": "admin", "required": True,
+        "description": "AWX web UI admin username",
+    },
+    {
+        "key": "AWX_ADMIN_PASSWORD", "label": "Admin Password", "section": "awx",
+        "type": "password", "required": True,
+        "description": "AWX web UI admin password",
+    },
+    {
+        "key": "AWX_ADMIN_EMAIL", "label": "Admin Email", "section": "awx",
+        "type": "email", "default": "admin@autoflow.local",
+        "description": "AWX admin email address",
+    },
+    {
+        "key": "AWX_SECRET_KEY", "label": "Secret Key", "section": "awx",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex64",
+        "description": "Django secret key — generate once, never change after first start",
+    },
+    {
+        "key": "AWX_TOKEN", "label": "API Token", "section": "awx",
+        "type": "password",
+        "description": "AWX API token (create in AWX UI after first start: User → Tokens → Add). Leave empty for initial setup.",
+    },
+    {
+        "key": "AWX_JOB_TEMPLATE_ID", "label": "Default Job Template ID", "section": "awx",
+        "type": "number", "default": "1",
+        "description": "Default AWX job template triggered on incoming events",
+    },
+
+    # ── Autoflow API ───────────────────────────────────────────────
+    {
+        "key": "API_SECRET_KEY", "label": "Secret Key", "section": "api",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Master secret key for the Autoflow API",
+    },
+    {
+        "key": "API_USERNAME", "label": "API Username", "section": "api",
+        "type": "text", "default": "admin",
+        "description": "Username for POST /auth/token",
+    },
+    {
+        "key": "API_PASSWORD", "label": "API Password", "section": "api",
+        "type": "password",
+        "description": "Password for POST /auth/token. Defaults to API_SECRET_KEY if empty.",
+    },
+    {
+        "key": "CORS_ORIGINS", "label": "CORS Origins", "section": "api",
+        "type": "text", "wide": True,
+        "description": "Comma-separated allowed origins. Auto-derived from Domain.",
+        "placeholder": "https://awx.example.com,https://api.example.com",
+        "derived": True,
+    },
+    {
+        "key": "RATE_LIMIT", "label": "Rate Limit", "section": "api",
+        "type": "text", "default": "100/minute",
+        "description": "API rate limit per IP (slowapi format)",
+    },
+    {
+        "key": "JWT_SECRET_KEY", "label": "JWT Secret Key", "section": "api",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "JWT signing secret. Defaults to API_SECRET_KEY if empty.",
+    },
+    {
+        "key": "JWT_EXPIRE_MINUTES", "label": "JWT Expiry (minutes)", "section": "api",
+        "type": "number", "default": "60",
+        "description": "JWT token lifetime in minutes",
+    },
+
+    # ── Monitoring ─────────────────────────────────────────────────
+    {
+        "key": "GRAFANA_ADMIN_USER", "label": "Grafana Username", "section": "monitoring",
+        "type": "text", "default": "admin",
+        "description": "Grafana admin username",
+    },
+    {
+        "key": "GRAFANA_ADMIN_PASSWORD", "label": "Grafana Password", "section": "monitoring",
+        "type": "password", "required": True,
+        "description": "Grafana admin password",
+    },
+    {
+        "key": "PROMETHEUS_RETENTION", "label": "Data Retention", "section": "monitoring",
+        "type": "text", "default": "15d",
+        "description": "Prometheus TSDB retention period (e.g. 15d, 30d, 90d)",
+    },
+    {
+        "key": "MONITORING_ADMIN_USER", "label": "BasicAuth Username", "section": "monitoring",
+        "type": "text", "default": "admin",
+        "description": "Username for Prometheus/Alertmanager BasicAuth (via Traefik)",
+    },
+    {
+        "key": "MONITORING_ADMIN_PASSWORD", "label": "BasicAuth Password", "section": "monitoring",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
+        "description": "Password for Prometheus/Alertmanager BasicAuth — auto-hashed to traefik/dynamic/monitoring_users",
+    },
+
+    # ── Event Engine ───────────────────────────────────────────────
+    {
+        "key": "DEDUP_TTL", "label": "Deduplication Window (s)", "section": "event_engine",
+        "type": "number", "default": "60",
+        "description": "Ignore duplicate events within this window (0 = disabled)",
+    },
+    {
+        "key": "GITHUB_WEBHOOK_SECRET", "label": "GitHub Webhook Secret", "section": "event_engine",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "HMAC-SHA256 secret for validating GitHub webhook payloads",
+    },
+    {
+        "key": "EVENT_ENGINE_ADMIN_TOKEN", "label": "Admin Token", "section": "event_engine",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
+        "description": "Bearer token required for /admin/* endpoints",
+    },
+    {
+        "key": "NOTIFICATION_WEBHOOK_URL", "label": "Notification Webhook URL", "section": "event_engine",
+        "type": "url",
+        "description": "Generic webhook called on job completion (optional)",
+    },
+    {
+        "key": "NOTIFICATION_SLACK_WEBHOOK", "label": "Slack Webhook URL", "section": "event_engine",
+        "type": "url",
+        "description": "Slack incoming webhook URL (optional)",
+    },
+    {
+        "key": "JOB_WATCHER_INTERVAL", "label": "Job Watcher Interval (s)", "section": "event_engine",
+        "type": "number", "default": "15",
+        "description": "How often to poll AWX for job completion status",
+    },
+
+    # ── Gitea ──────────────────────────────────────────────────────
+    {
+        "key": "GITEA_DOMAIN", "label": "Domain", "section": "gitea",
+        "type": "text", "derived": True,
+        "description": "Gitea domain — auto-derived from Infrastructure > Domain",
+    },
+    {
+        "key": "GITEA_ROOT_URL", "label": "Root URL", "section": "gitea",
+        "type": "url", "derived": True,
+        "description": "Gitea public URL — auto-derived from Infrastructure > Domain",
+    },
+    {
+        "key": "GITEA_DB_NAME", "label": "DB Name", "section": "gitea",
+        "type": "text", "default": "gitea",
+        "description": "Gitea PostgreSQL database name",
+    },
+    {
+        "key": "GITEA_DB_USER", "label": "DB User", "section": "gitea",
+        "type": "text", "default": "gitea",
+        "description": "Gitea PostgreSQL username",
+    },
+    {
+        "key": "GITEA_DB_PASSWORD", "label": "DB Password", "section": "gitea",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Gitea database password",
+    },
+    {
+        "key": "GITEA_SECRET_KEY", "label": "Secret Key", "section": "gitea",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex64",
+        "description": "Gitea application secret key — generate once, never change",
+    },
+    {
+        "key": "GITEA_INTERNAL_TOKEN", "label": "Internal Token", "section": "gitea",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex64",
+        "description": "Gitea internal API token",
+    },
+    {
+        "key": "GITEA_METRICS_TOKEN", "label": "Metrics Token", "section": "gitea",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "Bearer token for Prometheus to scrape Gitea metrics",
+    },
+    {
+        "key": "GITEA_WEBHOOK_SECRET", "label": "Webhook Secret", "section": "gitea",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "HMAC secret for Gitea webhook signature validation",
+    },
+    {
+        "key": "GITEA_REGISTRY_TOKEN", "label": "Registry Token", "section": "gitea",
+        "type": "password", "auto_generate": True, "generate_type": "hex32",
+        "description": "Token for the Gitea container registry",
+    },
+    {
+        "key": "GITEA_LOG_LEVEL", "label": "Log Level", "section": "gitea",
+        "type": "select", "default": "Warn",
+        "options": ["Trace", "Debug", "Info", "Warn", "Error", "Critical"],
+        "description": "Gitea log verbosity",
+    },
+
+    # ── PKI ────────────────────────────────────────────────────────
+    {
+        "key": "PKI_ADMIN_USER", "label": "Admin Username", "section": "pki",
+        "type": "text", "default": "admin",
+        "description": "PKI service admin username",
+    },
+    {
+        "key": "PKI_ADMIN_PASSWORD", "label": "Admin Password", "section": "pki",
+        "type": "password", "required": True,
+        "description": "PKI service admin password",
+    },
+    {
+        "key": "PKI_JWT_SECRET", "label": "JWT Secret", "section": "pki",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex64",
+        "description": "JWT signing secret for PKI — generate once, never change after first start",
+    },
+    {
+        "key": "PKI_BASE_URL", "label": "Base URL", "section": "pki",
+        "type": "url", "derived": True,
+        "description": "Public PKI URL — auto-derived from Infrastructure > Domain",
+    },
+    {
+        "key": "PKI_KEY_PASSPHRASE", "label": "Key Passphrase", "section": "pki",
+        "type": "password",
+        "description": "Optional passphrase to encrypt private keys at rest (leave empty to disable)",
+    },
+
+    # ── Advanced ───────────────────────────────────────────────────
+    {
+        "key": "LOG_LEVEL", "label": "Log Level", "section": "advanced",
+        "type": "select", "default": "info",
+        "options": ["debug", "info", "warning", "error"],
+        "description": "Log verbosity for Autoflow API and Event Engine",
+    },
+    {
+        "key": "AWX_METRICS_INTERVAL", "label": "AWX Metrics Interval (s)", "section": "advanced",
+        "type": "number", "default": "60",
+        "description": "AWX job metrics polling interval (0 = disabled)",
+    },
+    {
+        "key": "DOCKER_GID", "label": "Docker Socket GID", "section": "advanced",
+        "type": "number", "default": "999",
+        "description": "GID of /var/run/docker.sock on the host. Verify: stat -c '%g' /var/run/docker.sock",
+    },
+    {
+        "key": "SCAN_INTERVAL", "label": "Security Scan Interval (s)", "section": "advanced",
+        "type": "number", "default": "21600",
+        "description": "Trivy CVE scan frequency (default: 6 hours)",
+    },
+    {
+        "key": "TRIVY_VERSION", "label": "Trivy Version", "section": "advanced",
+        "type": "text", "default": "0.63.0", "readonly": True,
+        "description": "Trivy scanner version (pinned)",
+    },
+]

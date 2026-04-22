@@ -1,5 +1,9 @@
-# Environment – never commit secrets
+# Environment – never commit the plaintext file
+# .env.enc (encrypted with SOPS+Age) is safe to commit
 .env
+
+# Deploy wizard virtualenv
+.wizard-venv/
 
 # Python
 __pycache__/
@@ -15,3 +19,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+traefik/certs/*.key*
+traefik/dynamic/monitoring_users
+monitoring/prometheus/secrets/
+backups/

@@ -1,0 +1,10 @@
+---
+# SOPS configuration — Age encryption for Autoflow secrets
+# Key stored at: ~/.config/sops/age/keys.txt
+# To add a team member: add their public key to the `age:` list below,
+# then re-encrypt: sops updatekeys .env.enc
+creation_rules:
+  - path_regex: \.env(\..*)?$
+    age: age1wn3csx59ga8kppeznnqrq08g42n7h44d6sx4r6tq2p3z9gqvfglq0v46s7
+    input_type: dotenv
+    output_type: dotenv

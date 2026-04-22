@@ -2,7 +2,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* Fond sombre dès la première peinture — impossible d'avoir un flash blanc. */
-html,body{background:#151515!important;color:#fff}
+html,body{background:#151515!important}
 body{font-family:RedHatText,'Red Hat Text','Overpass',overpass,helvetica,arial,sans-serif}
 
 /* Neutralise TOTALEMENT les écrans d'auth natifs d'AWX — on ne s'en sert jamais.
@@ -472,6 +472,16 @@ var loginObs=new MutationObserver(function(){
   }
 });
 loginObs.observe(document.documentElement,{childList:true,subtree:true});
+
+/* ── Supprime la bannière "tech preview ui_next" dès qu'elle apparaît ── */
+/* AWX utilise pf-c-banner (pas pf-c-alert) — ne pas disconnect car SPA */
+var previewObs=new MutationObserver(function(){
+  document.querySelectorAll('a[href="/ui_next"],a[href*="ui_next"]').forEach(function(a){
+    var banner=a.closest('.pf-c-banner,.pf-v5-c-banner');
+    if(banner){banner.style.display='none';}
+  });
+});
+previewObs.observe(document.documentElement,{childList:true,subtree:true});
 
 })();</script>
 <link rel="stylesheet" href="/static/custom/custom.css"><script defer="defer" src="./static/js/main.be3da92f.js"></script><link href="./static/css/main.bcaaa591.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><style nonce="{{ csp_nonce }}">.app{height:100%}</style><div id="app" class="app"></div></body></html>

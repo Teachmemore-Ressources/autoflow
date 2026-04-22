@@ -37,6 +37,13 @@ x-awx-env: &awx-env
   AWX_ADMIN_EMAIL:    ${AWX_ADMIN_EMAIL:-admin@autoflow.local}
   AWX_SECRET_KEY:     ${AWX_SECRET_KEY}
 
+# Sécurité Linux — empêche l'escalade de privilèges via SUID/SGID
+# NE PAS appliquer sur awx_web, awx_task, awx_migrate, receptor
+# (Ansible become:true utilise sudo SUID — no-new-privileges casserait les playbooks)
+x-security-default: &security-default
+  security_opt:
+    - no-new-privileges:true
+
 # Log rotation for standard services
 x-log-default: &log-default
   logging:
@@ -70,8 +77,8 @@ services:
     ports:
       - "${TRAEFIK_HTTP_PORT:-80}:80"
       - "${TRAEFIK_HTTPS_PORT:-443}:443"
-      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
       - "${GITEA_SSH_PORT:-2222}:2222"
+      # Port 8080 retiré — dashboard désactivé (insecure: false dans traefik.yml)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -86,6 +93,7 @@ services:
       retries: 3
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -115,6 +123,7 @@ services:
       retries: 5
       start_period: 20s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -129,22 +138,23 @@ services:
     image: redis:7.4.8-alpine     # pinned: was 7-alpine (43 CRITICAL/HIGH CVEs fixed)
     container_name: autoflow_redis
     restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --appendonly yes
-      --appendfilename redis.aof
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
+      - ./redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
     networks:
       - autoflow
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -242,7 +252,7 @@ services:
   # Receptor is AWX's job-dispatch transport layer.
   # It must share the receptor_run volume so awx_task can reach the socket.
   receptor:
-    image: quay.io/ansible/receptor:latest
+    image: quay.io/ansible/receptor:1.6.4
     container_name: autoflow_receptor
     restart: unless-stopped
     hostname: awx
@@ -349,6 +359,12 @@ services:
       - "traefik.http.routers.api.entrypoints=web,websecure"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
+      # Routeur dédié /metrics — monitoring-auth requis, priorité haute (rule plus spécifique)
+      - "traefik.http.routers.api-metrics.rule=Host(`api.${DOMAIN:-localhost}`) && Path(`/metrics`)"
+      - "traefik.http.routers.api-metrics.entrypoints=websecure"
+      - "traefik.http.routers.api-metrics.tls=true"
+      - "traefik.http.routers.api-metrics.middlewares=monitoring-auth@file"
+      - "traefik.http.routers.api-metrics.service=api"
     networks:
       - autoflow
     healthcheck:
@@ -358,6 +374,7 @@ services:
       retries: 5
       start_period: 30s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -387,6 +404,7 @@ services:
       RATE_LIMIT:           ${RATE_LIMIT:-200/minute}
       RATE_LIMIT_WEBHOOKS:  ${RATE_LIMIT_WEBHOOKS:-60/minute}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      ADMIN_TOKEN:           ${EVENT_ENGINE_ADMIN_TOKEN:-}
     volumes:
       - ./event-engine/rules.yml:/etc/event-engine/rules.yml:ro
       - ./event-engine/schedules.yml:/etc/event-engine/schedules.yml:ro
@@ -399,6 +417,11 @@ services:
       - "traefik.http.routers.events.entrypoints=web,websecure"
       - "traefik.http.routers.events.tls=true"
       - "traefik.http.services.events.loadbalancer.server.port=8001"
+      - "traefik.http.routers.events-metrics.rule=Host(`events.${DOMAIN:-localhost}`) && Path(`/metrics`)"
+      - "traefik.http.routers.events-metrics.entrypoints=websecure"
+      - "traefik.http.routers.events-metrics.tls=true"
+      - "traefik.http.routers.events-metrics.middlewares=monitoring-auth@file"
+      - "traefik.http.routers.events-metrics.service=events"
     networks:
       - autoflow
     healthcheck:
@@ -408,6 +431,7 @@ services:
       retries: 5
       start_period: 30s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -419,7 +443,7 @@ services:
 
   # ── Prometheus ───────────────────────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.11.1
     container_name: autoflow_prometheus
     restart: unless-stopped
     command:
@@ -432,12 +456,14 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - ./monitoring/prometheus/secrets:/etc/prometheus/secrets:ro
       - prometheus_data:/prometheus
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.prometheus.entrypoints=web,websecure"
       - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.middlewares=monitoring-auth@file"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
     networks:
       - autoflow
@@ -448,6 +474,7 @@ services:
       retries: 3
       start_period: 15s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -459,14 +486,14 @@ services:
 
   # ── Grafana ──────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.4.2
     container_name: autoflow_grafana
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change_me_grafana}
       GF_USERS_ALLOW_SIGN_UP:     "false"
-      GF_SERVER_ROOT_URL:         "http://grafana.${DOMAIN:-localhost}/"
+      GF_SERVER_ROOT_URL:         "https://grafana.${DOMAIN:-localhost}/"
       GF_LOG_LEVEL:               ${LOG_LEVEL:-info}
     volumes:
       - grafana_data:/var/lib/grafana
@@ -490,6 +517,7 @@ services:
       retries: 3
       start_period: 15s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -501,11 +529,11 @@ services:
 
   # ── PostgreSQL Exporter ──────────────────────
   postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:latest
+    image: prometheuscommunity/postgres-exporter:v0.19.1
     container_name: autoflow_postgres_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=prefer"
     depends_on:
       postgres:
         condition: service_healthy
@@ -518,6 +546,7 @@ services:
       retries: 3
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -529,7 +558,7 @@ services:
 
   # ── Redis Exporter ───────────────────────────
   redis_exporter:
-    image: oliver006/redis_exporter:latest
+    image: oliver006/redis_exporter:v1.82.0
     container_name: autoflow_redis_exporter
     restart: unless-stopped
     environment:
@@ -548,6 +577,7 @@ services:
       retries: 3
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -592,6 +622,7 @@ services:
       - "traefik.http.routers.scanner.rule=Host(`scanner.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.scanner.entrypoints=web,websecure"
       - "traefik.http.routers.scanner.tls=true"
+      - "traefik.http.routers.scanner.middlewares=monitoring-auth@file"
       - "traefik.http.services.scanner.loadbalancer.server.port=8002"
     networks:
       - autoflow
@@ -602,6 +633,7 @@ services:
       retries: 3
       start_period: 60s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -633,6 +665,7 @@ services:
       retries: 5
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -711,6 +744,7 @@ services:
       retries: 5
       start_period: 30s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -741,7 +775,7 @@ services:
       LOG_LEVEL:            ${LOG_LEVEL:-info}
     volumes:
       - ./execution-environments:/execution-environments:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     group_add:
       - "${DOCKER_GID:-998}"
     labels:
@@ -750,6 +784,11 @@ services:
       - "traefik.http.routers.ee-builder.entrypoints=web,websecure"
       - "traefik.http.routers.ee-builder.tls=true"
       - "traefik.http.services.ee-builder.loadbalancer.server.port=8003"
+      - "traefik.http.routers.ee-metrics.rule=Host(`ee.${DOMAIN:-localhost}`) && Path(`/metrics`)"
+      - "traefik.http.routers.ee-metrics.entrypoints=websecure"
+      - "traefik.http.routers.ee-metrics.tls=true"
+      - "traefik.http.routers.ee-metrics.middlewares=monitoring-auth@file"
+      - "traefik.http.routers.ee-metrics.service=ee-builder"
     networks:
       - autoflow
     healthcheck:
@@ -759,6 +798,7 @@ services:
       retries: 3
       start_period: 30s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -772,7 +812,7 @@ services:
   # Receives firing alerts from Prometheus and routes them to the Autoflow
   # event engine (and optionally Slack/email).
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.32.0
     container_name: autoflow_alertmanager
     restart: unless-stopped
     command:
@@ -787,6 +827,7 @@ services:
       - "traefik.http.routers.alertmanager.rule=Host(`alerts.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.alertmanager.entrypoints=web,websecure"
       - "traefik.http.routers.alertmanager.tls=true"
+      - "traefik.http.routers.alertmanager.middlewares=monitoring-auth@file"
       - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
     networks:
       - autoflow
@@ -797,6 +838,7 @@ services:
       retries: 3
       start_period: 10s
     <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:
@@ -848,6 +890,11 @@ services:
       - "traefik.http.routers.pki.entrypoints=web,websecure"
       - "traefik.http.routers.pki.tls=true"
       - "traefik.http.services.pki.loadbalancer.server.port=8004"
+      - "traefik.http.routers.pki-metrics.rule=Host(`pki.${DOMAIN:-localhost}`) && Path(`/metrics`)"
+      - "traefik.http.routers.pki-metrics.entrypoints=websecure"
+      - "traefik.http.routers.pki-metrics.tls=true"
+      - "traefik.http.routers.pki-metrics.middlewares=monitoring-auth@file"
+      - "traefik.http.routers.pki-metrics.service=pki"
     networks:
       - autoflow
     healthcheck:
@@ -856,11 +903,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
     deploy:
       resources:
         limits:

@@ -4,8 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 api:
-  dashboard: true
-  insecure: true          # dashboard exposed on :8080 (no TLS)
+  dashboard: false        # dashboard désactivé — réactiver avec insecure: true si besoin en debug local
 
 ping: {}                  # GET /ping → 200 OK (used by healthcheck)
 

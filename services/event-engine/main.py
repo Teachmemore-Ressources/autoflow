@@ -27,8 +27,9 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -57,6 +58,26 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[settings.rate_limit],
 )
+
+
+# ── Admin auth — Bearer token requis sur tous les endpoints /admin/* ──────────
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+def require_admin_token(
+    credentials: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
+) -> None:
+    """Vérifie le token Bearer pour les endpoints admin.
+    Si ADMIN_TOKEN est vide, les endpoints sont bloqués (fail-secure).
+    """
+    if not settings.admin_token:
+        raise HTTPException(status_code=503, detail="Admin endpoints disabled — set ADMIN_TOKEN")
+    if credentials is None or credentials.credentials != settings.admin_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # ── Core dispatch (shared by HTTP + scheduler) ────────────────────────────────
@@ -300,7 +321,7 @@ async def webhook_alertmanager(request: Request):
 
 # ── Admin — Rules ─────────────────────────────────────────────────────────────
 
-@app.get("/admin/rules", tags=["admin"])
+@app.get("/admin/rules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_rules(request: Request):
     """Return the currently loaded routing rules."""
     engine: RuleEngine = request.app.state.rules
@@ -320,7 +341,7 @@ async def list_rules(request: Request):
     }
 
 
-@app.post("/admin/rules/reload", tags=["admin"])
+@app.post("/admin/rules/reload", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def reload_rules(request: Request):
     """Hot-reload the rules file from disk without restarting the service."""
     engine: RuleEngine = request.app.state.rules
@@ -330,7 +351,7 @@ async def reload_rules(request: Request):
 
 # ── Admin — Dedup ─────────────────────────────────────────────────────────────
 
-@app.get("/admin/dedup/stats", tags=["admin"])
+@app.get("/admin/dedup/stats", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def dedup_stats(request: Request):
     """Return dedup cache size and configuration."""
     dedup: DedupStore = request.app.state.dedup
@@ -341,7 +362,7 @@ async def dedup_stats(request: Request):
     }
 
 
-@app.post("/admin/dedup/clear", tags=["admin"])
+@app.post("/admin/dedup/clear", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def dedup_clear(request: Request):
     """Flush the entire dedup cache."""
     request.app.state.dedup.clear()
@@ -350,7 +371,7 @@ async def dedup_clear(request: Request):
 
 # ── Admin — Schedules ─────────────────────────────────────────────────────────
 
-@app.get("/admin/schedules", tags=["admin"])
+@app.get("/admin/schedules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_schedules(request: Request):
     """Return the currently active cron schedules and their next fire times."""
     sched: EventScheduler = request.app.state.scheduler
@@ -360,7 +381,7 @@ async def list_schedules(request: Request):
     }
 
 
-@app.post("/admin/schedules/reload", tags=["admin"])
+@app.post("/admin/schedules/reload", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def reload_schedules(request: Request):
     """Hot-reload the schedules file from disk without restarting the service."""
     sched: EventScheduler = request.app.state.scheduler

@@ -73,7 +73,7 @@ scrape_configs:
     static_configs:
       - targets: ['gitea:3001']
     metrics_path: /metrics
-    bearer_token: "4ccdb295528a9454706ed41d4008d6cb"
+    bearer_token_file: /etc/prometheus/secrets/gitea_bearer_token
 
   # EE Builder — ansible-builder pipeline metrics (builds_total, builds_running)
   - job_name: ee_builder

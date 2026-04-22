@@ -131,8 +131,18 @@ img[src*="brand-logo"] {
  
 }
 
-/* ── Masquer la bannière "tech preview" ── */
-.pf-c-alert.pf-m-info:has(a[href*="ui_next"]),
-.pf-v5-c-alert.pf-m-info:has(a[href*="ui_next"]) {
+/* ── Contenu principal : réinitialise la couleur de texte sur fond blanc ── */
+.pf-c-page__main,
+.pf-v5-c-page__main,
+.pf-c-page__main-section,
+.pf-v5-c-page__main-section {
+  color: var(--pf-global--Color--100, #151515) !important;
+}
+
+/* ── Masquer la bannière "tech preview" du nouveau UI AWX ── */
+/* AWX utilise pf-c-banner (pas pf-c-alert) avec variant info */
+.pf-c-banner.pf-m-info:has(a[href*="ui_next"]),
+.pf-c-banner:has(a[href="/ui_next"]),
+.pf-v5-c-banner.pf-m-info:has(a[href*="ui_next"]) {
   display: none !important;
 }
