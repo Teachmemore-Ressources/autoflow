@@ -722,10 +722,40 @@ async def init_awx_token():
             yield _sse("[DONE]")
             return
 
-        # Use docker exec + curl inside the AWX container — no DNS, no TLS.
-        # AWX web listens on http://localhost:8052 inside the container.
-        yield _sse("Requesting AWX token via docker exec (no DNS required)…")
         import json as _json
+
+        # ── Step 1: verify container is running ───────────────────────────
+        chk = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", "autoflow_awx_web"],
+            capture_output=True, text=True,
+        )
+        container_status = chk.stdout.strip()
+        yield _sse(f"Container autoflow_awx_web status: {container_status or '(not found)'}")
+        if container_status != "running":
+            yield _sse("[ERROR] Container is not running. Start the stack first: make start")
+            yield _sse("[DONE]")
+            return
+
+        # ── Step 2: detect AWX internal port (nginx proxy → uwsgi) ───────
+        # Try 8052 first (default), fallback to 80
+        for port in ("8052", "80"):
+            probe = subprocess.run(
+                ["docker", "exec", "autoflow_awx_web",
+                 "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                 f"http://localhost:{port}/api/v2/ping/"],
+                capture_output=True, text=True,
+            )
+            if probe.stdout.strip() in ("200", "401"):
+                awx_port = port
+                yield _sse(f"AWX API reachable on port {awx_port} (HTTP {probe.stdout.strip()}).")
+                break
+        else:
+            yield _sse("[ERROR] AWX API not reachable on port 8052 or 80 — AWX may still be starting.")
+            yield _sse("[DONE]")
+            return
+
+        # ── Step 3: create token ──────────────────────────────────────────
+        yield _sse("Creating API token…")
         payload = _json.dumps({
             "description": "Autoflow Event Engine",
             "application": None,
@@ -734,28 +764,31 @@ async def init_awx_token():
         result = subprocess.run(
             [
                 "docker", "exec", "autoflow_awx_web",
-                "curl", "-sf", "-X", "POST",
+                "curl", "-s", "-X", "POST",
                 "-u", f"{awx_user}:{awx_password}",
                 "-H", "Content-Type: application/json",
                 "-d", payload,
-                "http://localhost:8052/api/v2/tokens/",
+                f"http://localhost:{awx_port}/api/v2/tokens/",
             ],
             capture_output=True, text=True,
         )
         if result.returncode != 0:
-            yield _sse(f"[ERROR] curl failed: {result.stderr.strip() or 'container not running?'}")
+            yield _sse(f"[ERROR] docker exec failed: {result.stderr.strip()}")
             yield _sse("[DONE]")
             return
+
+        yield _sse(f"AWX response: {result.stdout[:300]}")
 
         try:
             r_data = _json.loads(result.stdout)
         except Exception:
-            yield _sse(f"[ERROR] Unexpected AWX response: {result.stdout[:200]}")
+            yield _sse(f"[ERROR] Could not parse AWX response (see above).")
             yield _sse("[DONE]")
             return
 
         if "token" not in r_data:
-            yield _sse(f"[ERROR] AWX returned: {result.stdout[:200]}")
+            detail = r_data.get("detail", r_data.get("non_field_errors", result.stdout[:200]))
+            yield _sse(f"[ERROR] AWX returned no token — {detail}")
             yield _sse("[DONE]")
             return
 
