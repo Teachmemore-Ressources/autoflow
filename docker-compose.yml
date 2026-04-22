@@ -533,7 +533,7 @@ services:
     container_name: autoflow_postgres_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=prefer"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy
