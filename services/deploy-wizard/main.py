@@ -117,9 +117,12 @@ def save_config(data: dict):
     # ── Write Gitea metrics bearer token for Prometheus ───────────
     gitea_token = merged.get("GITEA_METRICS_TOKEN", "")
     if gitea_token:
-        GITEA_BEARER_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        GITEA_BEARER_TOKEN_FILE.write_text(gitea_token)
-        GITEA_BEARER_TOKEN_FILE.chmod(0o600)
+        try:
+            GITEA_BEARER_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            GITEA_BEARER_TOKEN_FILE.write_text(gitea_token)
+            GITEA_BEARER_TOKEN_FILE.chmod(0o600)
+        except PermissionError:
+            pass  # file owned by root; user must run: sudo chown $(whoami) <path>
 
     # ── Compute affected services and warnings ─────────────────────
     services: set[str] = set()
