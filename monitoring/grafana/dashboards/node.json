@@ -17,7 +17,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
         "textMode": "auto", "colorMode": "value", "graphMode": "none" },
       "targets": [{ "expr": "node_time_seconds{job=\"node\"} - node_boot_time_seconds{job=\"node\"}",
-        "legendFormat": "Uptime", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "Uptime", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 2, "type": "stat", "title": "CPU Cores",
@@ -27,7 +27,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
         "textMode": "auto", "colorMode": "value", "graphMode": "none" },
       "targets": [{ "expr": "count(node_cpu_seconds_total{job=\"node\",mode=\"idle\"})",
-        "legendFormat": "Cores", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "Cores", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 3, "type": "stat", "title": "Total RAM",
@@ -37,7 +37,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
         "textMode": "auto", "colorMode": "value", "graphMode": "none" },
       "targets": [{ "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
-        "legendFormat": "Total RAM", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "Total RAM", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 4, "type": "gauge", "title": "CPU Usage",
@@ -51,7 +51,7 @@
         ] } } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
       "targets": [{ "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[2m])) * 100)",
-        "legendFormat": "CPU %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "CPU %", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 5, "type": "gauge", "title": "Memory Usage",
@@ -65,7 +65,7 @@
         ] } } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
       "targets": [{ "expr": "100 * (1 - (node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"}))",
-        "legendFormat": "Memory %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "Memory %", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 6, "type": "gauge", "title": "Disk Usage  /",
@@ -79,7 +79,7 @@
         ] } } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
       "targets": [{ "expr": "100 - (node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} * 100)",
-        "legendFormat": "Disk %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+        "legendFormat": "Disk %", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
     },
 
     { "id": 7, "type": "timeseries", "title": "CPU Usage %",
@@ -90,9 +90,9 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[2m])) * 100)",
-          "legendFormat": "Total CPU %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Total CPU %", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"iowait\"}[2m])) * 100",
-          "legendFormat": "IO Wait %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "legendFormat": "IO Wait %", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
 
@@ -104,11 +104,11 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
-          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}",
-          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_memory_Cached_bytes{job=\"node\"} + node_memory_Buffers_bytes{job=\"node\"}",
-          "legendFormat": "Cache+Buffers", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "legendFormat": "Cache+Buffers", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
 
@@ -120,9 +120,9 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!~\"lo|veth.*|docker.*|br.*\"}[2m])",
-          "legendFormat": "IN {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "IN {{device}}", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!~\"lo|veth.*|docker.*|br.*\"}[2m])",
-          "legendFormat": "OUT {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "legendFormat": "OUT {{device}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
 
@@ -134,9 +134,9 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "rate(node_disk_read_bytes_total{job=\"node\",device!~\"dm-.*\"}[2m])",
-          "legendFormat": "Read {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Read {{device}}", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "rate(node_disk_written_bytes_total{job=\"node\",device!~\"dm-.*\"}[2m])",
-          "legendFormat": "Write {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "legendFormat": "Write {{device}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
 
@@ -148,11 +148,11 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "node_load1{job=\"node\"}", "legendFormat": "1m",
-          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_load5{job=\"node\"}", "legendFormat": "5m",
-          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_load15{job=\"node\"}", "legendFormat": "15m",
-          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
 
@@ -164,11 +164,11 @@
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
-          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} - node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
-          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "prometheus" } },
         { "expr": "node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
-          "legendFormat": "Available", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+          "legendFormat": "Available", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     }
 
