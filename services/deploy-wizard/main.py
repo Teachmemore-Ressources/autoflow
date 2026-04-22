@@ -361,7 +361,7 @@ async def generate_cert():
             # Download private key PEM (admin permission required)
             r = await c.get(
                 f"{PKI_URL}/api/certs/{serial}/key.pem",
-                headers={**headers, "x-request-reason": "Deploy Wizard — Traefik TLS bootstrap"},
+                headers={**headers, "x-request-reason": "Deploy Wizard - Traefik TLS bootstrap"},
             )
             key_pem = r.text
 
