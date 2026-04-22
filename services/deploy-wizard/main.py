@@ -716,48 +716,51 @@ async def init_awx_token():
         config       = _load_env()
         awx_user     = config.get("AWX_ADMIN_USER", "admin")
         awx_password = config.get("AWX_ADMIN_PASSWORD", "")
-        domain       = config.get("DOMAIN", "localhost")
-        http_port    = config.get("TRAEFIK_HTTP_PORT", "80")
 
         if not awx_password:
             yield _sse("[ERROR] AWX_ADMIN_PASSWORD is not set.")
             yield _sse("[DONE]")
             return
 
-        # Connect via Traefik on localhost — no DNS required.
-        # The Host header tells Traefik which router to use.
-        awx_local = f"http://localhost:{http_port}"
-        yield _sse(f"Connecting to AWX via Traefik on {awx_local} (Host: awx.{domain})…")
+        # Use docker exec + curl inside the AWX container — no DNS, no TLS.
+        # AWX web listens on http://localhost:8052 inside the container.
+        yield _sse("Requesting AWX token via docker exec (no DNS required)…")
+        import json as _json
+        payload = _json.dumps({
+            "description": "Autoflow Event Engine",
+            "application": None,
+            "scope":       "write",
+        })
+        result = subprocess.run(
+            [
+                "docker", "exec", "autoflow_awx_web",
+                "curl", "-sf", "-X", "POST",
+                "-u", f"{awx_user}:{awx_password}",
+                "-H", "Content-Type: application/json",
+                "-d", payload,
+                "http://localhost:8052/api/v2/tokens/",
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            yield _sse(f"[ERROR] curl failed: {result.stderr.strip() or 'container not running?'}")
+            yield _sse("[DONE]")
+            return
 
-        import httpx as _httpx
         try:
-            async with _httpx.AsyncClient(
-                headers={"Host": f"awx.{domain}"},
-                follow_redirects=True,
-                timeout=15.0,
-            ) as c:
-                r = await c.post(
-                    f"{awx_local}/api/v2/tokens/",
-                    auth=(awx_user, awx_password),
-                    json={"description": "Autoflow Event Engine", "application": None, "scope": "write"},
-                )
-        except Exception as e:
-            yield _sse(f"[ERROR] Could not reach AWX: {e}")
+            r_data = _json.loads(result.stdout)
+        except Exception:
+            yield _sse(f"[ERROR] Unexpected AWX response: {result.stdout[:200]}")
             yield _sse("[DONE]")
             return
 
-        if r.status_code not in (200, 201):
-            yield _sse(f"[ERROR] AWX returned {r.status_code}: {r.text[:200]}")
+        if "token" not in r_data:
+            yield _sse(f"[ERROR] AWX returned: {result.stdout[:200]}")
             yield _sse("[DONE]")
             return
 
-        token = r.json().get("token", "")
-        if not token:
-            yield _sse("[ERROR] AWX response had no token field.")
-            yield _sse("[DONE]")
-            return
-
-        yield _sse(f"Token created (id={r.json().get('id')}). Writing to .env…")
+        token = r_data["token"]
+        yield _sse(f"Token created (id={r_data.get('id')}). Writing to .env…")
         current = _load_env()
         current["AWX_TOKEN"] = token
         _write_env(current)
