@@ -178,7 +178,7 @@ images-update:   ## Show pinned public images with available upstream versions
 	    "oliver006/redis_exporter:v1.82.0" \
 	    "prometheuscommunity/postgres-exporter:v0.19.1" \
 	    "gitea/gitea:1.23-rootless" \
-	    "quay.io/ansible/receptor:1.6.4"; do \
+	    "quay.io/ansible/receptor:v1.6.4"; do \
 	    echo "  $$img"; \
 	done
 	@echo ""

@@ -252,7 +252,7 @@ services:
   # Receptor is AWX's job-dispatch transport layer.
   # It must share the receptor_run volume so awx_task can reach the socket.
   receptor:
-    image: quay.io/ansible/receptor:1.6.4
+    image: quay.io/ansible/receptor:v1.6.4
     container_name: autoflow_receptor
     restart: unless-stopped
     hostname: awx
