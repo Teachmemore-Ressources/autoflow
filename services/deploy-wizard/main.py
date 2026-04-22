@@ -24,7 +24,8 @@ ROOT              = Path(os.environ.get("AUTOFLOW_ROOT", Path(__file__).parent.p
 ENV_FILE          = ROOT / ".env"
 ENV_ENC_FILE      = ROOT / ".env.enc"
 ENV_EXAMPLE_FILE  = ROOT / ".env.example"
-MONITORING_USERS  = ROOT / "traefik/dynamic/monitoring_users"
+MONITORING_USERS        = ROOT / "traefik/dynamic/monitoring_users"
+GITEA_BEARER_TOKEN_FILE = ROOT / "monitoring/prometheus/secrets/gitea_bearer_token"
 TLS_YML           = ROOT / "traefik/dynamic/tls.yml"
 CERTS_DIR         = ROOT / "traefik/certs"
 AWX_DOCKERFILE    = ROOT / "awx/Dockerfile.patched"
@@ -112,6 +113,13 @@ def save_config(data: dict):
         MONITORING_USERS.parent.mkdir(parents=True, exist_ok=True)
         MONITORING_USERS.write_text(f"{user}:{hashed}\n")
         MONITORING_USERS.chmod(0o600)
+
+    # ── Write Gitea metrics bearer token for Prometheus ───────────
+    gitea_token = merged.get("GITEA_METRICS_TOKEN", "")
+    if gitea_token:
+        GITEA_BEARER_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        GITEA_BEARER_TOKEN_FILE.write_text(gitea_token)
+        GITEA_BEARER_TOKEN_FILE.chmod(0o600)
 
     # ── Compute affected services and warnings ─────────────────────
     services: set[str] = set()
