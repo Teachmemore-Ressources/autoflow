@@ -68,6 +68,11 @@ scrape_configs:
       - targets: ['security_scanner:8002']
     metrics_path: /metrics
 
+  # Host system metrics (CPU, memory, disk, network)
+  - job_name: node
+    static_configs:
+      - targets: ['node_exporter:9100']
+
   # Gitea — repository, user, and CI metrics
   - job_name: gitea
     static_configs:

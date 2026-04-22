@@ -1,0 +1,176 @@
+{
+  "uid": "autoflow-node",
+  "title": "Host System",
+  "description": "CPU, memory, disk, network and load for the Autoflow host",
+  "tags": ["autoflow", "node"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "time": { "from": "now-3h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+
+    { "id": 1, "type": "stat", "title": "Uptime",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "expr": "node_time_seconds{job=\"node\"} - node_boot_time_seconds{job=\"node\"}",
+        "legendFormat": "Uptime", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 2, "type": "stat", "title": "CPU Cores",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [{ "color": "blue", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "expr": "count(node_cpu_seconds_total{job=\"node\",mode=\"idle\"})",
+        "legendFormat": "Cores", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 3, "type": "stat", "title": "Total RAM",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [{ "color": "blue", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
+        "legendFormat": "Total RAM", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 4, "type": "gauge", "title": "CPU Usage",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 70 },
+          { "color": "red", "value": 90 }
+        ] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
+      "targets": [{ "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[2m])) * 100)",
+        "legendFormat": "CPU %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 5, "type": "gauge", "title": "Memory Usage",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 75 },
+          { "color": "red", "value": 90 }
+        ] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
+      "targets": [{ "expr": "100 * (1 - (node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"}))",
+        "legendFormat": "Memory %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 6, "type": "gauge", "title": "Disk Usage  /",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "color": { "mode": "thresholds" },
+        "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 75 },
+          { "color": "red", "value": 90 }
+        ] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto" },
+      "targets": [{ "expr": "100 - (node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} * 100)",
+        "legendFormat": "Disk %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }]
+    },
+
+    { "id": 7, "type": "timeseries", "title": "CPU Usage %",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[2m])) * 100)",
+          "legendFormat": "Total CPU %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"iowait\"}[2m])) * 100",
+          "legendFormat": "IO Wait %", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    },
+
+    { "id": 8, "type": "timeseries", "title": "Memory",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "bytes",
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
+          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}",
+          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_memory_Cached_bytes{job=\"node\"} + node_memory_Buffers_bytes{job=\"node\"}",
+          "legendFormat": "Cache+Buffers", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    },
+
+    { "id": 9, "type": "timeseries", "title": "Network Traffic",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps",
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!~\"lo|veth.*|docker.*|br.*\"}[2m])",
+          "legendFormat": "IN {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!~\"lo|veth.*|docker.*|br.*\"}[2m])",
+          "legendFormat": "OUT {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    },
+
+    { "id": 10, "type": "timeseries", "title": "Disk I/O",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps",
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(node_disk_read_bytes_total{job=\"node\",device!~\"dm-.*\"}[2m])",
+          "legendFormat": "Read {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "rate(node_disk_written_bytes_total{job=\"node\",device!~\"dm-.*\"}[2m])",
+          "legendFormat": "Write {{device}}", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    },
+
+    { "id": 11, "type": "timeseries", "title": "System Load Average",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "short",
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "node_load1{job=\"node\"}", "legendFormat": "1m",
+          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_load5{job=\"node\"}", "legendFormat": "5m",
+          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_load15{job=\"node\"}", "legendFormat": "15m",
+          "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    },
+
+    { "id": 12, "type": "timeseries", "title": "Disk Space  /",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "bytes",
+        "color": { "mode": "palette-classic" },
+        "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
+          "legendFormat": "Total", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} - node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
+          "legendFormat": "Used", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } },
+        { "expr": "node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
+          "legendFormat": "Available", "datasource": { "type": "prometheus", "uid": "autoflow-prometheus" } }
+      ]
+    }
+
+  ]
+}

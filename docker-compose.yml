@@ -557,6 +557,40 @@ services:
           cpus: '0.01'
           memory: 16M
 
+  # ── Node Exporter (host system metrics) ─────
+  node_exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: autoflow_node_exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.rootfs=/rootfs
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics | head -1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.01'
+          memory: 16M
+
   # ── Redis Exporter ───────────────────────────
   redis_exporter:
     image: oliver006/redis_exporter:v1.82.0
