@@ -120,7 +120,7 @@ def save_config(data: dict):
         try:
             GITEA_BEARER_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
             GITEA_BEARER_TOKEN_FILE.write_text(gitea_token)
-            GITEA_BEARER_TOKEN_FILE.chmod(0o600)
+            GITEA_BEARER_TOKEN_FILE.chmod(0o644)  # readable by Prometheus non-root user
         except PermissionError:
             pass  # file owned by root; user must run: sudo chown $(whoami) <path>
 
