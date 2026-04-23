@@ -918,9 +918,12 @@ services:
       PKI_KEY_PASSPHRASE:  ${PKI_KEY_PASSPHRASE:-}
       PKI_ALLOWED_ORIGINS: ${PKI_ALLOWED_ORIGINS:-}
       PKI_BASE_URL:        ${PKI_BASE_URL:-http://localhost:8004}
+      DOMAIN:              ${DOMAIN:-localhost}
+      TRAEFIK_CERTS_DIR:   /traefik/certs
       LOG_LEVEL:           ${LOG_LEVEL:-info}
     volumes:
       - pki_data:/data/pki
+      - ./traefik/certs:/traefik/certs:rw
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pki.rule=Host(`pki.${DOMAIN:-localhost}`)"

@@ -43,6 +43,13 @@ CRL_DIR   = DATA_DIR / "crl"
 DB_FILE   = DATA_DIR / "db.json"
 USERS_FILE = DATA_DIR / "users.json"
 
+TRAEFIK_CERTS_DIR = Path(os.getenv("TRAEFIK_CERTS_DIR", "/traefik/certs"))
+DOMAIN            = os.getenv("DOMAIN", "localhost")
+# How many days before expiry to auto-renew the deployed wildcard cert
+AUTO_RENEW_DAYS   = int(os.getenv("PKI_AUTO_RENEW_DAYS", "30"))
+# Renewal validity (days) when auto-renewing
+AUTO_RENEW_VALIDITY = int(os.getenv("PKI_AUTO_RENEW_VALIDITY", "365"))
+
 _jwt_secret_env = os.getenv("PKI_JWT_SECRET", "")
 if not _jwt_secret_env:
     _jwt_secret_env = secrets.token_hex(32)
@@ -223,6 +230,8 @@ CA_EXPIRY_DAYS   = Gauge("pki_ca_expiry_days", "Days until CA expires", ["ca_nam
 CERT_ISSUE_CNT   = Counter("pki_certificate_issues_total", "Total issuance operations")
 CERT_REVOKE_CNT  = Counter("pki_certificate_revocations_total", "Total revocations")
 CERT_RENEW_CNT   = Counter("pki_certificate_renewals_total", "Total renewals")
+CERT_DEPLOY_CNT  = Counter("pki_certificate_deployments_total", "Total Traefik deployments")
+CERT_AUTORENEW_CNT = Counter("pki_certificate_autorenewals_total", "Total auto-renewals")
 ISSUE_LATENCY    = Histogram("pki_issue_duration_seconds", "Certificate issuance latency")
 
 
@@ -393,6 +402,158 @@ def _cert_status(sn: str, info: dict, db: dict, now: datetime) -> tuple[str, int
     elif days <= 30:  status = "warning"
     else:             status = "active"
     return status, days
+
+
+# ── Traefik deploy helpers ────────────────────────────────────────────────────
+def _traefik_certs_available() -> bool:
+    """Return True if the Traefik certs dir is mounted and writable."""
+    return TRAEFIK_CERTS_DIR.exists() and os.access(TRAEFIK_CERTS_DIR, os.W_OK)
+
+
+def _deploy_to_traefik(serial: str, db: dict) -> dict:
+    """
+    Copy cert+key for *serial* into TRAEFIK_CERTS_DIR as the wildcard files.
+    Marks serial as deployed in db (caller must persist via locked_db).
+    Returns a dict with deployed file paths.
+    """
+    if not _traefik_certs_available():
+        raise RuntimeError(
+            f"Traefik certs dir '{TRAEFIK_CERTS_DIR}' is not accessible. "
+            "Check that the volume is mounted in docker-compose.yml."
+        )
+
+    cert_src = CERTS_DIR / f"{serial}_cert.pem"
+    key_src  = CERTS_DIR / f"{serial}_key.pem"
+
+    if not cert_src.exists():
+        raise FileNotFoundError(f"Cert file not found: {cert_src}")
+    if not key_src.exists():
+        raise FileNotFoundError(f"Key file not found: {key_src}")
+
+    cert_dst = TRAEFIK_CERTS_DIR / f"wildcard.{DOMAIN}.crt"
+    key_dst  = TRAEFIK_CERTS_DIR / f"wildcard.{DOMAIN}.key"
+
+    # Also deploy CA cert so clients can optionally trust it
+    cert_info = db["certificates"].get(serial, {})
+    ca_name   = cert_info.get("ca_name")
+    ca_src    = CA_DIR / f"{ca_name}_cert.pem" if ca_name else None
+
+    # Write cert (chain = leaf + CA if available)
+    leaf_pem = cert_src.read_bytes()
+    if ca_src and ca_src.exists():
+        chain_pem = leaf_pem + ca_src.read_bytes()
+    else:
+        chain_pem = leaf_pem
+    cert_dst.write_bytes(chain_pem)
+    cert_dst.chmod(0o644)
+
+    # Write key (unencrypted — Traefik reads it directly)
+    key_dst.write_bytes(_export_key_unencrypted(key_src))
+    key_dst.chmod(0o600)
+
+    # Persist deployed serial in db
+    db.setdefault("deployed", {})
+    db["deployed"]["traefik_wildcard"] = {
+        "serial":      serial,
+        "deployed_at": datetime.now(timezone.utc).isoformat(),
+        "cert_path":   str(cert_dst),
+        "key_path":    str(key_dst),
+        "domain":      DOMAIN,
+    }
+
+    log.info("Deployed cert %s → %s", serial, cert_dst)
+    CERT_DEPLOY_CNT.inc()
+    return {"cert": str(cert_dst), "key": str(key_dst)}
+
+
+def _auto_renewal_check() -> None:
+    """
+    Check whether the currently deployed Traefik wildcard cert is within
+    AUTO_RENEW_DAYS of expiry. If so, renew it and re-deploy automatically.
+    Called from the background renewal loop.
+    """
+    if not _traefik_certs_available():
+        log.debug("Auto-renewal: Traefik certs dir not available, skipping.")
+        return
+
+    db = load_db()
+    deployed = db.get("deployed", {}).get("traefik_wildcard")
+    if not deployed:
+        log.debug("Auto-renewal: no deployed cert recorded, skipping.")
+        return
+
+    serial = deployed["serial"]
+    cert_info = db["certificates"].get(serial)
+    if not cert_info:
+        log.warning("Auto-renewal: deployed serial %s not found in DB.", serial)
+        return
+
+    # Skip if already revoked
+    if serial in db["revoked_serials"]:
+        log.debug("Auto-renewal: deployed serial %s is revoked, skipping.", serial)
+        return
+
+    exp  = _parse_dt(cert_info["not_after"])
+    days = (exp - datetime.now(timezone.utc)).days
+
+    if days > AUTO_RENEW_DAYS:
+        log.debug("Auto-renewal: cert %s expires in %d days — no action needed.", serial, days)
+        return
+
+    log.info(
+        "Auto-renewal: cert %s expires in %d days (threshold=%d) — renewing.",
+        serial, days, AUTO_RENEW_DAYS,
+    )
+
+    try:
+        # Reuse renew logic inside a locked_db context
+        with locked_db() as db2:
+            old = db2["certificates"][serial]
+            domains = [s[4:] for s in old.get("sans", []) if s.startswith("DNS:") and not s[4:].startswith("*.")]
+            ips     = [s[3:] for s in old.get("sans", []) if s.startswith("IP:")]
+            new_req = CertCreateRequest(
+                ca_name=old["ca_name"],
+                common_name=old["common_name"],
+                organization=old.get("organization", "Autoflow"),
+                domains=domains,
+                ips=ips,
+                validity_days=AUTO_RENEW_VALIDITY,
+                wildcard=old.get("wildcard", False),
+                cert_type=old.get("cert_type", "server"),
+                key_size=old.get("key_size", 2048),
+            )
+            new_serial, _ = _issue_cert_logic(new_req, db2, "auto-renewal")
+
+            # Revoke old cert
+            if serial not in db2["revoked_serials"]:
+                _revoke_cert_logic(serial, "superseded", "auto-renewal", db2)
+                _generate_crl(old.get("ca_name"), db2)
+
+            # Deploy new cert to Traefik
+            _deploy_to_traefik(new_serial, db2)
+
+        CERT_ISSUE_CNT.inc()
+        CERT_REVOKE_CNT.inc()
+        CERT_RENEW_CNT.inc()
+        CERT_AUTORENEW_CNT.inc()
+        update_metrics()
+        log.info("Auto-renewal: cert %s renewed → %s and deployed to Traefik.", serial, new_serial)
+
+    except Exception as e:
+        log.error("Auto-renewal failed for serial %s: %s", serial, e)
+
+
+def _auto_renewal_loop() -> None:
+    """Background thread: check every 12 h for certs needing renewal."""
+    # Initial delay so the service finishes starting up
+    time.sleep(60)
+    while True:
+        try:
+            _auto_renewal_check()
+        except Exception as e:
+            log.error("Auto-renewal loop error: %s", e)
+        # Re-check every 12 hours
+        time.sleep(43200)
 
 
 # ── Input Models ──────────────────────────────────────────────────────────────
@@ -676,8 +837,9 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app_: FastAPI):
     bootstrap_admin()
-    threading.Thread(target=_metrics_loop, daemon=True).start()
-    log.info("PKI Service v2.0 started")
+    threading.Thread(target=_metrics_loop,      daemon=True).start()
+    threading.Thread(target=_auto_renewal_loop, daemon=True).start()
+    log.info("PKI Service v2.0 started — auto-renewal threshold: %d days", AUTO_RENEW_DAYS)
     yield
 
 
@@ -1045,6 +1207,81 @@ def renew_cert(
     update_metrics()
     _audit(request, "cert.renew", user, resource=req.serial, detail=f"new={new_serial}")
     return {"status": "issued", "serial": new_serial, "renewed_from": req.serial}
+
+
+# ── Deploy endpoint ──────────────────────────────────────────────────────────
+@app.post("/api/certs/{serial}/deploy")
+def deploy_cert(
+    serial:  str,
+    request: Request,
+    user:    dict = Depends(require_permission("cert:issue")),
+):
+    """
+    Deploy the cert+key for *serial* as the active Traefik wildcard certificate.
+    Traefik hot-reloads TLS without restart.
+    """
+    if not SERIAL_RE.match(serial):
+        raise HTTPException(400, "Invalid serial format")
+
+    if not _traefik_certs_available():
+        raise HTTPException(503, (
+            f"Traefik certs directory '{TRAEFIK_CERTS_DIR}' is not accessible. "
+            "Ensure the volume is mounted (docker-compose.yml → pki.volumes)."
+        ))
+
+    with locked_db() as db:
+        if serial not in db["certificates"]:
+            raise HTTPException(404, "Certificate not found")
+        if serial in db["revoked_serials"]:
+            raise HTTPException(400, "Cannot deploy a revoked certificate")
+
+        try:
+            paths = _deploy_to_traefik(serial, db)
+        except (FileNotFoundError, RuntimeError) as e:
+            raise HTTPException(500, str(e))
+
+    _audit(request, "cert.deploy", user, resource=serial, detail=f"domain={DOMAIN}")
+    return {
+        "status":    "deployed",
+        "serial":    serial,
+        "domain":    DOMAIN,
+        "cert_path": paths["cert"],
+        "key_path":  paths["key"],
+        "note":      "Traefik hot-reloads TLS — no restart required.",
+    }
+
+
+@app.get("/api/deploy/status")
+def deploy_status(user: dict = Depends(require_permission("cert:list"))):
+    """Return info about the currently deployed Traefik wildcard cert."""
+    db       = load_db()
+    deployed = db.get("deployed", {}).get("traefik_wildcard")
+    if not deployed:
+        return {"deployed": False, "traefik_certs_available": _traefik_certs_available()}
+
+    serial    = deployed["serial"]
+    cert_info = db["certificates"].get(serial, {})
+    now       = datetime.now(timezone.utc)
+    days_left = 0
+    status    = "unknown"
+    if cert_info:
+        exp       = _parse_dt(cert_info["not_after"])
+        days_left = max(0, (exp - now).days)
+        status, _ = _cert_status(serial, cert_info, db, now)
+
+    return {
+        "deployed":               True,
+        "serial":                 serial,
+        "domain":                 deployed.get("domain"),
+        "deployed_at":            deployed.get("deployed_at"),
+        "cert_path":              deployed.get("cert_path"),
+        "common_name":            cert_info.get("common_name"),
+        "not_after":              cert_info.get("not_after"),
+        "days_left":              days_left,
+        "status":                 status,
+        "auto_renew_threshold":   AUTO_RENEW_DAYS,
+        "traefik_certs_available": _traefik_certs_available(),
+    }
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
