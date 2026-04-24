@@ -1,0 +1,84 @@
+groups:
+
+  # ── Erreurs applicatives ────────────────────────────────────
+  - name: autoflow_log_errors
+    rules:
+
+      # Taux d'erreurs HTTP 5xx élevé sur les services FastAPI
+      - alert: HighErrorRateInLogs
+        expr: |
+          sum(rate({compose_service=~"api|event_engine|pki|ee_builder|security_scanner"}
+            |= "ERROR" [5m])) by (compose_service) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreurs élevé dans les logs {{ $labels.compose_service }}"
+          description: "Plus de 0.5 erreurs/s détectées dans {{ $labels.compose_service }} sur les 5 dernières minutes."
+
+      # Erreur critique dans n'importe quel service
+      - alert: CriticalErrorInLogs
+        expr: |
+          count_over_time({compose_service=~".+"}
+            |= "CRITICAL" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Erreur CRITICAL détectée dans {{ $labels.compose_service }}"
+          description: "Un message CRITICAL a été trouvé dans les logs de {{ $labels.compose_service }}."
+
+  # ── Sécurité ────────────────────────────────────────────────
+  - name: autoflow_log_security
+    rules:
+
+      # Tentatives de connexion échouées répétées (brute-force)
+      - alert: BruteForceDetected
+        expr: |
+          sum(count_over_time({compose_service=~"api|pki"}
+            |= "Invalid credentials" [5m])) by (compose_service) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tentative de brute-force sur {{ $labels.compose_service }}"
+          description: "Plus de 10 échecs de connexion en 5 minutes sur {{ $labels.compose_service }}."
+
+      # Rate limit déclenché fréquemment
+      - alert: RateLimitExceeded
+        expr: |
+          sum(count_over_time({compose_service=~"api|event_engine|pki"}
+            |= "Rate limit exceeded" [5m])) by (compose_service) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit fréquemment atteint sur {{ $labels.compose_service }}"
+
+  # ── Infrastructure ──────────────────────────────────────────
+  - name: autoflow_log_infra
+    rules:
+
+      # AWX job failure dans les logs
+      - alert: AWXJobFailureInLogs
+        expr: |
+          count_over_time({compose_service="awx_task"}
+            |= "failed" |= "FAILED" [10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Plusieurs jobs AWX en échec"
+          description: "Plus de 5 lignes 'failed' détectées dans awx_task sur les 10 dernières minutes."
+
+      # Conteneur qui redémarre (OOM ou crash)
+      - alert: ContainerOOMInLogs
+        expr: |
+          count_over_time({stream="stderr"}
+            |= "OOMKilled" [10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Conteneur tué par OOMKiller"
+          description: "Un conteneur a été tué par manque de mémoire."

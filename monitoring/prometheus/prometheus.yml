@@ -86,8 +86,20 @@ scrape_configs:
       - targets: ['ee_builder:8003']
     metrics_path: /metrics
 
-# metric for pki
-  - job_name: 'autoflow-pki'
+  # PKI service
+  - job_name: autoflow_pki
     static_configs:
       - targets: ['pki:8004']
+    metrics_path: /metrics
+
+  # Loki — centralisation des logs
+  - job_name: loki
+    static_configs:
+      - targets: ['loki:3100']
+    metrics_path: /metrics
+
+  # Promtail — agent de collecte de logs
+  - job_name: promtail
+    static_configs:
+      - targets: ['promtail:9080']
     metrics_path: /metrics

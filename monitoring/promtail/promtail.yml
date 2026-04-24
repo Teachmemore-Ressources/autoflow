@@ -1,0 +1,112 @@
+# ─────────────────────────────────────────────────────────────
+# Promtail – Agent de collecte de logs pour Loki
+#
+# Collecte les logs de TOUS les conteneurs Docker via :
+#   1. Docker Service Discovery (socket) → métadonnées des conteneurs
+#   2. Lecture des fichiers json-file sur /var/lib/docker/containers/
+#
+# Labels automatiquement ajoutés à chaque stream de logs :
+#   container  → nom du conteneur (ex: autoflow_api)
+#   image      → image Docker (ex: autoflow/api:latest)
+#   compose_service → nom du service docker-compose
+#   stream     → stdout ou stderr
+# ─────────────────────────────────────────────────────────────
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+# Position file — garde trace des derniers octets lus pour chaque
+# fichier de log. Évite les doublons après un redémarrage de Promtail.
+positions:
+  filename: /tmp/positions.yaml
+
+# ── Client Loki ───────────────────────────────────────────────
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    # Timeout d'envoi des batches
+    timeout: 10s
+    # Taille max d'un batch avant envoi forcé
+    batch_size: 1048576   # 1 MiB
+    # Délai max entre deux envois (même si batch non plein)
+    batch_wait: 1s
+
+# ── Sources de logs ───────────────────────────────────────────
+scrape_configs:
+
+  # ── Conteneurs Docker (découverte automatique via Docker socket) ──
+  - job_name: docker
+
+    docker_sd_configs:
+      - host:             unix:///var/run/docker.sock
+        refresh_interval: 5s
+        # Filtrer uniquement les conteneurs du réseau Autoflow
+        filters:
+          - name:   label
+            values: ["com.docker.compose.project=autoflow"]
+
+    relabel_configs:
+
+      # Nom du conteneur (ex: autoflow_api)
+      - source_labels: [__meta_docker_container_name]
+        regex:         "/(.*)"
+        target_label:  container
+
+      # Image Docker (ex: autoflow/api:latest)
+      - source_labels: [__meta_docker_container_image]
+        target_label:  image
+
+      # Service docker-compose (ex: api, event_engine, awx_web…)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label:  compose_service
+
+      # stdout ou stderr
+      - source_labels: [__meta_docker_container_log_stream]
+        target_label:  stream
+
+      # Chemin vers le fichier de logs Docker json-file
+      - source_labels: [__meta_docker_container_id]
+        target_label:  __path__
+        replacement:   /var/lib/docker/containers/$1/$1-json.log
+
+    pipeline_stages:
+
+      # ── Parsing du format json-file Docker ──────────────────
+      # Chaque ligne est un JSON : {"log":"...", "stream":"...", "time":"..."}
+      - json:
+          expressions:
+            output:     log
+            stream:     stream
+            timestamp:  time
+
+      # Timestamp extrait du champ "time" du JSON Docker
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+      # Remplace la ligne brute par le contenu du champ "log" uniquement
+      - output:
+          source: output
+
+      # ── Parsing des logs JSON structurés (FastAPI services) ─
+      # Les services Autoflow (api, event_engine, pki, etc.) émettent
+      # des logs JSON avec les champs : level, message, ts, path, method…
+      # On extrait ces champs comme labels Loki pour faciliter le filtrage.
+      - json:
+          expressions:
+            level:   level
+            message: message
+          # Ne pas échouer si le log n'est pas en JSON (AWX, Redis, Postgres…)
+
+      # Ajouter le niveau de log comme label si présent
+      - labels:
+          level:
+
+      # ── Filtre multilignes pour les tracebacks Python ────────
+      # Regroupe les lignes "Traceback (most recent call last):"
+      # et les suivantes en un seul événement Loki.
+      - multiline:
+          firstline:    '^\d{4}-\d{2}-\d{2}|^{"'
+          max_wait_time: 3s
+          max_lines:    128

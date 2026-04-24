@@ -16,6 +16,7 @@ volumes:
   receptor_run:         # shared socket dir between receptor ↔ awx_task
   prometheus_data:
   grafana_data:
+  loki_data:            # Loki log storage (chunks + index)
   trivy_db:             # Trivy vulnerability DB cache (persisted across restarts)
   gitea_data:           # Gitea repositories + config
   gitea_postgres_data:  # Dedicated PostgreSQL instance for Gitea
@@ -844,6 +845,78 @@ services:
         reservations:
           cpus: '0.05'
           memory: 64M
+
+  # ── Loki (centralisation des logs) ──────────────────────────
+  # Agrège les logs de tous les conteneurs Docker.
+  # Interface : grafana.{DOMAIN} → datasource "Loki"
+  # Rétention  : LOKI_RETENTION (défaut 720h = 30 jours)
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: autoflow_loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    environment:
+      # Durée de rétention des logs (ex: 720h = 30j, 2160h = 90j)
+      LOKI_RETENTION: ${LOKI_RETENTION:-720h}
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - ./monitoring/loki/rules:/loki/rules:ro
+      - loki_data:/loki
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  # ── Promtail (agent de collecte de logs) ─────────────────────
+  # Découvre tous les conteneurs Docker via le socket et envoie leurs
+  # logs vers Loki. Ajoute automatiquement les labels :
+  #   container, image, compose_service, stream, level (si JSON)
+  promtail:
+    image: grafana/promtail:3.4.2
+    container_name: autoflow_promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      # Socket Docker — lecture seule pour la découverte des conteneurs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Logs Docker bruts — lecture seule
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.02'
+          memory: 32M
 
   # ── Alertmanager ─────────────────────────────
   # Receives firing alerts from Prometheus and routes them to the Autoflow
