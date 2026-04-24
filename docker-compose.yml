@@ -921,6 +921,57 @@ services:
       DOMAIN:              ${DOMAIN:-localhost}
       TRAEFIK_CERTS_DIR:   /traefik/certs
       LOG_LEVEL:           ${LOG_LEVEL:-info}
+      # ── LDAP / Active Directory (désactivé par défaut) ──────────────────
+      # Mettre LDAP_ENABLED=true et renseigner les paramètres ci-dessous.
+      # Les comptes locaux restent actifs en parallèle (LDAP_FALLBACK_LOCAL).
+      LDAP_ENABLED:        ${LDAP_ENABLED:-false}
+      # Mode : "ldap" pour OpenLDAP/standard, "ad" pour Active Directory
+      LDAP_MODE:           ${LDAP_MODE:-ldap}
+      # URL du serveur — ldaps:// recommandé en production (chiffrement TLS)
+      # Exemples : ldap://ldap.mondomaine.com:389
+      #            ldaps://ldap.mondomaine.com:636
+      #            ldaps://dc01.mondomaine.com:636  (Active Directory)
+      LDAP_URL:            ${LDAP_URL:-}
+      # Upgrade STARTTLS sur une connexion ldap:// (alternative à ldaps://)
+      LDAP_STARTTLS:       ${LDAP_STARTTLS:-false}
+      # Compte de service pour la recherche des utilisateurs dans l'annuaire
+      # OpenLDAP  : cn=svc-pki,ou=services,dc=mondomaine,dc=com
+      # Active Directory : svc-pki@mondomaine.com  ou  DOMAINE\svc-pki
+      LDAP_BIND_DN:        ${LDAP_BIND_DN:-}
+      LDAP_BIND_PASSWORD:  ${LDAP_BIND_PASSWORD:-}
+      # Base de recherche des utilisateurs
+      # OpenLDAP  : ou=users,dc=mondomaine,dc=com
+      # Active Directory : CN=Users,DC=mondomaine,DC=com
+      LDAP_BASE_DN:        ${LDAP_BASE_DN:-}
+      # Filtre de recherche — {username} est remplacé par le login saisi
+      # OpenLDAP  : (uid={username})
+      # Active Directory : (sAMAccountName={username})
+      # AD avec email : (|(sAMAccountName={username})(userPrincipalName={username}@mondomaine.com))
+      LDAP_USER_FILTER:    ${LDAP_USER_FILTER:-}
+      # Base de recherche des groupes (laisser vide = même que LDAP_BASE_DN)
+      # Active Directory : OU=Groups,DC=mondomaine,DC=com
+      LDAP_GROUP_BASE_DN:  ${LDAP_GROUP_BASE_DN:-}
+      # DN complet du groupe mappé au rôle admin PKI (accès total)
+      # Exemple AD : CN=PKI-Admins,OU=Groups,DC=mondomaine,DC=com
+      LDAP_GROUP_ADMIN:    ${LDAP_GROUP_ADMIN:-}
+      # DN complet du groupe mappé au rôle operator (émettre, révoquer, renouveler)
+      # Exemple AD : CN=PKI-Operators,OU=Groups,DC=mondomaine,DC=com
+      LDAP_GROUP_OPERATOR: ${LDAP_GROUP_OPERATOR:-}
+      # DN complet du groupe mappé au rôle viewer (lecture seule)
+      # Exemple AD : CN=PKI-Viewers,OU=Groups,DC=mondomaine,DC=com
+      LDAP_GROUP_VIEWER:   ${LDAP_GROUP_VIEWER:-}
+      # Certificat CA pour valider le serveur LDAPs (si CA interne/auto-signé)
+      # Si le serveur LDAP utilise un cert signé par notre PKI :
+      #   /data/pki/ca/<nom_ca>_cert.pem
+      # Laisser vide si le cert est signé par une CA publique reconnue.
+      LDAP_TLS_CA_CERT:    ${LDAP_TLS_CA_CERT:-}
+      # Vérification du certificat serveur LDAPs : true (recommandé) / false
+      LDAP_TLS_VERIFY:     ${LDAP_TLS_VERIFY:-true}
+      # Délai de connexion LDAP en secondes
+      LDAP_TIMEOUT:        ${LDAP_TIMEOUT:-5}
+      # Si LDAP injoignable, autoriser les comptes locaux en fallback
+      # true = haute disponibilité / false = authentification LDAP obligatoire
+      LDAP_FALLBACK_LOCAL: ${LDAP_FALLBACK_LOCAL:-true}
     volumes:
       - pki_data:/data/pki
       - ./traefik/certs:/traefik/certs:rw

@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Request, Depends
+import ldap3
+from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, Tls, SUBTREE
+from ldap3.core.exceptions import LDAPException, LDAPBindError, LDAPSocketOpenError
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -49,6 +52,80 @@ DOMAIN            = os.getenv("DOMAIN", "localhost")
 AUTO_RENEW_DAYS   = int(os.getenv("PKI_AUTO_RENEW_DAYS", "30"))
 # Renewal validity (days) when auto-renewing
 AUTO_RENEW_VALIDITY = int(os.getenv("PKI_AUTO_RENEW_VALIDITY", "365"))
+
+# ── LDAP / Active Directory Configuration ────────────────────────────────────
+#
+# Mettre LDAP_ENABLED=true pour activer l'authentification LDAP/AD.
+# Les comptes locaux (users.json) restent actifs en parallèle.
+# En cas d'indisponibilité du serveur LDAP, le fallback local s'applique
+# automatiquement si LDAP_FALLBACK_LOCAL=true.
+#
+# LDAP_MODE : "ldap" pour OpenLDAP/standard, "ad" pour Active Directory
+#   - ldap : utilise uid={username} comme filtre de recherche par défaut
+#   - ad   : utilise sAMAccountName={username} et supporte les groupes AD
+#             avec recherche récursive (LDAP_MATCHING_RULE_IN_CHAIN)
+#
+# LDAP_URL : URL du serveur LDAP
+#   - LDAP  standard  : ldap://ldap.mondomaine.com:389
+#   - LDAPs (SSL/TLS) : ldaps://ldap.mondomaine.com:636  ← recommandé
+#   - STARTTLS        : utiliser ldap:// + LDAP_STARTTLS=true
+#
+# LDAP_BIND_DN : DN du compte de service utilisé pour rechercher les utilisateurs
+#   - OpenLDAP  : cn=svc-pki,ou=services,dc=mondomaine,dc=com
+#   - Active Directory : svc-pki@mondomaine.com  (ou DOMAIN\svc-pki)
+#
+# LDAP_BASE_DN : Base de recherche des utilisateurs
+#   Exemple : ou=users,dc=mondomaine,dc=com
+#   Active Directory : CN=Users,DC=mondomaine,DC=com
+#
+# LDAP_USER_FILTER : Filtre de recherche de l'utilisateur
+#   - OpenLDAP      : (uid={username})
+#   - Active Directory : (sAMAccountName={username})
+#   - AD avec UPN   : (|(sAMAccountName={username})(userPrincipalName={username}@mondomaine.com))
+#
+# LDAP_GROUP_BASE_DN : Base de recherche des groupes (peut différer de LDAP_BASE_DN)
+#   Exemple AD : OU=Groups,DC=mondomaine,DC=com
+#
+# LDAP_GROUP_ADMIN / LDAP_GROUP_OPERATOR / LDAP_GROUP_VIEWER :
+#   DN complet du groupe LDAP/AD mappé à chaque rôle PKI.
+#   Les utilisateurs membres de plusieurs groupes obtiennent le rôle le plus élevé.
+#   Exemple AD : CN=PKI-Admins,OU=Groups,DC=mondomaine,DC=com
+#
+# LDAP_TLS_CA_CERT : Chemin vers le certificat CA pour valider LDAPs.
+#   Si le serveur LDAP utilise un certificat signé par votre PKI interne,
+#   pointez ici vers le PEM de votre CA (ex: /data/pki/ca/autoflow_cert.pem).
+#   Laisser vide pour utiliser les CA système (Let's Encrypt, etc.).
+#
+# LDAP_TLS_VERIFY : true = vérifie le certificat serveur (recommandé en prod)
+#                   false = désactive la vérification (à éviter en production)
+#
+# LDAP_STARTTLS : true = upgrade STARTTLS sur une connexion ldap:// (port 389)
+#   Alternative à LDAPs. Non compatible avec ldaps://.
+#
+# LDAP_TIMEOUT : Délai de connexion en secondes (défaut : 5)
+#
+# LDAP_FALLBACK_LOCAL : true = si LDAP injoignable, les comptes locaux restent actifs
+#                       false = blocage total si LDAP est down (plus strict)
+
+LDAP_ENABLED        = os.getenv("LDAP_ENABLED", "false").lower() == "true"
+LDAP_MODE           = os.getenv("LDAP_MODE", "ldap")          # "ldap" | "ad"
+LDAP_URL            = os.getenv("LDAP_URL", "")
+LDAP_STARTTLS       = os.getenv("LDAP_STARTTLS", "false").lower() == "true"
+LDAP_BIND_DN        = os.getenv("LDAP_BIND_DN", "")
+LDAP_BIND_PASSWORD  = os.getenv("LDAP_BIND_PASSWORD", "")
+LDAP_BASE_DN        = os.getenv("LDAP_BASE_DN", "")
+LDAP_USER_FILTER    = os.getenv(
+    "LDAP_USER_FILTER",
+    "(sAMAccountName={username})" if os.getenv("LDAP_MODE", "ldap") == "ad" else "(uid={username})",
+)
+LDAP_GROUP_BASE_DN  = os.getenv("LDAP_GROUP_BASE_DN", "")
+LDAP_GROUP_ADMIN    = os.getenv("LDAP_GROUP_ADMIN", "")
+LDAP_GROUP_OPERATOR = os.getenv("LDAP_GROUP_OPERATOR", "")
+LDAP_GROUP_VIEWER   = os.getenv("LDAP_GROUP_VIEWER", "")
+LDAP_TLS_CA_CERT    = os.getenv("LDAP_TLS_CA_CERT", "")
+LDAP_TLS_VERIFY     = os.getenv("LDAP_TLS_VERIFY", "true").lower() == "true"
+LDAP_TIMEOUT        = int(os.getenv("LDAP_TIMEOUT", "5"))
+LDAP_FALLBACK_LOCAL = os.getenv("LDAP_FALLBACK_LOCAL", "true").lower() == "true"
 
 _jwt_secret_env = os.getenv("PKI_JWT_SECRET", "")
 if not _jwt_secret_env:
@@ -97,6 +174,151 @@ def _verify_password(plain: str, hashed: str) -> bool:
         return bcrypt.checkpw(plain[:72].encode(), hashed.encode())
     except Exception:
         return False
+
+# ── LDAP helpers ─────────────────────────────────────────────────────────────
+
+def _build_ldap_server() -> Server:
+    """Build an ldap3 Server object from environment config."""
+    use_ssl = LDAP_URL.lower().startswith("ldaps://")
+
+    tls = None
+    if use_ssl or LDAP_STARTTLS:
+        import ssl
+        tls_ctx = ssl.create_default_context()
+        if LDAP_TLS_CA_CERT and Path(LDAP_TLS_CA_CERT).exists():
+            tls_ctx.load_verify_locations(LDAP_TLS_CA_CERT)
+        if not LDAP_TLS_VERIFY:
+            tls_ctx.check_hostname = False
+            tls_ctx.verify_mode    = ssl.CERT_NONE
+        tls = Tls(
+            validate=ssl.CERT_REQUIRED if LDAP_TLS_VERIFY else ssl.CERT_NONE,
+            ca_certs_file=LDAP_TLS_CA_CERT if LDAP_TLS_CA_CERT else None,
+        )
+
+    return Server(LDAP_URL, use_ssl=use_ssl, tls=tls, connect_timeout=LDAP_TIMEOUT, get_info=ALL)
+
+
+def _ldap_get_user_dn(conn: Connection, username: str) -> Optional[str]:
+    """Search for a user and return their full DN, or None if not found."""
+    search_filter = LDAP_USER_FILTER.replace("{username}", ldap3.utils.conv.escape_filter_chars(username))
+    conn.search(
+        search_base=LDAP_BASE_DN,
+        search_filter=search_filter,
+        search_scope=SUBTREE,
+        attributes=["distinguishedName", "dn", "memberOf"],
+    )
+    if not conn.entries:
+        return None
+    return conn.entries[0].entry_dn
+
+
+def _ldap_get_user_groups(conn: Connection, user_dn: str) -> list:
+    """
+    Return the list of group DNs the user belongs to.
+    Active Directory : uses recursive memberOf (LDAP_MATCHING_RULE_IN_CHAIN).
+    Standard LDAP    : searches groups where member=user_dn.
+    """
+    groups = []
+    base = LDAP_GROUP_BASE_DN or LDAP_BASE_DN
+
+    if LDAP_MODE == "ad":
+        # Recursive group membership via AD extended matching rule
+        escaped_dn = ldap3.utils.conv.escape_filter_chars(user_dn)
+        f = f"(member:1.2.840.113556.1.4.1941:={escaped_dn})"
+        conn.search(base, f, search_scope=SUBTREE, attributes=["distinguishedName"])
+    else:
+        # Standard LDAP: posixGroup (memberUid) or groupOfNames (member)
+        escaped_dn  = ldap3.utils.conv.escape_filter_chars(user_dn)
+        escaped_uid = ldap3.utils.conv.escape_filter_chars(user_dn.split(",")[0].split("=")[-1])
+        f = f"(|(member={escaped_dn})(memberUid={escaped_uid}))"
+        conn.search(base, f, search_scope=SUBTREE, attributes=["distinguishedName"])
+
+    for entry in conn.entries:
+        groups.append(entry.entry_dn)
+    return groups
+
+
+def _ldap_resolve_role(groups: list) -> Optional[str]:
+    """
+    Map group membership to a PKI role.
+    Priority order: admin > operator > viewer.
+    Returns None if the user is not in any mapped group.
+    """
+    def _match(cfg_dn: str) -> bool:
+        if not cfg_dn:
+            return False
+        return any(g.lower() == cfg_dn.lower() for g in groups)
+
+    if _match(LDAP_GROUP_ADMIN):    return "admin"
+    if _match(LDAP_GROUP_OPERATOR): return "operator"
+    if _match(LDAP_GROUP_VIEWER):   return "viewer"
+    return None
+
+
+def _ldap_authenticate(username: str, password: str) -> Optional[str]:
+    """
+    Authenticate *username/password* against the configured LDAP/AD server.
+
+    Returns the PKI role string ("admin" | "operator" | "viewer") on success,
+    None if credentials are invalid or the user has no mapped group,
+    raises RuntimeError if the LDAP server is unreachable.
+    """
+    if not LDAP_ENABLED or not LDAP_URL:
+        return None
+
+    try:
+        server = _build_ldap_server()
+
+        # Step 1 — bind with service account to search for the user
+        with Connection(
+            server,
+            user=LDAP_BIND_DN,
+            password=LDAP_BIND_PASSWORD,
+            authentication=SIMPLE,
+            auto_bind=not LDAP_STARTTLS,
+            raise_exceptions=True,
+        ) as search_conn:
+            if LDAP_STARTTLS:
+                search_conn.start_tls()
+                search_conn.bind()
+
+            user_dn = _ldap_get_user_dn(search_conn, username)
+            if not user_dn:
+                log.info("LDAP: user '%s' not found in directory.", username)
+                return None
+
+            groups = _ldap_get_user_groups(search_conn, user_dn)
+
+        # Step 2 — bind with the user's own credentials to verify password
+        with Connection(
+            server,
+            user=user_dn,
+            password=password,
+            authentication=SIMPLE,
+            auto_bind=not LDAP_STARTTLS,
+            raise_exceptions=True,
+        ) as user_conn:
+            if LDAP_STARTTLS:
+                user_conn.start_tls()
+                user_conn.bind()
+
+        # Step 3 — resolve role from group membership
+        role = _ldap_resolve_role(groups)
+        if role is None:
+            log.info(
+                "LDAP: user '%s' authenticated but not in any mapped group. Groups: %s",
+                username, groups,
+            )
+        return role
+
+    except LDAPBindError:
+        # Wrong password
+        return None
+    except LDAPSocketOpenError as e:
+        raise RuntimeError(f"LDAP server unreachable: {e}") from e
+    except LDAPException as e:
+        raise RuntimeError(f"LDAP error: {e}") from e
+
 
 bearer_scheme  = HTTPBearer(auto_error=False)
 
@@ -872,25 +1094,125 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 @app.post("/api/auth/login")
 @limiter.limit("10/minute")
 async def login(request: Request, req: LoginRequest):
+    ip   = request.client.host if request.client else "?"
+    role = None
+    auth_source = "local"
+
+    # ── LDAP / AD authentication ──────────────────────────────────────────
+    if LDAP_ENABLED:
+        try:
+            role = _ldap_authenticate(req.username, req.password)
+            if role is not None:
+                auth_source = f"ldap({LDAP_MODE})"
+                log.info("Login[LDAP]: user=%s role=%s ip=%s", req.username, role, ip)
+                token = create_token(req.username, role)
+                return {
+                    "access_token": token,
+                    "token_type":   "bearer",
+                    "expires_in":   JWT_EXPIRE_HOURS * 3600,
+                    "role":         role,
+                    "username":     req.username,
+                    "auth_source":  auth_source,
+                }
+            # role is None → user not found or not in any group
+            if role is None and not LDAP_FALLBACK_LOCAL:
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+        except RuntimeError as ldap_err:
+            # LDAP server unreachable
+            log.warning("LDAP unavailable: %s — falling back to local auth.", ldap_err)
+            if not LDAP_FALLBACK_LOCAL:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"LDAP server unavailable and local fallback is disabled. {ldap_err}",
+                )
+
+    # ── Local authentication (fallback or LDAP disabled) ─────────────────
     users = load_users()
     user  = users.get(req.username)
     if not user or not _verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    log.info("Login[local]: user=%s role=%s ip=%s", req.username, user["role"], ip)
     token = create_token(req.username, user["role"])
-    log.info("Login: user=%s role=%s ip=%s", req.username, user["role"],
-             request.client.host if request.client else "?")
     return {
         "access_token": token,
         "token_type":   "bearer",
         "expires_in":   JWT_EXPIRE_HOURS * 3600,
         "role":         user["role"],
         "username":     req.username,
+        "auth_source":  "local",
     }
 
 
 @app.get("/api/auth/me")
 async def whoami(user: dict = Depends(get_current_user)):
     return {"username": user["sub"], "role": user["role"]}
+
+
+@app.get("/api/ldap/status")
+def ldap_status(user: dict = Depends(require_permission("user:manage"))):
+    """Return the current LDAP configuration (passwords redacted)."""
+    return {
+        "enabled":         LDAP_ENABLED,
+        "mode":            LDAP_MODE,
+        "url":             LDAP_URL or None,
+        "starttls":        LDAP_STARTTLS,
+        "bind_dn":         LDAP_BIND_DN or None,
+        "base_dn":         LDAP_BASE_DN or None,
+        "user_filter":     LDAP_USER_FILTER,
+        "group_base_dn":   LDAP_GROUP_BASE_DN or None,
+        "group_admin":     LDAP_GROUP_ADMIN or None,
+        "group_operator":  LDAP_GROUP_OPERATOR or None,
+        "group_viewer":    LDAP_GROUP_VIEWER or None,
+        "tls_ca_cert":     LDAP_TLS_CA_CERT or None,
+        "tls_verify":      LDAP_TLS_VERIFY,
+        "timeout":         LDAP_TIMEOUT,
+        "fallback_local":  LDAP_FALLBACK_LOCAL,
+    }
+
+
+@app.post("/api/ldap/test")
+@limiter.limit("5/minute")
+def ldap_test(request: Request, user: dict = Depends(require_permission("user:manage"))):
+    """
+    Test the LDAP connection using the service account (LDAP_BIND_DN).
+    Does NOT test user credentials — only verifies server reachability and bind.
+    """
+    if not LDAP_ENABLED:
+        return {"success": False, "message": "LDAP is disabled (LDAP_ENABLED=false)."}
+    if not LDAP_URL:
+        return {"success": False, "message": "LDAP_URL is not configured."}
+
+    try:
+        server = _build_ldap_server()
+        with Connection(
+            server,
+            user=LDAP_BIND_DN,
+            password=LDAP_BIND_PASSWORD,
+            authentication=SIMPLE,
+            auto_bind=not LDAP_STARTTLS,
+            raise_exceptions=True,
+        ) as conn:
+            if LDAP_STARTTLS:
+                conn.start_tls()
+                conn.bind()
+            # Quick search to confirm base DN is reachable
+            conn.search(LDAP_BASE_DN, "(objectClass=*)", search_scope=SUBTREE,
+                        size_limit=1, attributes=["dn"])
+            entries = len(conn.entries)
+
+        return {
+            "success": True,
+            "message": f"Connected to {LDAP_URL} — service account bind OK.",
+            "server_info": str(server.info.vendor_name) if server.info else "n/a",
+            "base_dn_entries_found": entries,
+        }
+    except LDAPBindError as e:
+        return {"success": False, "message": f"Bind failed (check LDAP_BIND_DN / LDAP_BIND_PASSWORD): {e}"}
+    except LDAPSocketOpenError as e:
+        return {"success": False, "message": f"Cannot reach LDAP server at {LDAP_URL}: {e}"}
+    except LDAPException as e:
+        return {"success": False, "message": f"LDAP error: {e}"}
 
 
 # ── User management (admin only) ──────────────────────────────────────────────
