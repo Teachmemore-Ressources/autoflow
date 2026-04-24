@@ -127,7 +127,7 @@ else
   warn "update-ca-certificates non trouvé — trust store système non mis à jour."
 fi
 
-# ── 4. Vérifier si Docker daemon.json a besoin d'être mis à jour ──
+# ── 4. Afficher la configuration Docker daemon ────────────────
 
 DAEMON_JSON="/etc/docker/daemon.json"
 
@@ -144,7 +144,27 @@ fi
 log "Configuration Docker actuelle :"
 sudo cat "${DAEMON_JSON}" 2>/dev/null || echo "  (aucune)"
 
-# ── 5. Test de connexion Docker ───────────────────────────────
+# ── 5. Résolution DNS — ajouter /etc/hosts si nécessaire ──────
+
+log "Vérification résolution DNS de ${REGISTRY}..."
+if ! getent hosts "${REGISTRY}" >/dev/null 2>&1; then
+  warn "${REGISTRY} non résolu — ajout dans /etc/hosts (127.0.0.1)..."
+  HOSTS_LINE="127.0.0.1  ${REGISTRY}"
+  if grep -qF "${REGISTRY}" /etc/hosts 2>/dev/null; then
+    ok "Entrée déjà présente dans /etc/hosts pour ${REGISTRY}."
+  else
+    if echo "${HOSTS_LINE}" | sudo tee -a /etc/hosts >/dev/null; then
+      ok "Ajouté dans /etc/hosts : ${HOSTS_LINE} ✔"
+    else
+      warn "Impossible d'écrire dans /etc/hosts."
+      warn "Ajoute manuellement : echo '${HOSTS_LINE}' | sudo tee -a /etc/hosts"
+    fi
+  fi
+else
+  ok "${REGISTRY} se résout correctement."
+fi
+
+# ── 6. Test de connexion Docker ───────────────────────────────
 
 echo ""
 log "Test de connexion au registry ${REGISTRY}..."

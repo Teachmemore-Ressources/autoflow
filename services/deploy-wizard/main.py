@@ -929,6 +929,27 @@ async def docker_trust_ca():
                 return
             yield _sse(f"CA installé via sudo dans {cert_dir}/ca.crt ✔")
 
+        # Ensure registry hostname resolves (add to /etc/hosts if needed)
+        import socket as _socket
+        try:
+            _socket.getaddrinfo(registry, 443)
+        except _socket.gaierror:
+            yield _sse(f"[WARN] {registry} non résolu par DNS — ajout dans /etc/hosts...")
+            hosts_line = f"127.0.0.1  {registry}"
+            check = subprocess.run(["grep", "-qF", registry, "/etc/hosts"], capture_output=True)
+            if check.returncode != 0:
+                add = subprocess.run(
+                    ["sudo", "bash", "-c", f"echo '{hosts_line}' >> /etc/hosts"],
+                    capture_output=True, text=True,
+                )
+                if add.returncode == 0:
+                    yield _sse(f"Entrée ajoutée dans /etc/hosts : {hosts_line} ✔")
+                else:
+                    yield _sse(f"[WARN] Impossible d'écrire dans /etc/hosts: {add.stderr.strip()}")
+                    yield _sse(f"[WARN] Ajoute manuellement : echo '{hosts_line}' | sudo tee -a /etc/hosts")
+            else:
+                yield _sse(f"Entrée déjà présente dans /etc/hosts pour {registry}.")
+
         # Test docker login
         token = config.get("GITEA_REGISTRY_TOKEN", "") or config.get("GITEA_ADMIN_PASSWORD", "")
         user  = config.get("GITEA_ADMIN_USER", "admin")
