@@ -9,22 +9,28 @@ SERVICES  =
 SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 export SOPS_AGE_KEY_FILE
 
-# ── EE config (override on CLI: make ee-build EE=security VERSION=1.2.0) ──
-EE       ?= base
-VERSION  ?= latest
-REGISTRY ?= localhost:3001
+# ── ansible-builder — cherche dans PATH, puis ~/.local/bin (fallback) ────────
+ANSIBLE_BUILDER ?= $(shell which ansible-builder 2>/dev/null \
+                    || echo ~/.local/bin/ansible-builder)
+
+# ── EE config (override sur CLI : make ee-build EE=security VERSION=1.2.0) ──
+EE         ?= base
+VERSION    ?= latest
 GITEA_USER ?= admin
+
+# Domaine lu depuis .env (fallback localhost) → registry = git.<DOMAIN>
+_DOMAIN    := $(shell grep '^DOMAIN=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo localhost)
+REGISTRY   ?= git.$(_DOMAIN)
 
 # ── AWX image config ─────────────────────────────────────────────────────────
 AWX_VERSION  ?= $(shell grep '^AWX_VERSION=' .env 2>/dev/null | cut -d= -f2 || echo "24.6.1")
 AWX_IMAGE    ?= autoflow/awx-patched
-# Set GITEA_REGISTRY to push to Gitea: make awx-push GITEA_REGISTRY=git.domain/admin
-GITEA_REGISTRY ?= localhost:3001/admin
+GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
 
 .PHONY: help start stop restart logs status build pull setup \
         backup restore monitoring-up monitoring-down \
         ee-build ee-push ee-build-push ee-list ee-network \
-        gitea-init-network \
+        ee-deps docker-trust-ca gitea-init-network \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update
 
@@ -105,7 +111,9 @@ setup:          ## Bootstrap: decrypt .env.enc → .env  (or copy .env.example i
 
 ee-build:       ## Build an EE image  (e.g. make ee-build EE=security VERSION=1.0.0)
 	@echo "Building EE: $(EE) → $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)"
-	~/.local/bin/ansible-builder build \
+	@test -x "$(ANSIBLE_BUILDER)" || \
+		(echo "ERROR: ansible-builder introuvable. Installe-le : pip install --user ansible-builder" && exit 1)
+	$(ANSIBLE_BUILDER) build \
 		--file execution-environments/$(EE)/execution-environment.yml \
 		--tag $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION) \
 		--context /tmp/ee-build-$(EE) \
@@ -131,6 +139,19 @@ gitea-init-network: ## Push network-playbooks repo to Gitea (run after: make sta
 
 ee-network:     ## Build + push the network EE  (shortcut for EE=network)
 	$(MAKE) ee-build-push EE=network VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)
+
+# ── Prérequis EE Build ───────────────────────────────────────
+
+ee-deps:        ## Installer ansible-builder pour l'utilisateur courant
+	@echo "Installation d'ansible-builder pour $(USER)..."
+	pip install --user ansible-builder
+	@echo ""
+	@echo "  ansible-builder installé dans ~/.local/bin/"
+	@echo "  Ajoute ~/.local/bin à ton PATH si besoin :"
+	@echo '  echo '"'"'export PATH="$$HOME/.local/bin:$$PATH"'"'"' >> ~/.bashrc && source ~/.bashrc'
+
+docker-trust-ca: ## Faire confiance au CA Autoflow pour le registry Docker (git.$(DOMAIN))
+	@bash scripts/docker-trust-ca.sh
 
 # ── Utilities ────────────────────────────────────────────────
 
