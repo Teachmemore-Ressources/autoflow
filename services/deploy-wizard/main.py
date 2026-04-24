@@ -885,21 +885,53 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
 
         yield _sse(f"Build OK — push vers {registry}...")
 
-        # docker push
+        push_rc = -1
+        push_lines: list[str] = []
         push_proc = await asyncio.create_subprocess_exec(
             "docker", "push", tag,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        async for line in push_proc.stdout:
-            yield _sse(line.decode().rstrip())
+        async for raw in push_proc.stdout:
+            ln = raw.decode().rstrip()
+            push_lines.append(ln)
+            yield _sse(ln)
         await push_proc.wait()
+        push_rc = push_proc.returncode
 
-        if push_proc.returncode == 0:
+        if push_rc == 0:
             yield _sse(f"[SUCCESS] ee-{ee}:{version} buildé et poussé ✔")
         else:
-            yield _sse(f"[ERROR] docker push échoué (code {push_proc.returncode})")
-            yield _sse("[WARN] Vérifie: 1) 'Configurer CA Docker' 2) GITEA_REGISTRY_TOKEN dans .env")
+            push_out = "\n".join(push_lines)
+            if "certificate signed by unknown authority" in push_out or "x509" in push_out:
+                yield _sse("[WARN] Erreur TLS détectée — configuration automatique du CA système...")
+                _ca_file = CERTS_DIR / f"ca.{domain}.crt"
+                if _ca_file.exists():
+                    _ca_pem = _ca_file.read_text()
+                    _sys_ca = "/usr/local/share/ca-certificates/autoflow-registry-ca.crt"
+                    import tempfile as _t2
+                    with _t2.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as _tf2:
+                        _tf2.write(_ca_pem)
+                        _tp2 = _tf2.name
+                    _sr = _sudo_run(
+                        ["bash", "-c",
+                         f"cp '{_tp2}' '{_sys_ca}' && chmod 644 '{_sys_ca}'"
+                         f" && update-ca-certificates --fresh 2>&1 | tail -3"
+                         f" && systemctl restart docker"],
+                        capture_output=True, text=True,
+                    )
+                    Path(_tp2).unlink(missing_ok=True)
+                    if _sr.returncode == 0:
+                        yield _sse("CA système mis à jour + Docker redémarré ✔")
+                        yield _sse("Relance le build pour pusher l'image.")
+                    else:
+                        yield _sse(f"[WARN] Auto-fix échoué: {_sr.stderr.strip()[:200]}")
+                        yield _sse("[WARN] Lance manuellement 'Configurer CA Docker' puis relance le build.")
+                else:
+                    yield _sse("[WARN] Fichier CA introuvable — lance 'Configurer CA Docker' d'abord.")
+            else:
+                yield _sse(f"[ERROR] docker push échoué (code {push_rc})")
+                yield _sse("[WARN] Vérifie: 1) 'Configurer CA Docker' 2) GITEA_REGISTRY_TOKEN dans .env")
         yield _sse("[DONE]")
 
     return StreamingResponse(stream(), media_type="text/event-stream",
@@ -978,6 +1010,26 @@ async def docker_trust_ca():
                 yield _sse("[DONE]")
                 return
             yield _sse(f"CA installé via sudo dans {cert_dir}/ca.crt ✔")
+
+        # Install CA in the system trust store so the docker credential helper trusts it
+        # (the credential helper uses system TLS, NOT /etc/docker/certs.d/)
+        import tempfile as _tempfile_sys
+        with _tempfile_sys.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as _sf:
+            _sf.write(ca_pem)
+            _sys_tmp = _sf.name
+        _sys_ca_dst = "/usr/local/share/ca-certificates/autoflow-registry-ca.crt"
+        _sys_r = _sudo_run(
+            ["bash", "-c",
+             f"cp '{_sys_tmp}' '{_sys_ca_dst}' && chmod 644 '{_sys_ca_dst}' && update-ca-certificates --fresh 2>&1 | tail -3"],
+            capture_output=True, text=True,
+        )
+        Path(_sys_tmp).unlink(missing_ok=True)
+        if _sys_r.returncode == 0:
+            yield _sse(f"CA ajouté au store système + update-ca-certificates ✔")
+            if _sys_r.stdout.strip():
+                yield _sse(_sys_r.stdout.strip())
+        else:
+            yield _sse(f"[WARN] Store système non mis à jour: {_sys_r.stderr.strip()}")
 
         # Also add to insecure-registries in daemon.json so docker push bypasses
         # TLS verification for this local registry (belt + suspenders approach)
