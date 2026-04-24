@@ -138,6 +138,36 @@ select option{background:var(--surface2)}
 .pf-log.open{display:block}
 .pf-log .err{color:#f87171}
 .pf-log .ok{color:#4ade80;font-weight:700}
+
+/* ── Execution Environments ── */
+.ee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;margin-bottom:24px}
+.ee-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:10px;transition:.15s}
+.ee-card:hover{border-color:var(--accent)}
+.ee-card-head{display:flex;align-items:center;gap:10px}
+.ee-badge{font-size:22px}
+.ee-name{font-weight:700;font-size:14px}
+.ee-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.ee-tag{font-size:10px;font-family:'Courier New',monospace;background:var(--surface2);color:var(--muted);border-radius:4px;padding:2px 7px;margin-top:2px;word-break:break-all}
+.ee-status{display:flex;align-items:center;gap:6px;font-size:12px}
+.ee-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
+.ee-dot.ok{background:var(--success);box-shadow:0 0 5px var(--success)}
+.ee-dot.err{background:var(--danger)}
+.ee-dot.running{background:var(--warning);animation:pulse 1s infinite}
+.ee-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ee-log{background:#070d1a;border-radius:6px;padding:8px 12px;font:11px/1.6 'Courier New',monospace;color:#7dd3a8;max-height:180px;overflow-y:auto;display:none}
+.ee-log.open{display:block}
+.ee-log .err{color:#f87171}
+.ee-log .ok{color:#4ade80;font-weight:700}
+.ee-log .warn{color:#fbbf24}
+.ee-prereq{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+.ee-prereq-title{font-weight:700;font-size:13px;margin-bottom:14px;color:var(--accent)}
+.ee-prereq-items{display:flex;flex-direction:column;gap:10px}
+.ee-prereq-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
+.ee-prereq-item .pi-icon{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.ee-prereq-item .pi-body{flex:1;min-width:0}
+.ee-prereq-item .pi-title{font-weight:700;font-size:13px;margin-bottom:2px}
+.ee-prereq-item .pi-desc{font-size:11px;color:var(--muted);margin-bottom:8px}
+.ee-prereq-item .pi-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -153,7 +183,8 @@ select option{background:var(--surface2)}
     </div>
   </div>
   <nav class="sb-nav" id="nav">
-    <a id="nav-preflight" onclick="activateSection('preflight')" class="active">Pre-flight</a>
+    <a id="nav-preflight"  onclick="activateSection('preflight')"  class="active">🚀 Pre-flight</a>
+    <a id="nav-ee"         onclick="activateSection('ee')"                        >📦 Exec Environments</a>
   </nav>
   <div class="sb-foot">
     <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">⚙ Generate all secrets</button>
@@ -350,8 +381,9 @@ function activateSection(id) {
   if (sec) sec.classList.add('active');
   if (navLink) navLink.classList.add('active');
   const meta = SCHEMA?.sections?.find(s => s.id === id);
-  document.getElementById('section-label').textContent =
-    id === 'preflight' ? 'Pre-flight checks' : (meta?.label || id);
+  const labels = { preflight: 'Pre-flight checks', ee: 'Execution Environments' };
+  document.getElementById('section-label').textContent = labels[id] ?? meta?.label ?? id;
+  if (id === 'ee') checkEEStatus();
 }
 
 // ── Section + Field rendering ──────────────────────────────────────────────
@@ -477,7 +509,7 @@ function buildSections() {
       </div>`;
   }).join('');
 
-  content.innerHTML = preflightHtml + sectionsHtml;
+  content.innerHTML = preflightHtml + EE_SECTION_HTML + sectionsHtml;
 
   // Attach domain-change listener
   const domainInput = document.getElementById('field-DOMAIN');
@@ -782,6 +814,216 @@ function toast(msg, type) {
   el.className = `show ${type}`;
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Execution Environments section HTML ───────────────────────────────────
+const EE_SECTION_HTML = `
+<div class="section" id="sec-ee">
+  <div class="sec-title">📦 Execution Environments</div>
+  <div class="sec-desc">
+    Build les images d'Execution Environments AWX et pousse-les dans le registry Gitea privé.<br>
+    <span style="color:var(--warning);font-size:12px">⚠ Requiert que le stack soit déployé (Gitea running) et le Pre-flight complété (CA cert).</span>
+  </div>
+
+  <!-- Prérequis -->
+  <div class="ee-prereq">
+    <div class="ee-prereq-title">⚙ Prérequis</div>
+    <div class="ee-prereq-items">
+
+      <div class="ee-prereq-item">
+        <div class="pi-icon">🔧</div>
+        <div class="pi-body">
+          <div class="pi-title">ansible-builder</div>
+          <div class="pi-desc">Outil de build des Execution Environments Ansible. Utilise pipx (compatible Debian/Ubuntu 22+).</div>
+          <div class="pi-status">
+            <span class="ee-dot" id="ab-dot"></span>
+            <span id="ab-status-text">Vérification…</span>
+          </div>
+          <div class="pf-actions">
+            <button class="btn btn-primary btn-sm" onclick="runEEInstallDeps()">⬇ Installer ansible-builder</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ab')">📋 Logs</button>
+          </div>
+          <div class="ee-log" id="ee-log-ab"></div>
+        </div>
+      </div>
+
+      <div class="ee-prereq-item">
+        <div class="pi-icon">🔐</div>
+        <div class="pi-body">
+          <div class="pi-title">CA Docker pour le registry git.${CONFIG.DOMAIN||'<domain>'}</div>
+          <div class="pi-desc">
+            Configure Docker pour faire confiance au CA Autoflow — nécessaire pour pusher les images EE vers le registry Gitea privé (HTTPS).
+          </div>
+          <div class="pi-status">
+            <span class="ee-dot" id="ca-dot"></span>
+            <span id="ca-status-text">Vérification…</span>
+          </div>
+          <div class="pf-actions">
+            <button class="btn btn-primary btn-sm" onclick="runDockerTrustCA()">🔑 Configurer CA Docker</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ca')">📋 Logs</button>
+          </div>
+          <div class="ee-log" id="ee-log-ca"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- EE Cards -->
+  <div id="ee-grid" class="ee-grid"></div>
+
+  <!-- Playbooks réseau -->
+  <div class="divider"></div>
+  <div class="sec-title" style="font-size:16px;margin-bottom:4px">🌐 Playbooks Réseau</div>
+  <div class="sec-desc" style="margin-bottom:16px">
+    Pousse la bibliothèque de playbooks réseau (Cisco, Juniper, Arista, F5) dans un repo Gitea dédié.<br>
+    <span style="font-size:11px;color:var(--muted)">Prérequis : Gitea running + admin créé (Post-deploy dans Pre-flight).</span>
+  </div>
+  <div class="ee-prereq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:8px">
+    <div class="pi-icon">📁</div>
+    <div class="pi-body">
+      <div class="pi-title">Repo <code>network-playbooks</code> dans Gitea</div>
+      <div class="pi-desc">
+        Crée le repo et pousse les playbooks : cisco/ · juniper/ · arista/ · f5/ · compliance/<br>
+        15 playbooks prêts à l'emploi + inventaires d'exemple + group_vars.
+      </div>
+      <div class="pi-status">
+        <span class="ee-dot" id="np-dot"></span>
+        <span id="np-status-text">Non vérifié</span>
+      </div>
+      <div class="pf-actions">
+        <button class="btn btn-primary btn-sm" onclick="runGiteaInitNetwork()">🚀 Pousser les playbooks réseau</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('np')">📋 Logs</button>
+      </div>
+      <div class="ee-log" id="ee-log-np"></div>
+    </div>
+  </div>
+</div>`;
+
+// ── EE helpers ─────────────────────────────────────────────────────────────
+let EE_STATUS = {};
+
+function toggleEELog(id) {
+  document.getElementById(`ee-log-${id}`).classList.toggle('open');
+}
+
+function eeLog(id, msg, cls) {
+  const el = document.getElementById(`ee-log-${id}`);
+  el.classList.add('open');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setEEDot(id, state, text) {
+  const dot = document.getElementById(`${id}-dot`);
+  const txt = document.getElementById(`${id}-status-text`);
+  if (dot) dot.className = `ee-dot ${state}`;
+  if (txt) txt.textContent = text;
+}
+
+function runEEStream(url, logId, onDone) {
+  const evts = new EventSource(url);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') { evts.close(); if (onDone) onDone(); return; }
+    const cls = msg.startsWith('[ERROR]') ? 'err'
+              : msg.startsWith('[SUCCESS]') ? 'ok'
+              : msg.startsWith('[WARN]') ? 'warn' : '';
+    eeLog(logId, msg, cls);
+  };
+  evts.onerror = () => {
+    eeLog(logId, '[ERROR] Connexion interrompue', 'err');
+    evts.close();
+    if (onDone) onDone();
+  };
+}
+
+async function checkEEStatus() {
+  try {
+    EE_STATUS = await fetch('/api/ee/status').then(r => r.json());
+  } catch { return; }
+
+  // ansible-builder
+  const ab = EE_STATUS.ansible_builder_version;
+  setEEDot('ab', ab ? 'ok' : 'err',
+    ab ? `Installé : ${ab}` : 'Non installé — cliquez "Installer ansible-builder"');
+
+  // Docker CA
+  setEEDot('ca', EE_STATUS.docker_trusted ? 'ok' : 'err',
+    EE_STATUS.docker_trusted
+      ? `CA Docker configuré pour ${EE_STATUS.registry}`
+      : `CA non configuré pour ${EE_STATUS.registry} — cliquez "Configurer CA Docker"`);
+
+  // Build EE cards
+  buildEECards(EE_STATUS.ees || []);
+}
+
+function buildEECards(ees) {
+  const icons = { base: '🔵', security: '🔴', network: '🌐' };
+  const grid  = document.getElementById('ee-grid');
+  if (!grid) return;
+  grid.innerHTML = ees.map(ee => `
+    <div class="ee-card" id="ee-card-${ee.id}">
+      <div class="ee-card-head">
+        <span class="ee-badge">${icons[ee.id] || '📦'}</span>
+        <div>
+          <div class="ee-name">${ee.label}</div>
+          <div class="ee-tag">${ee.tag}</div>
+        </div>
+      </div>
+      <div class="ee-desc">${ee.description}</div>
+      <div class="ee-status">
+        <span class="ee-dot ${ee.built ? 'ok' : 'err'}" id="ee-dot-${ee.id}"></span>
+        <span id="ee-status-${ee.id}">${ee.built ? 'Image disponible dans Docker ✔' : 'Image non trouvée — build requis'}</span>
+      </div>
+      <div class="ee-actions">
+        <button class="btn btn-primary btn-sm" id="ee-btn-${ee.id}"
+          onclick="runEEBuild('${ee.id}','${ee.version}')">🔨 Build &amp; Push</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ee-${ee.id}')">📋 Logs</button>
+      </div>
+      <div class="ee-log" id="ee-log-ee-${ee.id}"></div>
+    </div>`).join('');
+}
+
+function runEEInstallDeps() {
+  setEEDot('ab', 'running', 'Installation en cours…');
+  document.getElementById('ee-log-ab').innerHTML = '';
+  runEEStream('/api/ee/install-deps', 'ab', () => checkEEStatus());
+}
+
+function runDockerTrustCA() {
+  setEEDot('ca', 'running', 'Configuration en cours…');
+  document.getElementById('ee-log-ca').innerHTML = '';
+  runEEStream('/api/docker/trust-ca', 'ca', () => checkEEStatus());
+}
+
+function runEEBuild(ee, version) {
+  const btn = document.getElementById(`ee-btn-${ee}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Build…'; }
+  document.getElementById(`ee-dot-${ee}`)?.classList.replace('ok','running') ||
+    document.getElementById(`ee-dot-${ee}`)?.classList.replace('err','running');
+  if (document.getElementById(`ee-status-${ee}`))
+    document.getElementById(`ee-status-${ee}`).textContent = 'Build en cours…';
+  document.getElementById(`ee-log-ee-${ee}`).innerHTML = '';
+  runEEStream(
+    `/api/ee/build?ee=${encodeURIComponent(ee)}&version=${encodeURIComponent(version)}`,
+    `ee-${ee}`,
+    () => {
+      if (btn) { btn.disabled = false; btn.textContent = '🔨 Build & Push'; }
+      checkEEStatus();
+    }
+  );
+}
+
+function runGiteaInitNetwork() {
+  setEEDot('np', 'running', 'Push en cours…');
+  document.getElementById('ee-log-np').innerHTML = '';
+  runEEStream('/api/gitea/init-network', 'np', () => {
+    setEEDot('np', 'ok', 'Repo network-playbooks disponible dans Gitea ✔');
+  });
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

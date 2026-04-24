@@ -142,11 +142,20 @@ ee-network:     ## Build + push the network EE  (shortcut for EE=network)
 
 # ── Prérequis EE Build ───────────────────────────────────────
 
-ee-deps:        ## Installer ansible-builder pour l'utilisateur courant
+ee-deps:        ## Installer ansible-builder (pipx en priorité, compatible Debian/Ubuntu 22+)
 	@echo "Installation d'ansible-builder pour $(USER)..."
-	pip install --user ansible-builder
+	@if command -v ansible-builder >/dev/null 2>&1; then \
+		echo "  ansible-builder déjà installé : $$(ansible-builder --version)"; \
+	elif command -v pipx >/dev/null 2>&1; then \
+		pipx install ansible-builder && echo "  Installé via pipx"; \
+	elif pip3 install --user --break-system-packages ansible-builder 2>/dev/null; then \
+		echo "  Installé via pip --break-system-packages"; \
+	else \
+		echo "  Installation de pipx puis ansible-builder..."; \
+		python3 -m pip install --user --break-system-packages pipx 2>/dev/null || true; \
+		python3 -m pipx install ansible-builder; \
+	fi
 	@echo ""
-	@echo "  ansible-builder installé dans ~/.local/bin/"
 	@echo "  Ajoute ~/.local/bin à ton PATH si besoin :"
 	@echo '  echo '"'"'export PATH="$$HOME/.local/bin:$$PATH"'"'"' >> ~/.bashrc && source ~/.bashrc'
 
