@@ -20,7 +20,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import FastAPI, Request
@@ -35,6 +35,8 @@ from awx_metrics import collect_loop as awx_metrics_loop
 from limiter import limiter
 from routers import awx, health
 from routers.auth import router as auth_router
+from routers.compliance import _generate_and_cache
+from routers.compliance import router as compliance_router
 from routers.jobs_history import router as jobs_history_router
 from settings import settings
 
@@ -78,6 +80,33 @@ async def lifespan(app: FastAPI):
                 notifications.collect_loop(app.state.http, settings.job_watcher_interval)
             )
         )
+
+    # Rapport de conformité hebdomadaire — génération automatique chaque lundi à 06h00 UTC
+    async def _weekly_compliance_loop(http) -> None:
+        """Génère le rapport HTML de conformité chaque semaine."""
+        while True:
+            now = datetime.now(timezone.utc)
+            # Prochain lundi à 06:00 UTC
+            days_until_monday = (7 - now.weekday()) % 7 or 7
+            next_run = (now + timedelta(days=days_until_monday)).replace(
+                hour=6, minute=0, second=0, microsecond=0
+            )
+            wait_seconds = (next_run - now).total_seconds()
+            logging.getLogger("compliance").info(
+                "Prochain rapport de conformité : %s (dans %.0fh)",
+                next_run.isoformat(), wait_seconds / 3600,
+            )
+            await asyncio.sleep(wait_seconds)
+            try:
+                await _generate_and_cache(http)
+            except Exception as exc:
+                logging.getLogger("compliance").error(
+                    "Erreur lors de la génération du rapport hebdomadaire : %s", exc
+                )
+
+    background_tasks.append(
+        asyncio.create_task(_weekly_compliance_loop(app.state.http))
+    )
 
     yield
 
@@ -128,6 +157,7 @@ app.include_router(auth_router)                           # /auth/token, /auth/m
 # are matched before the wildcard route /awx/jobs/{job_id}
 app.include_router(jobs_history_router)                   # /awx/jobs/history, /stats, /watch
 app.include_router(awx.router, prefix="/awx", tags=["AWX"])
+app.include_router(compliance_router)                     # /compliance/*
 
 
 # ── Audit log middleware ──────────────────────────────────────────────────────

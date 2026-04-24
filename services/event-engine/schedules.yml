@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────
+# Autoflow Event Engine — Schedules YAML
+#
+# Format :
+#   schedules:
+#     - name:   <identifiant unique>
+#       cron:   "<expr cron 5 champs, UTC>"
+#       source: <source label>
+#       action: <action label>
+#       data:   <dict optionnel transmis à l'extra_vars AWX>
+#
+# Expressions cron (UTC) :
+#   ┌── minute (0-59)
+#   │  ┌── heure (0-23)
+#   │  │  ┌── jour du mois (1-31)
+#   │  │  │  ┌── mois (1-12)
+#   │  │  │  │  ┌── jour de la semaine (0=dim, 1=lun … 6=sam)
+#   │  │  │  │  │
+#   *  *  *  *  *
+# ─────────────────────────────────────────────────────────────
+
+schedules:
+
+  # ── Maintenance nocturne (chaque nuit à 02h00 UTC) ────────
+  - name:   nightly-maintenance
+    cron:   "0 2 * * *"
+    source: scheduler
+    action: maintenance
+    data:
+      environment: production
+      task:        cleanup
+
+  # ── Vérification de santé hebdomadaire (lundi 05h00 UTC) ──
+  # Lance un job AWX de vérification générale de l'infrastructure
+  - name:   weekly-health-check
+    cron:   "0 5 * * 1"
+    source: scheduler
+    action: health_check
+    data:
+      scope: full
+      notify: true
+
+  # ── Synchronisation des inventaires AWX (chaque heure) ────
+  - name:   hourly-inventory-sync
+    cron:   "0 * * * *"
+    source: scheduler
+    action: inventory_sync
+    data:
+      environment: production

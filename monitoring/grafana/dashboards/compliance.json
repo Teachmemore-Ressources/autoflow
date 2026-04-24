@@ -1,0 +1,566 @@
+{
+  "uid": "autoflow-compliance",
+  "title": "Conformité Autoflow",
+  "description": "Tableau de bord de conformité : jobs AWX, certificats PKI, vulnérabilités CVE, disponibilité des services",
+  "tags": ["autoflow", "compliance", "sécurité"],
+  "timezone": "browser",
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+
+    { "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 2 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background:linear-gradient(135deg,#1f6feb,#388bfd);border-radius:8px;padding:12px 20px;color:#fff;display:flex;align-items:center;gap:12px\"><span style=\"font-size:1.4rem\">🛡️</span><div><strong style=\"font-size:1.1rem\">Tableau de Bord Conformité Autoflow</strong><br><span style=\"opacity:.8;font-size:.85rem\">Supervision des indicateurs de conformité : automatisation, sécurité, disponibilité</span></div></div>"
+      }
+    },
+
+    { "id": 10,
+      "type": "stat",
+      "title": "Taux de Réussite Jobs AWX (7j)",
+      "gridPos": { "x": 0, "y": 2, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 70   },
+              { "color": "yellow", "value": 85   },
+              { "color": "green",  "value": 95   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "100 * sum(increase(awx_jobs_total{status=\"successful\"}[7d])) / clamp_min(sum(increase(awx_jobs_total[7d])), 1)",
+        "legendFormat": "Réussite",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 11,
+      "type": "stat",
+      "title": "Jobs Réussis (7j)",
+      "gridPos": { "x": 4, "y": 2, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "value", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "sum(increase(awx_jobs_total{status=\"successful\"}[7d]))",
+        "legendFormat": "Réussis",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 12,
+      "type": "stat",
+      "title": "Jobs Échoués (7j)",
+      "gridPos": { "x": 7, "y": 2, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1    },
+              { "color": "red",    "value": 10   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "sum(increase(awx_jobs_total{status=~\"failed|error\"}[7d]))",
+        "legendFormat": "Échoués",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 13,
+      "type": "stat",
+      "title": "Jobs en cours",
+      "gridPos": { "x": 10, "y": 2, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "blue", "value": null }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "value", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "sum(awx_jobs_running) or vector(0)",
+        "legendFormat": "En cours",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 14,
+      "type": "timeseries",
+      "title": "Évolution du taux de réussite (7j)",
+      "gridPos": { "x": 13, "y": 2, "w": 11, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 15, "spanNulls": true },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 70   },
+              { "color": "green",  "value": 95   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend":  { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [{
+        "expr": "100 * sum(increase(awx_jobs_total{status=\"successful\"}[1h])) / clamp_min(sum(increase(awx_jobs_total[1h])), 1)",
+        "legendFormat": "Taux réussite (1h)",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 20,
+      "type": "stat",
+      "title": "Certificats PKI actifs",
+      "gridPos": { "x": 0, "y": 6, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 1    }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "value", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "pki_certificates_total{status=\"valid\"} or vector(0)",
+        "legendFormat": "Actifs",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 21,
+      "type": "stat",
+      "title": "Certificats expirés",
+      "gridPos": { "x": 3, "y": 6, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1    },
+              { "color": "red",    "value": 5    }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "pki_certificates_total{status=\"expired\"} or vector(0)",
+        "legendFormat": "Expirés",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 22,
+      "type": "stat",
+      "title": "Certificats expirant < 30j",
+      "gridPos": { "x": 6, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 3    }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "pki_certificates_expiring_soon or vector(0)",
+        "legendFormat": "Expirent bientôt",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 23,
+      "type": "stat",
+      "title": "Renouvellements auto (24h)",
+      "gridPos": { "x": 10, "y": 6, "w": 3, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "blue", "value": null }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "value", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "increase(pki_cert_autorenew_total[24h]) or vector(0)",
+        "legendFormat": "Auto-renouvellements",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 30,
+      "type": "stat",
+      "title": "CVE Critiques (scanner)",
+      "gridPos": { "x": 0, "y": 10, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1    },
+              { "color": "red",    "value": 5    }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "sum(trivy_vulnerabilities_total{severity=\"CRITICAL\"}) or vector(0)",
+        "legendFormat": "CVE Critiques",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 31,
+      "type": "stat",
+      "title": "CVE Hautes",
+      "gridPos": { "x": 4, "y": 10, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "orange", "value": 10   },
+              { "color": "red",    "value": 25   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "sum(trivy_vulnerabilities_total{severity=\"HIGH\"}) or vector(0)",
+        "legendFormat": "CVE Hautes",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 32,
+      "type": "timeseries",
+      "title": "Évolution des CVE dans le temps",
+      "gridPos": { "x": 8, "y": 10, "w": 16, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "CRITICAL" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "HIGH" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "MEDIUM" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend":  { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(trivy_vulnerabilities_total{severity=\"CRITICAL\"}) or vector(0)",
+          "legendFormat": "CRITICAL",
+          "datasource": { "type": "prometheus", "uid": "prometheus" }
+        },
+        {
+          "expr": "sum(trivy_vulnerabilities_total{severity=\"HIGH\"}) or vector(0)",
+          "legendFormat": "HIGH",
+          "datasource": { "type": "prometheus", "uid": "prometheus" }
+        },
+        {
+          "expr": "sum(trivy_vulnerabilities_total{severity=\"MEDIUM\"}) or vector(0)",
+          "legendFormat": "MEDIUM",
+          "datasource": { "type": "prometheus", "uid": "prometheus" }
+        }
+      ]
+    },
+
+    { "id": 40,
+      "type": "stat",
+      "title": "Services UP",
+      "gridPos": { "x": 0, "y": 14, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 6    },
+              { "color": "green",  "value": 10   }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "count(up == 1)",
+        "legendFormat": "UP",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 41,
+      "type": "stat",
+      "title": "Services DOWN",
+      "gridPos": { "x": 4, "y": 14, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1    },
+              { "color": "red",    "value": 3    }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "count(up == 0) or vector(0)",
+        "legendFormat": "DOWN",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 42,
+      "type": "stat",
+      "title": "Disponibilité Globale (24h)",
+      "gridPos": { "x": 8, "y": 14, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 95   },
+              { "color": "yellow", "value": 99   },
+              { "color": "green",  "value": 99.9 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["mean"] },
+        "orientation": "auto", "textMode": "auto",
+        "colorMode": "background", "graphMode": "none"
+      },
+      "targets": [{
+        "expr": "100 * avg_over_time(avg(up)[24h:1m])",
+        "legendFormat": "Disponibilité",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 43,
+      "type": "table",
+      "title": "État des services",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "displayName", "value": "Statut" },
+              { "id": "custom.width", "value": 80 },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "1": { "text": "✅ UP",   "color": "green" } } },
+                { "type": "value", "options": { "0": { "text": "❌ DOWN", "color": "red"   } } }
+              ]}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        { "id": "labelsToFields", "options": { "mode": "columns" } },
+        { "id": "organize", "options": {
+            "excludeByName": { "Time": true, "__name__": true },
+            "renameByName": { "job": "Service", "instance": "Instance" }
+          }
+        }
+      ],
+      "targets": [{
+        "expr": "up",
+        "legendFormat": "{{job}}",
+        "instant": true,
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 50,
+      "type": "timeseries",
+      "title": "Disponibilité des services (7j)",
+      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0, "max": 1,
+          "custom": { "lineWidth": 1, "fillOpacity": 20, "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend":  { "displayMode": "table", "placement": "bottom",
+                     "calcs": ["mean", "min"] }
+      },
+      "targets": [{
+        "expr": "up",
+        "legendFormat": "{{job}}",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 51,
+      "type": "timeseries",
+      "title": "Erreurs HTTP 5xx (API)",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend":  { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{status=~\"5..\",job=\"autoflow_api\"}[5m])) or vector(0)",
+        "legendFormat": "Erreurs 5xx/s",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      }]
+    },
+
+    { "id": 60,
+      "type": "logs",
+      "title": "Erreurs récentes (Loki)",
+      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 8 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [{
+        "expr": "{compose_service=~\"api|event_engine|pki|ee_builder|security_scanner\"} |= \"ERROR\" | level = \"ERROR\"",
+        "legendFormat": "Erreurs",
+        "datasource": { "type": "loki", "uid": "loki" }
+      }]
+    }
+
+  ]
+}
