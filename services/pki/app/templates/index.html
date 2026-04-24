@@ -211,6 +211,7 @@
     <div class="nav-item" data-page="issue" onclick="nav(this,'issue')"><span class="icon">+</span><span>Émettre</span></div>
     <div class="nav-item" data-page="revoked" onclick="nav(this,'revoked')"><span class="icon">✕</span><span>Révoqués</span></div>
     <div class="nav-item admin-only" data-page="users" onclick="nav(this,'users')" style="display:none"><span class="icon">👤</span><span>Utilisateurs</span></div>
+    <div class="nav-item admin-only" data-page="ldap"  onclick="nav(this,'ldap')"  style="display:none"><span class="icon">🔗</span><span>LDAP / AD</span></div>
   </nav>
   <div class="sidebar-bottom">
     <div class="user-info">
@@ -368,6 +369,189 @@
       </div>
     </div>
 
+    <!-- LDAP / AD -->
+    <div class="page" id="page-ldap">
+      <div style="max-width:720px">
+
+        <!-- Statut actuel -->
+        <div id="ldap-status-bar" style="display:none;padding:12px 20px;border-radius:14px;margin-bottom:24px;font-size:13px;font-weight:500"></div>
+
+        <!-- Formulaire de configuration -->
+        <div class="card" style="padding:32px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+            <div>
+              <h3 style="font-weight:700;font-size:17px">Configuration LDAP / Active Directory</h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                La configuration est sauvegardée dans <code>/data/pki/ldap_config.json</code> et prend effet immédiatement.
+              </p>
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:14px">
+              <span>Activé</span>
+              <input type="checkbox" id="ldap-enabled" style="width:18px;height:18px;cursor:pointer">
+            </label>
+          </div>
+
+          <!-- Mode -->
+          <div class="form-group">
+            <label>Mode d'annuaire</label>
+            <select class="form-control" id="ldap-mode" onchange="ldapModeChange()">
+              <option value="ldap">OpenLDAP / LDAP standard</option>
+              <option value="ad">Active Directory (Microsoft)</option>
+            </select>
+            <div class="form-hint">Active Directory utilise <code>sAMAccountName</code> et la recherche de groupe récursive.</div>
+          </div>
+
+          <!-- URL -->
+          <div class="form-group">
+            <label>URL du serveur *</label>
+            <input class="form-control" id="ldap-url" placeholder="ldaps://dc01.mondomaine.com:636">
+            <div class="form-hint">
+              <b>ldaps://</b> (port 636) — chiffrement TLS, recommandé en production.<br>
+              <b>ldap://</b> (port 389) — non chiffré ou avec STARTTLS ci-dessous.
+            </div>
+          </div>
+
+          <!-- STARTTLS -->
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" id="ldap-starttls">
+              Utiliser STARTTLS (upgrade TLS sur une connexion ldap://)
+            </label>
+            <div class="form-hint">Non compatible avec ldaps://. À utiliser avec ldap:// port 389.</div>
+          </div>
+
+          <!-- Bind DN + Password -->
+          <div style="background:#fafcff;border:1px solid var(--border-light);border-radius:16px;padding:20px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:14px">Compte de service (lecture annuaire)</div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Bind DN *</label>
+              <input class="form-control" id="ldap-bind-dn" placeholder="">
+              <div class="form-hint" id="ldap-bind-dn-hint"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Mot de passe du compte de service *</label>
+              <input class="form-control" id="ldap-bind-password" type="password" placeholder="••••••••" autocomplete="new-password">
+              <div class="form-hint">Laissez vide pour conserver le mot de passe existant.</div>
+            </div>
+          </div>
+
+          <!-- Base DN -->
+          <div class="form-group">
+            <label>Base DN des utilisateurs *</label>
+            <input class="form-control" id="ldap-base-dn" placeholder="">
+            <div class="form-hint" id="ldap-base-dn-hint"></div>
+          </div>
+
+          <!-- Filtre utilisateur -->
+          <div class="form-group">
+            <label>Filtre de recherche utilisateur</label>
+            <input class="form-control" id="ldap-user-filter" placeholder="">
+            <div class="form-hint">
+              <code>{username}</code> est remplacé par le login saisi au moment du login.<br>
+              <span id="ldap-filter-hint"></span>
+            </div>
+          </div>
+
+          <!-- Groupes -->
+          <div style="background:#fafcff;border:1px solid var(--border-light);border-radius:16px;padding:20px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:6px">Mapping groupes → rôles PKI</div>
+            <div class="form-hint" style="margin-bottom:14px">
+              Renseignez le <b>DN complet</b> du groupe LDAP/AD pour chaque rôle PKI.<br>
+              Un utilisateur membre de plusieurs groupes obtient le rôle le plus élevé (admin &gt; operator &gt; viewer).<br>
+              Les champs laissés vides désactivent le rôle correspondant.
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Base DN des groupes <span style="font-weight:400;color:var(--text-muted)">(optionnel — défaut : même que Base DN)</span></label>
+              <input class="form-control" id="ldap-group-base-dn" placeholder="">
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Groupe Admin <span style="background:#e8f0fe;color:#1a5cff;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:6px">accès complet</span></label>
+              <input class="form-control" id="ldap-group-admin" placeholder="">
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Groupe Operator <span style="background:#e6f7e6;color:#0a6b3e;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:6px">émettre / révoquer</span></label>
+              <input class="form-control" id="ldap-group-operator" placeholder="">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Groupe Viewer <span style="background:#f0f4fa;color:#5e7188;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:6px">lecture seule</span></label>
+              <input class="form-control" id="ldap-group-viewer" placeholder="">
+            </div>
+          </div>
+
+          <!-- TLS -->
+          <div style="background:#fafcff;border:1px solid var(--border-light);border-radius:16px;padding:20px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:14px">Certificat TLS (LDAPs)</div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Chemin vers le CA cert (PEM) <span style="font-weight:400;color:var(--text-muted)">optionnel</span></label>
+              <input class="form-control" id="ldap-tls-ca" placeholder="/data/pki/ca/autoflow_cert.pem">
+              <div class="form-hint">
+                Si le serveur LDAP utilise un certificat signé par votre PKI interne, indiquez le chemin du PEM de votre CA ici.<br>
+                Laisser vide si le certificat est signé par une CA publique (Let's Encrypt, DigiCert…).
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="checkbox-row">
+                <input type="checkbox" id="ldap-tls-verify" checked>
+                Vérifier le certificat du serveur LDAP (recommandé)
+              </label>
+              <div class="form-hint">Décocher uniquement en environnement de test — ne jamais désactiver en production.</div>
+            </div>
+          </div>
+
+          <!-- Divers -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Timeout connexion (secondes)</label>
+              <input class="form-control" id="ldap-timeout" type="number" value="5" min="1" max="30">
+            </div>
+            <div class="form-group">
+              <label class="checkbox-row" style="margin-top:28px">
+                <input type="checkbox" id="ldap-fallback" checked>
+                Fallback comptes locaux si LDAP indisponible
+              </label>
+              <div class="form-hint">Si décoché, toute authentification est bloquée lorsque le serveur LDAP est inaccessible.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+            <button class="btn" id="ldap-test-btn" onclick="ldapTest()">🔌 Tester la connexion</button>
+            <button class="btn btn-primary" id="ldap-save-btn" onclick="ldapSave()">💾 Sauvegarder</button>
+          </div>
+        </div>
+
+        <!-- Résultat test -->
+        <div id="ldap-test-result" style="display:none;padding:16px 20px;border-radius:14px;font-size:13px;margin-bottom:24px"></div>
+
+        <!-- Aide exemples -->
+        <div class="card" style="padding:24px">
+          <h4 style="font-weight:700;margin-bottom:16px">📋 Exemples de paramètres</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--accent)">Active Directory</div>
+              <table style="font-size:12px;width:100%">
+                <tr><td style="color:var(--text-muted);padding:3px 0;white-space:nowrap">URL</td><td style="padding:3px 8px;font-family:monospace">ldaps://dc01.corp.lan:636</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Bind DN</td><td style="padding:3px 8px;font-family:monospace">svc-pki@corp.lan</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Base DN</td><td style="padding:3px 8px;font-family:monospace">CN=Users,DC=corp,DC=lan</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Filtre</td><td style="padding:3px 8px;font-family:monospace">(sAMAccountName={username})</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Groupe Admin</td><td style="padding:3px 8px;font-family:monospace">CN=PKI-Admins,OU=Groups,DC=corp,DC=lan</td></tr>
+              </table>
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:#0a6b3e">OpenLDAP</div>
+              <table style="font-size:12px;width:100%">
+                <tr><td style="color:var(--text-muted);padding:3px 0;white-space:nowrap">URL</td><td style="padding:3px 8px;font-family:monospace">ldaps://ldap.corp.lan:636</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Bind DN</td><td style="padding:3px 8px;font-family:monospace">cn=svc-pki,ou=services,dc=corp,dc=lan</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Base DN</td><td style="padding:3px 8px;font-family:monospace">ou=users,dc=corp,dc=lan</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Filtre</td><td style="padding:3px 8px;font-family:monospace">(uid={username})</td></tr>
+                <tr><td style="color:var(--text-muted);padding:3px 0">Groupe Admin</td><td style="padding:3px 8px;font-family:monospace">cn=pki-admins,ou=groups,dc=corp,dc=lan</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Utilisateurs -->
     <div class="page" id="page-users">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
@@ -515,7 +699,7 @@
   const pageTitles = {
     dashboard:'Dashboard', timeline:'Timeline', cas:'Autorités de certification',
     certs:'Certificats', issue:'Émettre un certificat', revoked:'Certificats révoqués',
-    users:'Gestion des utilisateurs',
+    users:'Gestion des utilisateurs', ldap:'Authentification LDAP / Active Directory',
   };
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -631,6 +815,7 @@
     else if (id === 'issue')    loadCASelects();
     else if (id === 'revoked')  loadRevoked();
     else if (id === 'users')    loadUsers();
+    else if (id === 'ldap')     loadLdapConfig();
   }
 
   function refreshAll() {
@@ -994,6 +1179,123 @@
       toast(`Utilisateur "${username}" supprimé`, 'success');
       loadUsers();
     } catch(e) { toast('Erreur: ' + e.message, 'error'); }
+  }
+
+  // ── LDAP / AD ─────────────────────────────────────────────────────────────
+  const LDAP_AD_HINTS = {
+    bind_dn:   'Exemple : svc-pki@corp.lan  ou  CORP\\svc-pki',
+    base_dn:   'Exemple : CN=Users,DC=corp,DC=lan',
+    filter:    'Filtre AD recommandé : (sAMAccountName={username})',
+  };
+  const LDAP_LDAP_HINTS = {
+    bind_dn:   'Exemple : cn=svc-pki,ou=services,dc=corp,dc=lan',
+    base_dn:   'Exemple : ou=users,dc=corp,dc=lan',
+    filter:    'Filtre OpenLDAP recommandé : (uid={username})',
+  };
+
+  function ldapModeChange() {
+    const mode   = document.getElementById('ldap-mode').value;
+    const hints  = mode === 'ad' ? LDAP_AD_HINTS : LDAP_LDAP_HINTS;
+    document.getElementById('ldap-bind-dn-hint').textContent = hints.bind_dn;
+    document.getElementById('ldap-base-dn-hint').textContent = hints.base_dn;
+    document.getElementById('ldap-filter-hint').textContent  = hints.filter;
+    // Auto-fill filter if empty
+    const filterEl = document.getElementById('ldap-user-filter');
+    if (!filterEl.value || filterEl.value === '(uid={username})' || filterEl.value === '(sAMAccountName={username})') {
+      filterEl.value = mode === 'ad' ? '(sAMAccountName={username})' : '(uid={username})';
+    }
+  }
+
+  async function loadLdapConfig() {
+    try {
+      const cfg = await api('/api/ldap/config');
+      document.getElementById('ldap-enabled').checked         = !!cfg.enabled;
+      document.getElementById('ldap-mode').value              = cfg.mode || 'ldap';
+      document.getElementById('ldap-url').value               = cfg.url || '';
+      document.getElementById('ldap-starttls').checked        = !!cfg.starttls;
+      document.getElementById('ldap-bind-dn').value           = cfg.bind_dn || '';
+      document.getElementById('ldap-bind-password').value     = cfg.bind_password || '';
+      document.getElementById('ldap-base-dn').value           = cfg.base_dn || '';
+      document.getElementById('ldap-user-filter').value       = cfg.user_filter || '';
+      document.getElementById('ldap-group-base-dn').value     = cfg.group_base_dn || '';
+      document.getElementById('ldap-group-admin').value       = cfg.group_admin || '';
+      document.getElementById('ldap-group-operator').value    = cfg.group_operator || '';
+      document.getElementById('ldap-group-viewer').value      = cfg.group_viewer || '';
+      document.getElementById('ldap-tls-ca').value            = cfg.tls_ca_cert || '';
+      document.getElementById('ldap-tls-verify').checked      = cfg.tls_verify !== false;
+      document.getElementById('ldap-timeout').value           = cfg.timeout || 5;
+      document.getElementById('ldap-fallback').checked        = cfg.fallback_local !== false;
+      ldapModeChange();
+
+      // Status bar
+      const bar = document.getElementById('ldap-status-bar');
+      if (cfg.enabled && cfg.url) {
+        bar.style.display = 'block';
+        bar.style.background = '#e6f7e6'; bar.style.color = '#0a6b3e'; bar.style.border = '1px solid #86efac';
+        bar.innerHTML = `✔ LDAP activé · Mode : <b>${cfg.mode?.toUpperCase()}</b> · Serveur : <b>${cfg.url}</b>`;
+      } else if (cfg.enabled && !cfg.url) {
+        bar.style.display = 'block';
+        bar.style.background = '#fff1e0'; bar.style.color = '#b45309'; bar.style.border = '1px solid #fde68a';
+        bar.innerHTML = '⚠ LDAP activé mais URL du serveur non configurée.';
+      } else {
+        bar.style.display = 'block';
+        bar.style.background = '#f0f4fa'; bar.style.color = '#5e7188'; bar.style.border = '1px solid var(--border-light)';
+        bar.innerHTML = 'ℹ LDAP désactivé — authentification locale uniquement.';
+      }
+    } catch(e) { toast('Erreur chargement config LDAP : ' + e.message, 'error'); }
+  }
+
+  async function ldapSave() {
+    const btn = document.getElementById('ldap-save-btn');
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    const cfg = {
+      enabled:        document.getElementById('ldap-enabled').checked,
+      mode:           document.getElementById('ldap-mode').value,
+      url:            document.getElementById('ldap-url').value.trim(),
+      starttls:       document.getElementById('ldap-starttls').checked,
+      bind_dn:        document.getElementById('ldap-bind-dn').value.trim(),
+      bind_password:  document.getElementById('ldap-bind-password').value || '••••••••',
+      base_dn:        document.getElementById('ldap-base-dn').value.trim(),
+      user_filter:    document.getElementById('ldap-user-filter').value.trim(),
+      group_base_dn:  document.getElementById('ldap-group-base-dn').value.trim(),
+      group_admin:    document.getElementById('ldap-group-admin').value.trim(),
+      group_operator: document.getElementById('ldap-group-operator').value.trim(),
+      group_viewer:   document.getElementById('ldap-group-viewer').value.trim(),
+      tls_ca_cert:    document.getElementById('ldap-tls-ca').value.trim(),
+      tls_verify:     document.getElementById('ldap-tls-verify').checked,
+      timeout:        parseInt(document.getElementById('ldap-timeout').value) || 5,
+      fallback_local: document.getElementById('ldap-fallback').checked,
+    };
+    try {
+      await api('/api/ldap/config', 'PUT', cfg);
+      toast('Configuration LDAP sauvegardée', 'success');
+      loadLdapConfig();
+    } catch(e) { toast('Erreur : ' + e.message, 'error'); }
+    finally { btn.innerHTML = '💾 Sauvegarder'; btn.disabled = false; }
+  }
+
+  async function ldapTest() {
+    const btn = document.getElementById('ldap-test-btn');
+    btn.innerHTML = '<span class="spinner"></span> Test…'; btn.disabled = true;
+    const resultEl = document.getElementById('ldap-test-result');
+    resultEl.style.display = 'none';
+    try {
+      const r = await api('/api/ldap/test', 'POST');
+      resultEl.style.display = 'block';
+      if (r.success) {
+        resultEl.style.background = '#e6f7e6'; resultEl.style.color = '#0a6b3e'; resultEl.style.border = '1px solid #86efac';
+        resultEl.innerHTML = `✔ <b>Connexion réussie</b><br>${r.message}<br>
+          <span style="font-size:11px;color:#5e7188">Serveur : ${r.server_info} · Entrées trouvées dans Base DN : ${r.base_dn_entries_found}</span>`;
+      } else {
+        resultEl.style.background = '#fee9e7'; resultEl.style.color = '#b91c1c'; resultEl.style.border = '1px solid #fecaca';
+        resultEl.innerHTML = `✖ <b>Échec</b><br>${r.message}`;
+      }
+    } catch(e) {
+      resultEl.style.display = 'block';
+      resultEl.style.background = '#fee9e7'; resultEl.style.color = '#b91c1c'; resultEl.style.border = '1px solid #fecaca';
+      resultEl.innerHTML = `✖ Erreur : ${e.message}`;
+    }
+    finally { btn.innerHTML = '🔌 Tester la connexion'; btn.disabled = false; }
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────

@@ -107,6 +107,8 @@ AUTO_RENEW_VALIDITY = int(os.getenv("PKI_AUTO_RENEW_VALIDITY", "365"))
 # LDAP_FALLBACK_LOCAL : true = si LDAP injoignable, les comptes locaux restent actifs
 #                       false = blocage total si LDAP est down (plus strict)
 
+LDAP_CONFIG_FILE    = DATA_DIR / "ldap_config.json"
+
 LDAP_ENABLED        = os.getenv("LDAP_ENABLED", "false").lower() == "true"
 LDAP_MODE           = os.getenv("LDAP_MODE", "ldap")          # "ldap" | "ad"
 LDAP_URL            = os.getenv("LDAP_URL", "")
@@ -175,144 +177,176 @@ def _verify_password(plain: str, hashed: str) -> bool:
     except Exception:
         return False
 
+# ── LDAP config persistence ───────────────────────────────────────────────────
+
+def _ldap_defaults() -> dict:
+    """Return LDAP config built from environment variables (lowest priority)."""
+    return {
+        "enabled":        LDAP_ENABLED,
+        "mode":           LDAP_MODE,
+        "url":            LDAP_URL,
+        "starttls":       LDAP_STARTTLS,
+        "bind_dn":        LDAP_BIND_DN,
+        "bind_password":  LDAP_BIND_PASSWORD,
+        "base_dn":        LDAP_BASE_DN,
+        "user_filter":    LDAP_USER_FILTER,
+        "group_base_dn":  LDAP_GROUP_BASE_DN,
+        "group_admin":    LDAP_GROUP_ADMIN,
+        "group_operator": LDAP_GROUP_OPERATOR,
+        "group_viewer":   LDAP_GROUP_VIEWER,
+        "tls_ca_cert":    LDAP_TLS_CA_CERT,
+        "tls_verify":     LDAP_TLS_VERIFY,
+        "timeout":        LDAP_TIMEOUT,
+        "fallback_local": LDAP_FALLBACK_LOCAL,
+    }
+
+
+def load_ldap_config() -> dict:
+    """
+    Return the effective LDAP configuration.
+    File config (/data/pki/ldap_config.json) takes precedence over env vars.
+    """
+    cfg = _ldap_defaults()
+    if LDAP_CONFIG_FILE.exists():
+        try:
+            saved = json.loads(LDAP_CONFIG_FILE.read_text())
+            cfg.update(saved)
+        except Exception as e:
+            log.warning("Failed to read LDAP config file: %s", e)
+    return cfg
+
+
+def save_ldap_config(cfg: dict) -> None:
+    """Persist LDAP configuration to file (password stored, chmod 600)."""
+    LDAP_CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
+    LDAP_CONFIG_FILE.chmod(0o600)
+
+
 # ── LDAP helpers ─────────────────────────────────────────────────────────────
 
-def _build_ldap_server() -> Server:
-    """Build an ldap3 Server object from environment config."""
-    use_ssl = LDAP_URL.lower().startswith("ldaps://")
+def _build_ldap_server(cfg: dict) -> Server:
+    """Build an ldap3 Server object from the given config dict."""
+    import ssl
+    url     = cfg["url"]
+    use_ssl = url.lower().startswith("ldaps://")
+    tls     = None
 
-    tls = None
-    if use_ssl or LDAP_STARTTLS:
-        import ssl
-        tls_ctx = ssl.create_default_context()
-        if LDAP_TLS_CA_CERT and Path(LDAP_TLS_CA_CERT).exists():
-            tls_ctx.load_verify_locations(LDAP_TLS_CA_CERT)
-        if not LDAP_TLS_VERIFY:
-            tls_ctx.check_hostname = False
-            tls_ctx.verify_mode    = ssl.CERT_NONE
+    if use_ssl or cfg.get("starttls"):
+        ca_cert = cfg.get("tls_ca_cert", "")
+        verify  = cfg.get("tls_verify", True)
         tls = Tls(
-            validate=ssl.CERT_REQUIRED if LDAP_TLS_VERIFY else ssl.CERT_NONE,
-            ca_certs_file=LDAP_TLS_CA_CERT if LDAP_TLS_CA_CERT else None,
+            validate=ssl.CERT_REQUIRED if verify else ssl.CERT_NONE,
+            ca_certs_file=ca_cert if ca_cert and Path(ca_cert).exists() else None,
         )
 
-    return Server(LDAP_URL, use_ssl=use_ssl, tls=tls, connect_timeout=LDAP_TIMEOUT, get_info=ALL)
+    return Server(url, use_ssl=use_ssl, tls=tls,
+                  connect_timeout=cfg.get("timeout", 5), get_info=ALL)
 
 
-def _ldap_get_user_dn(conn: Connection, username: str) -> Optional[str]:
+def _ldap_get_user_dn(conn: Connection, username: str, cfg: dict) -> Optional[str]:
     """Search for a user and return their full DN, or None if not found."""
-    search_filter = LDAP_USER_FILTER.replace("{username}", ldap3.utils.conv.escape_filter_chars(username))
+    search_filter = cfg["user_filter"].replace(
+        "{username}", ldap3.utils.conv.escape_filter_chars(username)
+    )
     conn.search(
-        search_base=LDAP_BASE_DN,
+        search_base=cfg["base_dn"],
         search_filter=search_filter,
         search_scope=SUBTREE,
         attributes=["distinguishedName", "dn", "memberOf"],
     )
-    if not conn.entries:
-        return None
-    return conn.entries[0].entry_dn
+    return conn.entries[0].entry_dn if conn.entries else None
 
 
-def _ldap_get_user_groups(conn: Connection, user_dn: str) -> list:
+def _ldap_get_user_groups(conn: Connection, user_dn: str, cfg: dict) -> list:
     """
     Return the list of group DNs the user belongs to.
     Active Directory : uses recursive memberOf (LDAP_MATCHING_RULE_IN_CHAIN).
     Standard LDAP    : searches groups where member=user_dn.
     """
-    groups = []
-    base = LDAP_GROUP_BASE_DN or LDAP_BASE_DN
+    base = cfg.get("group_base_dn") or cfg["base_dn"]
 
-    if LDAP_MODE == "ad":
-        # Recursive group membership via AD extended matching rule
+    if cfg.get("mode") == "ad":
         escaped_dn = ldap3.utils.conv.escape_filter_chars(user_dn)
         f = f"(member:1.2.840.113556.1.4.1941:={escaped_dn})"
-        conn.search(base, f, search_scope=SUBTREE, attributes=["distinguishedName"])
     else:
-        # Standard LDAP: posixGroup (memberUid) or groupOfNames (member)
         escaped_dn  = ldap3.utils.conv.escape_filter_chars(user_dn)
         escaped_uid = ldap3.utils.conv.escape_filter_chars(user_dn.split(",")[0].split("=")[-1])
         f = f"(|(member={escaped_dn})(memberUid={escaped_uid}))"
-        conn.search(base, f, search_scope=SUBTREE, attributes=["distinguishedName"])
 
-    for entry in conn.entries:
-        groups.append(entry.entry_dn)
-    return groups
+    conn.search(base, f, search_scope=SUBTREE, attributes=["distinguishedName"])
+    return [e.entry_dn for e in conn.entries]
 
 
-def _ldap_resolve_role(groups: list) -> Optional[str]:
+def _ldap_resolve_role(groups: list, cfg: dict) -> Optional[str]:
     """
     Map group membership to a PKI role.
     Priority order: admin > operator > viewer.
     Returns None if the user is not in any mapped group.
     """
-    def _match(cfg_dn: str) -> bool:
-        if not cfg_dn:
-            return False
-        return any(g.lower() == cfg_dn.lower() for g in groups)
+    def _match(dn: str) -> bool:
+        return bool(dn) and any(g.lower() == dn.lower() for g in groups)
 
-    if _match(LDAP_GROUP_ADMIN):    return "admin"
-    if _match(LDAP_GROUP_OPERATOR): return "operator"
-    if _match(LDAP_GROUP_VIEWER):   return "viewer"
+    if _match(cfg.get("group_admin",    "")): return "admin"
+    if _match(cfg.get("group_operator", "")): return "operator"
+    if _match(cfg.get("group_viewer",   "")): return "viewer"
     return None
 
 
 def _ldap_authenticate(username: str, password: str) -> Optional[str]:
     """
     Authenticate *username/password* against the configured LDAP/AD server.
+    Uses the persisted file config (merged with env vars).
 
-    Returns the PKI role string ("admin" | "operator" | "viewer") on success,
-    None if credentials are invalid or the user has no mapped group,
-    raises RuntimeError if the LDAP server is unreachable.
+    Returns the PKI role string on success, None if credentials are invalid
+    or the user has no mapped group, raises RuntimeError if unreachable.
     """
-    if not LDAP_ENABLED or not LDAP_URL:
+    cfg = load_ldap_config()
+    if not cfg.get("enabled") or not cfg.get("url"):
         return None
 
     try:
-        server = _build_ldap_server()
+        server   = _build_ldap_server(cfg)
+        starttls = cfg.get("starttls", False)
 
-        # Step 1 — bind with service account to search for the user
+        # Step 1 — service account bind to search for the user
         with Connection(
             server,
-            user=LDAP_BIND_DN,
-            password=LDAP_BIND_PASSWORD,
+            user=cfg["bind_dn"],
+            password=cfg["bind_password"],
             authentication=SIMPLE,
-            auto_bind=not LDAP_STARTTLS,
+            auto_bind=not starttls,
             raise_exceptions=True,
         ) as search_conn:
-            if LDAP_STARTTLS:
+            if starttls:
                 search_conn.start_tls()
                 search_conn.bind()
-
-            user_dn = _ldap_get_user_dn(search_conn, username)
+            user_dn = _ldap_get_user_dn(search_conn, username, cfg)
             if not user_dn:
                 log.info("LDAP: user '%s' not found in directory.", username)
                 return None
+            groups = _ldap_get_user_groups(search_conn, user_dn, cfg)
 
-            groups = _ldap_get_user_groups(search_conn, user_dn)
-
-        # Step 2 — bind with the user's own credentials to verify password
+        # Step 2 — bind with user credentials to verify password
         with Connection(
             server,
             user=user_dn,
             password=password,
             authentication=SIMPLE,
-            auto_bind=not LDAP_STARTTLS,
+            auto_bind=not starttls,
             raise_exceptions=True,
         ) as user_conn:
-            if LDAP_STARTTLS:
+            if starttls:
                 user_conn.start_tls()
                 user_conn.bind()
 
         # Step 3 — resolve role from group membership
-        role = _ldap_resolve_role(groups)
+        role = _ldap_resolve_role(groups, cfg)
         if role is None:
-            log.info(
-                "LDAP: user '%s' authenticated but not in any mapped group. Groups: %s",
-                username, groups,
-            )
+            log.info("LDAP: '%s' authenticated but not in any mapped group. Groups: %s",
+                     username, groups)
         return role
 
     except LDAPBindError:
-        # Wrong password
         return None
     except LDAPSocketOpenError as e:
         raise RuntimeError(f"LDAP server unreachable: {e}") from e
@@ -1149,70 +1183,91 @@ async def whoami(user: dict = Depends(get_current_user)):
     return {"username": user["sub"], "role": user["role"]}
 
 
-@app.get("/api/ldap/status")
-def ldap_status(user: dict = Depends(require_permission("user:manage"))):
-    """Return the current LDAP configuration (passwords redacted)."""
-    return {
-        "enabled":         LDAP_ENABLED,
-        "mode":            LDAP_MODE,
-        "url":             LDAP_URL or None,
-        "starttls":        LDAP_STARTTLS,
-        "bind_dn":         LDAP_BIND_DN or None,
-        "base_dn":         LDAP_BASE_DN or None,
-        "user_filter":     LDAP_USER_FILTER,
-        "group_base_dn":   LDAP_GROUP_BASE_DN or None,
-        "group_admin":     LDAP_GROUP_ADMIN or None,
-        "group_operator":  LDAP_GROUP_OPERATOR or None,
-        "group_viewer":    LDAP_GROUP_VIEWER or None,
-        "tls_ca_cert":     LDAP_TLS_CA_CERT or None,
-        "tls_verify":      LDAP_TLS_VERIFY,
-        "timeout":         LDAP_TIMEOUT,
-        "fallback_local":  LDAP_FALLBACK_LOCAL,
-    }
+@app.get("/api/ldap/config")
+def ldap_get_config(user: dict = Depends(require_permission("user:manage"))):
+    """Return the current LDAP configuration (password redacted)."""
+    cfg = load_ldap_config()
+    cfg["bind_password"] = "••••••••" if cfg.get("bind_password") else ""
+    return cfg
+
+
+@app.put("/api/ldap/config")
+def ldap_save_config(
+    cfg:     dict,
+    request: Request,
+    user:    dict = Depends(require_permission("user:manage")),
+):
+    """
+    Persist the LDAP configuration to /data/pki/ldap_config.json.
+    If bind_password is the placeholder '••••••••', the existing password is kept.
+    """
+    # Keep existing password if not changed
+    if cfg.get("bind_password") == "••••••••":
+        existing = load_ldap_config()
+        cfg["bind_password"] = existing.get("bind_password", "")
+
+    # Apply sensible defaults for missing fields
+    cfg.setdefault("mode",           "ldap")
+    cfg.setdefault("starttls",       False)
+    cfg.setdefault("tls_verify",     True)
+    cfg.setdefault("timeout",        5)
+    cfg.setdefault("fallback_local", True)
+    cfg.setdefault("user_filter",
+        "(sAMAccountName={username})" if cfg.get("mode") == "ad" else "(uid={username})")
+
+    save_ldap_config(cfg)
+    _audit(request, "ldap.config.update", user, detail=f"enabled={cfg.get('enabled')}, url={cfg.get('url')}")
+    return {"status": "saved", "enabled": cfg.get("enabled")}
 
 
 @app.post("/api/ldap/test")
 @limiter.limit("5/minute")
 def ldap_test(request: Request, user: dict = Depends(require_permission("user:manage"))):
     """
-    Test the LDAP connection using the service account (LDAP_BIND_DN).
+    Test the LDAP connection using the service account credentials.
     Does NOT test user credentials — only verifies server reachability and bind.
     """
-    if not LDAP_ENABLED:
-        return {"success": False, "message": "LDAP is disabled (LDAP_ENABLED=false)."}
-    if not LDAP_URL:
-        return {"success": False, "message": "LDAP_URL is not configured."}
+    cfg = load_ldap_config()
+
+    if not cfg.get("enabled"):
+        return {"success": False, "message": "LDAP est désactivé."}
+    if not cfg.get("url"):
+        return {"success": False, "message": "L'URL du serveur LDAP n'est pas configurée."}
 
     try:
-        server = _build_ldap_server()
+        server   = _build_ldap_server(cfg)
+        starttls = cfg.get("starttls", False)
         with Connection(
             server,
-            user=LDAP_BIND_DN,
-            password=LDAP_BIND_PASSWORD,
+            user=cfg["bind_dn"],
+            password=cfg["bind_password"],
             authentication=SIMPLE,
-            auto_bind=not LDAP_STARTTLS,
+            auto_bind=not starttls,
             raise_exceptions=True,
         ) as conn:
-            if LDAP_STARTTLS:
+            if starttls:
                 conn.start_tls()
                 conn.bind()
-            # Quick search to confirm base DN is reachable
-            conn.search(LDAP_BASE_DN, "(objectClass=*)", search_scope=SUBTREE,
-                        size_limit=1, attributes=["dn"])
+            conn.search(cfg["base_dn"], "(objectClass=*)",
+                        search_scope=SUBTREE, size_limit=1, attributes=["dn"])
             entries = len(conn.entries)
 
+        vendor = ""
+        if server.info and server.info.vendor_name:
+            vendor = str(server.info.vendor_name[0]) if isinstance(server.info.vendor_name, list) else str(server.info.vendor_name)
+
         return {
-            "success": True,
-            "message": f"Connected to {LDAP_URL} — service account bind OK.",
-            "server_info": str(server.info.vendor_name) if server.info else "n/a",
+            "success":               True,
+            "message":               f"Connexion réussie à {cfg['url']} — compte de service OK.",
+            "server_info":           vendor or "n/a",
             "base_dn_entries_found": entries,
         }
     except LDAPBindError as e:
-        return {"success": False, "message": f"Bind failed (check LDAP_BIND_DN / LDAP_BIND_PASSWORD): {e}"}
+        return {"success": False, "message": f"Échec du bind (vérifiez Bind DN / mot de passe) : {e}"}
     except LDAPSocketOpenError as e:
-        return {"success": False, "message": f"Cannot reach LDAP server at {LDAP_URL}: {e}"}
+        return {"success": False, "message": f"Serveur LDAP inaccessible ({cfg['url']}) : {e}"}
     except LDAPException as e:
-        return {"success": False, "message": f"LDAP error: {e}"}
+        return {"success": False, "message": f"Erreur LDAP : {e}"}
 
 
 # ── User management (admin only) ──────────────────────────────────────────────
