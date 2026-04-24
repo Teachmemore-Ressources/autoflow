@@ -946,6 +946,19 @@ async def docker_trust_ca():
                 return
             yield _sse(f"CA installé via sudo dans {cert_dir}/ca.crt ✔")
 
+        # Restart Docker daemon so it trusts the new CA cert
+        yield _sse("Redémarrage du daemon Docker pour charger le nouveau CA...")
+        restart = subprocess.run(
+            ["sudo", "systemctl", "restart", "docker"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if restart.returncode == 0:
+            yield _sse("Docker daemon redémarré ✔ (les conteneurs Autoflow reviennent automatiquement)")
+            await asyncio.sleep(4)  # wait for daemon to accept connections
+        else:
+            yield _sse(f"[WARN] Redémarrage Docker échoué: {restart.stderr.strip()}")
+            yield _sse("[WARN] Relance manuellement : sudo systemctl restart docker")
+
         # Ensure registry hostname resolves (add to /etc/hosts if needed)
         import socket as _socket
         try:

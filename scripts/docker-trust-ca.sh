@@ -127,7 +127,17 @@ else
   warn "update-ca-certificates non trouvé — trust store système non mis à jour."
 fi
 
-# ── 4. Afficher la configuration Docker daemon ────────────────
+# ── 4. Redémarrer le daemon Docker ────────────────────────────
+
+log "Redémarrage du daemon Docker pour charger le nouveau CA..."
+if sudo systemctl restart docker 2>/dev/null; then
+  ok "Docker daemon redémarré ✔ (les conteneurs Autoflow reviennent automatiquement)"
+  sleep 3  # laisser le daemon démarrer avant les tests
+else
+  warn "Redémarrage Docker échoué — relance manuellement : sudo systemctl restart docker"
+fi
+
+# ── 5. Afficher la configuration Docker daemon ────────────────
 
 DAEMON_JSON="/etc/docker/daemon.json"
 
@@ -144,7 +154,7 @@ fi
 log "Configuration Docker actuelle :"
 sudo cat "${DAEMON_JSON}" 2>/dev/null || echo "  (aucune)"
 
-# ── 5. Résolution DNS — ajouter /etc/hosts si nécessaire ──────
+# ── 6. Résolution DNS — ajouter /etc/hosts si nécessaire ──────
 
 log "Vérification résolution DNS de ${REGISTRY}..."
 if ! getent hosts "${REGISTRY}" >/dev/null 2>&1; then
@@ -164,7 +174,7 @@ else
   ok "${REGISTRY} se résout correctement."
 fi
 
-# ── 6. Test de connexion Docker + génération auto du token ────
+# ── 7. Test de connexion Docker + génération auto du token ────
 
 echo ""
 log "Test de connexion au registry ${REGISTRY}..."
