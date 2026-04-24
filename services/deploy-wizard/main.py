@@ -374,6 +374,39 @@ async def restart_services(services: str = ""):
 PKI_URL           = "http://localhost:8004"
 
 
+def _sudo_password() -> str:
+    return _load_env().get("SUDO_PASSWORD", "")
+
+
+def _sudo_run(cmd: list, *, password: str | None = None, **kwargs) -> subprocess.CompletedProcess:
+    """Run cmd with sudo, injecting password via stdin when available."""
+    pw = password if password is not None else _sudo_password()
+    if pw:
+        return subprocess.run(
+            ["sudo", "-S", "--"] + cmd,
+            input=pw + "\n",
+            **kwargs,
+        )
+    return subprocess.run(["sudo"] + cmd, **kwargs)
+
+
+async def _async_sudo_exec(cmd: list, *, password: str | None = None, **kwargs):
+    """Async version — returns (proc, stdout_pipe) using create_subprocess_exec."""
+    pw = password if password is not None else _sudo_password()
+    if pw:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "-S", "--", *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            **kwargs,
+        )
+        proc.stdin.write((pw + "\n").encode())
+        await proc.stdin.drain()
+        proc.stdin.close()
+    else:
+        proc = await asyncio.create_subprocess_exec("sudo", *cmd, **kwargs)
+    return proc
+
+
 def _gitea_api_url() -> str:
     """Return the Gitea API base URL reachable from the host.
 
@@ -933,8 +966,8 @@ async def docker_trust_ca():
             with tempfile.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as tmp:
                 tmp.write(ca_pem)
                 tmp_path = tmp.name
-            r = subprocess.run(
-                ["sudo", "bash", "-c",
+            r = _sudo_run(
+                ["bash", "-c",
                  f"mkdir -p '{cert_dir}' && cp '{tmp_path}' '{cert_dir}/ca.crt' && chmod 644 '{cert_dir}/ca.crt'"],
                 capture_output=True, text=True,
             )
@@ -946,11 +979,40 @@ async def docker_trust_ca():
                 return
             yield _sse(f"CA installé via sudo dans {cert_dir}/ca.crt ✔")
 
+        # Also add to insecure-registries in daemon.json so docker push bypasses
+        # TLS verification for this local registry (belt + suspenders approach)
+        import json as _json_mod
+        daemon_json = Path("/etc/docker/daemon.json")
+        try:
+            existing_cfg = _json_mod.loads(daemon_json.read_text()) if daemon_json.exists() else {}
+        except Exception:
+            existing_cfg = {}
+        insecure = existing_cfg.get("insecure-registries", [])
+        if registry not in insecure:
+            insecure.append(registry)
+            existing_cfg["insecure-registries"] = insecure
+            daemon_content = _json_mod.dumps(existing_cfg, indent=2)
+            import tempfile as _tmp_mod
+            with _tmp_mod.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+                tf.write(daemon_content)
+                tf_path = tf.name
+            ir = _sudo_run(
+                ["bash", "-c", f"cp '{tf_path}' /etc/docker/daemon.json && chmod 644 /etc/docker/daemon.json"],
+                capture_output=True, text=True,
+            )
+            Path(tf_path).unlink(missing_ok=True)
+            if ir.returncode == 0:
+                yield _sse(f"insecure-registries → {registry} ajouté dans daemon.json ✔")
+            else:
+                yield _sse(f"[WARN] daemon.json non mis à jour: {ir.stderr.strip()}")
+        else:
+            yield _sse(f"insecure-registries déjà configuré pour {registry}.")
+
         # Restart Docker daemon so it trusts the new CA cert
         yield _sse("Redémarrage du daemon Docker pour charger le nouveau CA...")
         yield _sse("(Arrêt des conteneurs en cours — peut prendre 30–60 s...)")
-        restart_proc = await asyncio.create_subprocess_exec(
-            "sudo", "systemctl", "restart", "docker",
+        restart_proc = await _async_sudo_exec(
+            ["systemctl", "restart", "docker"],
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -984,8 +1046,8 @@ async def docker_trust_ca():
             hosts_line = f"127.0.0.1  {registry}"
             check = subprocess.run(["grep", "-qF", registry, "/etc/hosts"], capture_output=True)
             if check.returncode != 0:
-                add = subprocess.run(
-                    ["sudo", "bash", "-c", f"echo '{hosts_line}' >> /etc/hosts"],
+                add = _sudo_run(
+                    ["bash", "-c", f"echo '{hosts_line}' >> /etc/hosts"],
                     capture_output=True, text=True,
                 )
                 if add.returncode == 0:

@@ -4,7 +4,8 @@ Each field maps to one .env variable.
 """
 
 SECTIONS = [
-    {"id": "infrastructure", "label": "Infrastructure",  "desc": "Domain, ports and network topology"},
+    {"id": "system",         "label": "Système",          "desc": "Utilisateur et mot de passe sudo pour les opérations privilégiées"},
+    {"id": "infrastructure", "label": "Infrastructure",   "desc": "Domain, ports and network topology"},
     {"id": "postgresql",     "label": "PostgreSQL",       "desc": "Main database credentials"},
     {"id": "redis",          "label": "Redis",            "desc": "Cache / queue credentials"},
     {"id": "awx",            "label": "AWX",              "desc": "Automation platform configuration"},
@@ -18,6 +19,22 @@ SECTIONS = [
 
 # generate_type: hex32 | hex64 | urlsafe32
 FIELDS = [
+    # ── Système ───────────────────────────────────────────────────
+    {
+        "key": "DEPLOY_USER", "label": "Utilisateur système", "section": "system",
+        "type": "text", "required": True,
+        "default": "",
+        "placeholder": "armel",
+        "description": "Nom d'utilisateur Linux qui exécute le wizard et les commandes de déploiement.",
+    },
+    {
+        "key": "SUDO_PASSWORD", "label": "Mot de passe sudo", "section": "system",
+        "type": "password", "sensitive": True,
+        "default": "",
+        "placeholder": "••••••••",
+        "description": "Mot de passe sudo de l'utilisateur ci-dessus — utilisé pour les opérations privilégiées (CA Docker, /etc/hosts, daemon restart). Jamais transmis à l'extérieur.",
+    },
+
     # ── Infrastructure ────────────────────────────────────────────
     {
         "key": "DOMAIN", "label": "Domain", "section": "infrastructure",
