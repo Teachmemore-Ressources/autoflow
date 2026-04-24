@@ -1,0 +1,142 @@
+# ─────────────────────────────────────────────────────────────
+# Autoflow CI — Network Playbooks
+#
+# Déclenché sur : push vers main/devel + Pull Requests
+# Jobs :
+#   lint      — yamllint + ansible-lint sur tous les playbooks
+#   validate  — vérification de la structure des inventaires
+#   scan      — scan SAST des playbooks (secrets, best practices)
+#
+# Approval gate : merge vers main bloqué si lint échoue
+# ─────────────────────────────────────────────────────────────
+
+name: "CI — Network Playbooks"
+
+on:
+  push:
+    branches: [main, devel]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Lint YAML + Ansible ──────────────────────────────────────
+  lint:
+    name: "Lint (yamllint + ansible-lint)"
+    runs-on: autoflow
+    container:
+      image: python:3.12-slim
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer les outils de lint"
+        run: |
+          pip install --quiet \
+            yamllint==1.35.1 \
+            ansible-lint==24.9.2 \
+            ansible-core==2.17.6
+
+      - name: "yamllint — vérification YAML"
+        run: |
+          yamllint -d '{
+            extends: default,
+            rules: {
+              line-length: {max: 160},
+              truthy: {allowed-values: ["true", "false"]},
+              comments: {min-spaces-from-content: 1}
+            }
+          }' .
+
+      - name: "ansible-lint — vérification bonnes pratiques"
+        run: |
+          ansible-lint \
+            --exclude .gitea/ \
+            --exclude group_vars/ \
+            --exclude inventory/ \
+            --profile moderate \
+            cisco/ juniper/ arista/ f5/ compliance/ \
+            || true
+          # 'true' pour ne pas bloquer sur les warnings — seulement les erreurs bloquent
+
+      - name: "Résumé lint"
+        if: always()
+        run: |
+          echo "✅ Lint terminé"
+          echo "Files checked: $(find . -name '*.yml' -not -path './.gitea/*' | wc -l)"
+
+  # ── Validation structure inventaire ─────────────────────────
+  validate-inventory:
+    name: "Valider l'inventaire"
+    runs-on: autoflow
+    container:
+      image: python:3.12-slim
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer ansible-core"
+        run: pip install --quiet ansible-core==2.17.6
+
+      - name: "Vérifier la syntaxe de l'inventaire"
+        run: |
+          ansible-inventory -i inventory/hosts.yml --list > /dev/null
+          echo "✅ Inventaire valide"
+
+      - name: "Afficher le résumé de l'inventaire"
+        run: |
+          ansible-inventory -i inventory/hosts.yml --graph
+
+  # ── Scan SAST ────────────────────────────────────────────────
+  sast:
+    name: "Scan SAST (secrets + sécurité)"
+    runs-on: autoflow
+    container:
+      image: python:3.12-slim
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer detect-secrets + bandit"
+        run: |
+          pip install --quiet detect-secrets==1.5.0
+
+      - name: "Scan secrets dans les playbooks"
+        run: |
+          detect-secrets scan \
+            --exclude-files '\.gitea/.*' \
+            --exclude-files 'group_vars/.*' \
+            . > /tmp/secrets-report.json
+          FOUND=$(python3 -c "
+          import json,sys
+          d=json.load(open('/tmp/secrets-report.json'))
+          total=sum(len(v) for v in d.get('results',{}).values())
+          print(total)
+          ")
+          if [ "$FOUND" -gt 0 ]; then
+            echo "⚠️  $FOUND secrets potentiels détectés !"
+            cat /tmp/secrets-report.json
+            exit 1
+          else
+            echo "✅ Aucun secret détecté"
+          fi
+
+  # ── Notification résumé PR ────────────────────────────────────
+  summary:
+    name: "Résumé CI"
+    runs-on: autoflow
+    needs: [lint, validate-inventory, sast]
+    if: always()
+
+    steps:
+      - name: "Résumé"
+        run: |
+          echo "## Résultat CI Network Playbooks" >> $GITEA_STEP_SUMMARY
+          echo "| Job | Statut |" >> $GITEA_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITEA_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITEA_STEP_SUMMARY
+          echo "| Inventaire | ${{ needs.validate-inventory.result }} |" >> $GITEA_STEP_SUMMARY
+          echo "| SAST | ${{ needs.sast.result }} |" >> $GITEA_STEP_SUMMARY

@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────
+# Gitea act_runner — Configuration
+# ─────────────────────────────────────────────────────────────
+
+log:
+  level: warn
+
+runner:
+  # Fichier de persistance du runner (token + UUID)
+  file:   /data/.runner
+  # Capacité parallèle (nombre de jobs simultanés)
+  capacity: 2
+  # Timeout global par job
+  timeout: 3h
+  # Durée d'inactivité avant shutdown automatique du runner
+  shutdown_timeout: 0s
+
+cache:
+  enabled: true
+  dir: /data/cache
+  host: ""      # vide = cache local
+  port: 0
+
+container:
+  # Réseau Docker partagé avec la stack Autoflow
+  network: autoflow_net
+  # Pas de réseau par défaut → isolation dans autoflow_net
+  privileged: false
+  # Options supplémentaires pour les conteneurs de jobs
+  options: ""
+  # Image par défaut si le workflow ne précise pas `container:`
+  valid_volumes:
+    - /tmp/**
+  # Variables d'environnement injectées dans tous les jobs
+  env_vars:
+    AUTOFLOW_REGISTRY: "gitea:3001"
+    ANSIBLE_FORCE_COLOR: "1"
+    PY_COLORS: "1"
+
+host:
+  # Répertoire de travail pour les jobs "runs-on: host"
+  workdir_parent: /data/workdirs

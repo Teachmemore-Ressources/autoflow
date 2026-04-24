@@ -1,0 +1,222 @@
+# ─────────────────────────────────────────────────────────────
+# Autoflow CI — Execution Environments Build
+#
+# Déclenché sur :
+#   push vers main/devel  → build + push de l'EE modifié
+#   pull_request          → build uniquement (pas de push)
+#
+# Détection intelligente : seuls les EE dont les fichiers ont
+# changé sont rebuildés (pas de rebuild global à chaque push).
+#
+# Jobs :
+#   detect    — détecter quels EE ont changé
+#   lint-ee   — ansible-lint de chaque EE modifié
+#   build-ee  — ansible-builder build + push vers registry Gitea
+# ─────────────────────────────────────────────────────────────
+
+name: "CI/CD — Execution Environments"
+
+on:
+  push:
+    branches: [main, devel]
+    paths:
+      - "execution-environments/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "execution-environments/**"
+
+env:
+  REGISTRY:    gitea:3001
+  GITEA_USER:  ${{ secrets.GITEA_USER || 'admin' }}
+
+jobs:
+
+  # ── Détection des EE modifiés ────────────────────────────────
+  detect:
+    name: "Détecter les EE modifiés"
+    runs-on: autoflow
+    outputs:
+      base:    ${{ steps.detect.outputs.base }}
+      security: ${{ steps.detect.outputs.security }}
+      network: ${{ steps.detect.outputs.network }}
+      any:     ${{ steps.detect.outputs.any }}
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: "Détecter les changements"
+        id: detect
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD)
+          echo "Fichiers modifiés:"
+          echo "$CHANGED"
+
+          BASE=false; SECURITY=false; NETWORK=false; ANY=false
+
+          echo "$CHANGED" | grep -q "^execution-environments/base/"     && BASE=true     && ANY=true
+          echo "$CHANGED" | grep -q "^execution-environments/security/" && SECURITY=true && ANY=true
+          echo "$CHANGED" | grep -q "^execution-environments/network/"  && NETWORK=true  && ANY=true
+
+          echo "base=$BASE"     >> $GITEA_OUTPUT
+          echo "security=$SECURITY" >> $GITEA_OUTPUT
+          echo "network=$NETWORK"   >> $GITEA_OUTPUT
+          echo "any=$ANY"       >> $GITEA_OUTPUT
+
+          echo "EEs à rebuilder : base=$BASE security=$SECURITY network=$NETWORK"
+
+  # ── Lint des EE ──────────────────────────────────────────────
+  lint-ee:
+    name: "Lint EE"
+    runs-on: autoflow
+    needs: detect
+    if: needs.detect.outputs.any == 'true'
+    container:
+      image: python:3.12-slim
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer yamllint"
+        run: pip install --quiet yamllint==1.35.1
+
+      - name: "yamllint sur tous les EE modifiés"
+        run: |
+          yamllint -d '{
+            extends: default,
+            rules: {line-length: {max: 200}, truthy: disable}
+          }' execution-environments/
+          echo "✅ YAML des EE valide"
+
+  # ── Build EE Base ─────────────────────────────────────────────
+  build-base:
+    name: "Build ee-base"
+    runs-on: autoflow
+    needs: [detect, lint-ee]
+    if: needs.detect.outputs.base == 'true'
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer ansible-builder"
+        run: |
+          if ! command -v ansible-builder &>/dev/null; then
+            pip3 install --user --break-system-packages ansible-builder 2>/dev/null \
+              || pipx install ansible-builder
+          fi
+          ansible-builder --version
+
+      - name: "Build ee-base"
+        run: |
+          TAG="${REGISTRY}/${GITEA_USER}/ee-base:${GITEA_REF_NAME:-latest}"
+          ansible-builder build \
+            --file execution-environments/base/execution-environment.yml \
+            --tag "$TAG" \
+            --context /tmp/ee-build-base \
+            --verbosity 1
+          echo "EE_TAG=$TAG" >> $GITEA_ENV
+
+      - name: "Push ee-base (main uniquement)"
+        if: gitea.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
+            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          docker push "${EE_TAG}"
+          echo "✅ ee-base poussé vers ${REGISTRY}"
+
+  # ── Build EE Security ─────────────────────────────────────────
+  build-security:
+    name: "Build ee-security"
+    runs-on: autoflow
+    needs: [detect, lint-ee]
+    if: needs.detect.outputs.security == 'true'
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer ansible-builder"
+        run: |
+          if ! command -v ansible-builder &>/dev/null; then
+            pip3 install --user --break-system-packages ansible-builder 2>/dev/null \
+              || pipx install ansible-builder
+          fi
+
+      - name: "Build ee-security"
+        run: |
+          TAG="${REGISTRY}/${GITEA_USER}/ee-security:${GITEA_REF_NAME:-latest}"
+          ansible-builder build \
+            --file execution-environments/security/execution-environment.yml \
+            --tag "$TAG" \
+            --context /tmp/ee-build-security \
+            --verbosity 1
+          echo "EE_TAG=$TAG" >> $GITEA_ENV
+
+      - name: "Push ee-security (main uniquement)"
+        if: gitea.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
+            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          docker push "${EE_TAG}"
+          echo "✅ ee-security poussé vers ${REGISTRY}"
+
+  # ── Build EE Network ──────────────────────────────────────────
+  build-network:
+    name: "Build ee-network"
+    runs-on: autoflow
+    needs: [detect, lint-ee]
+    if: needs.detect.outputs.network == 'true'
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Installer ansible-builder"
+        run: |
+          if ! command -v ansible-builder &>/dev/null; then
+            pip3 install --user --break-system-packages ansible-builder 2>/dev/null \
+              || pipx install ansible-builder
+          fi
+
+      - name: "Build ee-network"
+        run: |
+          TAG="${REGISTRY}/${GITEA_USER}/ee-network:${GITEA_REF_NAME:-latest}"
+          ansible-builder build \
+            --file execution-environments/network/execution-environment.yml \
+            --tag "$TAG" \
+            --context /tmp/ee-build-network \
+            --verbosity 1
+          echo "EE_TAG=$TAG" >> $GITEA_ENV
+
+      - name: "Push ee-network (main uniquement)"
+        if: gitea.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
+            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          docker push "${EE_TAG}"
+          echo "✅ ee-network poussé vers ${REGISTRY}"
+
+  # ── Résumé CI ─────────────────────────────────────────────────
+  summary:
+    name: "Résumé CI/CD EE"
+    runs-on: autoflow
+    needs: [detect, build-base, build-security, build-network]
+    if: always()
+
+    steps:
+      - name: "Résumé"
+        run: |
+          echo "## CI/CD Execution Environments" >> $GITEA_STEP_SUMMARY
+          echo "" >> $GITEA_STEP_SUMMARY
+          echo "| EE | Détecté | Build |" >> $GITEA_STEP_SUMMARY
+          echo "|----|---------|-------|" >> $GITEA_STEP_SUMMARY
+          echo "| ee-base | ${{ needs.detect.outputs.base }} | ${{ needs.build-base.result }} |" >> $GITEA_STEP_SUMMARY
+          echo "| ee-security | ${{ needs.detect.outputs.security }} | ${{ needs.build-security.result }} |" >> $GITEA_STEP_SUMMARY
+          echo "| ee-network | ${{ needs.detect.outputs.network }} | ${{ needs.build-network.result }} |" >> $GITEA_STEP_SUMMARY
+          echo "" >> $GITEA_STEP_SUMMARY
+          echo "Push vers registry : **main uniquement**" >> $GITEA_STEP_SUMMARY

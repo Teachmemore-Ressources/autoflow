@@ -20,6 +20,7 @@ volumes:
   trivy_db:             # Trivy vulnerability DB cache (persisted across restarts)
   gitea_data:           # Gitea repositories + config
   gitea_postgres_data:  # Dedicated PostgreSQL instance for Gitea
+  act_runner_data:      # Gitea Actions runner state + cache
 
 # ── Shared environment anchors ───────────────────────────────
 
@@ -758,6 +759,9 @@ services:
       GITEA__packages__LIMIT_SIZE_CONTAINER:     ${GITEA_REGISTRY_IMAGE_LIMIT:--1}  # per-image limit
       # ── Mailer (disabled by default) ──────────
       GITEA__mailer__ENABLED:        "false"
+      # ── Gitea Actions (CI/CD natif) ────────────────────────────
+      GITEA__actions__ENABLED:                "true"
+      GITEA__actions__DEFAULT_ACTIONS_URL:    "github"   # fallback vers actions marketplace
       # ── Logging ───────────────────────────────
       GITEA__log__LEVEL:             ${GITEA_LOG_LEVEL:-Warn}
     volumes:
@@ -791,6 +795,41 @@ services:
         reservations:
           cpus: '0.05'
           memory: 128M
+
+  # ── Gitea Actions Runner ─────────────────────
+  # Exécute les jobs CI/CD définis dans .gitea/workflows/*.yml
+  # Enregistrement : make gitea-init-runner  (ou via le Deploy Wizard)
+  act_runner:
+    image: gitea/act_runner:nightly
+    container_name: autoflow_act_runner
+    restart: unless-stopped
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      GITEA_INSTANCE_URL:    "http://gitea:3001"
+      GITEA_RUNNER_REGISTRATION_TOKEN: "${GITEA_RUNNER_TOKEN:-}"
+      GITEA_RUNNER_NAME:     "autoflow-runner"
+      GITEA_RUNNER_LABELS:   "autoflow,linux,docker,ansible"
+      CONFIG_FILE:           /config/act_runner.yml
+    volumes:
+      - act_runner_data:/data
+      - ./act_runner:/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "${DOCKER_GID:-998}"
+    networks:
+      - autoflow
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 256M
 
   # ── EE Builder ───────────────────────────────
   # Listens for Gitea push webhooks and rebuilds Execution Environment images

@@ -872,6 +872,35 @@ const EE_SECTION_HTML = `
   <!-- EE Cards -->
   <div id="ee-grid" class="ee-grid"></div>
 
+  <!-- CI/CD Runner -->
+  <div class="divider"></div>
+  <div class="sec-title" style="font-size:16px;margin-bottom:4px">⚙️ CI/CD — Gitea Actions Runner</div>
+  <div class="sec-desc" style="margin-bottom:16px">
+    Enregistre le runner <code>act_runner</code> dans Gitea Actions pour exécuter les pipelines CI/CD
+    (build EE, lint playbooks réseau).<br>
+    <span style="font-size:11px;color:var(--muted)">Prérequis : Gitea running + admin créé.</span>
+  </div>
+  <div class="ee-prereq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:8px">
+    <div class="pi-icon">🏃</div>
+    <div class="pi-body">
+      <div class="pi-title">Runner <code>autoflow-runner</code></div>
+      <div class="pi-desc">
+        Obtient un token d'enregistrement depuis l'API Gitea et configure le conteneur
+        <code>act_runner</code> pour exécuter des jobs Actions avec les labels
+        <code>autoflow · linux · docker · ansible</code>.
+      </div>
+      <div class="pi-status">
+        <span class="ee-dot" id="runner-dot"></span>
+        <span id="runner-status-text">Vérification…</span>
+      </div>
+      <div class="pf-actions">
+        <button class="btn btn-primary btn-sm" onclick="runRunnerRegister()">🏃 Enregistrer le runner</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('runner')">📋 Logs</button>
+      </div>
+      <div class="ee-log" id="ee-log-runner"></div>
+    </div>
+  </div>
+
   <!-- Playbooks réseau -->
   <div class="divider"></div>
   <div class="sec-title" style="font-size:16px;margin-bottom:4px">🌐 Playbooks Réseau</div>
@@ -959,6 +988,9 @@ async function checkEEStatus() {
 
   // Build EE cards
   buildEECards(EE_STATUS.ees || []);
+
+  // Runner status
+  checkRunnerStatus();
 }
 
 function buildEECards(ees) {
@@ -1024,6 +1056,22 @@ function runGiteaInitNetwork() {
   runEEStream('/api/gitea/init-network', 'np', () => {
     setEEDot('np', 'ok', 'Repo network-playbooks disponible dans Gitea ✔');
   });
+}
+
+function checkRunnerStatus() {
+  fetch('/api/runner/status').then(r => r.json()).then(d => {
+    if (d.registered) {
+      setEEDot('runner', 'ok', `Runner enregistré ✔ (${d.runner_count} runner(s) actif(s))`);
+    } else {
+      setEEDot('runner', 'err', d.error || 'Runner non enregistré — cliquez "Enregistrer le runner"');
+    }
+  }).catch(() => setEEDot('runner', 'err', 'Gitea non joignable'));
+}
+
+function runRunnerRegister() {
+  setEEDot('runner', 'running', 'Enregistrement en cours…');
+  document.getElementById('ee-log-runner').innerHTML = '';
+  runEEStream('/api/runner/register', 'runner', () => checkRunnerStatus());
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

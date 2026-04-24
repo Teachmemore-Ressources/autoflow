@@ -30,7 +30,7 @@ GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
 .PHONY: help start stop restart logs status build pull setup \
         backup restore monitoring-up monitoring-down \
         ee-build ee-push ee-build-push ee-list ee-network \
-        ee-deps docker-trust-ca gitea-init-network \
+        ee-deps docker-trust-ca gitea-init-network gitea-init-runner \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update
 
@@ -136,6 +136,9 @@ ee-list:        ## List available EE definitions
 
 gitea-init-network: ## Push network-playbooks repo to Gitea (run after: make start)
 	@bash scripts/gitea-init-network.sh
+
+gitea-init-runner:  ## Register act_runner in Gitea Actions (gets token + restarts container)
+	@bash scripts/gitea-init-runner.sh
 
 ee-network:     ## Build + push the network EE  (shortcut for EE=network)
 	$(MAKE) ee-build-push EE=network VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)

@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import bcrypt
+import httpx
 from dotenv import dotenv_values
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -1166,6 +1167,67 @@ async def init_awx_token():
             yield _sse(line.decode().rstrip())
         await proc.wait()
         yield _sse("[SUCCESS] AWX token configured and event_engine restarted.")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Gitea Actions Runner ──────────────────────────────────────────────────────
+
+@app.get("/api/runner/status")
+def runner_status():
+    env = _load_env()
+    gitea_url = f"http://localhost:{env.get('GITEA_HTTP_PORT', '3001')}"
+    user = env.get("GITEA_ADMIN_USER", "admin")
+    passwd = env.get("GITEA_ADMIN_PASSWORD", "")
+    try:
+        resp = httpx.get(
+            f"{gitea_url}/api/v1/admin/runners",
+            params={"limit": 20},
+            auth=(user, passwd),
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return {"registered": False, "error": f"Gitea API HTTP {resp.status_code}"}
+        data = resp.json()
+        runners = data if isinstance(data, list) else data.get("data", [])
+        autoflow = [r for r in runners if r.get("name") == "autoflow-runner"]
+        return {"registered": bool(autoflow), "runner_count": len(autoflow), "runners": autoflow}
+    except Exception as exc:
+        return {"registered": False, "error": str(exc)}
+
+
+@app.get("/api/runner/register")
+async def runner_register():
+    async def stream():
+        script = ROOT / "scripts" / "gitea-init-runner.sh"
+        if not script.exists():
+            yield _sse(f"[ERROR] Script non trouvé : {script}")
+            yield _sse("[DONE]")
+            return
+
+        env = _load_env()
+        env_vars = {**os.environ, **env}
+        yield _sse("Lancement de gitea-init-runner.sh…")
+
+        proc = await asyncio.create_subprocess_exec(
+            "bash", str(script),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            env=env_vars, cwd=str(ROOT),
+        )
+        async for raw in proc.stdout:
+            line = raw.decode().rstrip()
+            if not line:
+                continue
+            cls = "[ERROR]" if "✖" in line or "ERROR" in line else \
+                  "[SUCCESS]" if "✔" in line or "Runner" in line and "enregistré" in line else ""
+            yield _sse(f"{cls} {line}".strip() if cls else line)
+        rc = await proc.wait()
+        if rc == 0:
+            yield _sse("[SUCCESS] Runner enregistré dans Gitea Actions ✔")
+        else:
+            yield _sse(f"[ERROR] gitea-init-runner.sh a échoué (code {rc})")
         yield _sse("[DONE]")
 
     return StreamingResponse(stream(), media_type="text/event-stream",
