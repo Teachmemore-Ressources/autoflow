@@ -11,9 +11,14 @@ import secrets
 import subprocess
 from pathlib import Path
 
+import warnings
+
 import bcrypt
 import httpx
 from dotenv import dotenv_values
+
+# Suppress TLS verification warnings for internal calls to self-signed CA
+warnings.filterwarnings("ignore", message=".*Unverified HTTPS.*")
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -367,6 +372,18 @@ async def restart_services(services: str = ""):
 # ── PKI constants ─────────────────────────────────────────────────────────────
 
 PKI_URL           = "http://localhost:8004"
+
+
+def _gitea_api_url() -> str:
+    """Return the Gitea API base URL reachable from the host.
+
+    Gitea has no direct host port binding — it is accessible only via Traefik
+    at https://git.<DOMAIN>.  We use verify=False (or the local CA) because
+    the CA may not yet be in the system trust store when this is called.
+    """
+    cfg = _load_env()
+    domain = cfg.get("DOMAIN", "localhost")
+    return f"https://git.{domain}/api/v1"
 PKI_CA_NAME       = "autoflow-root"
 WIZARD_PKI_OVERRIDE = ROOT / "docker-compose.wizard-pki.yml"
 
@@ -973,11 +990,10 @@ async def docker_trust_ca():
                 yield _sse("GITEA_REGISTRY_TOKEN absent — génération automatique via l'API Gitea...")
 
             # Try to generate a token via the Gitea API using admin credentials
-            gitea_port = config.get("GITEA_HTTP_PORT", "3001")
-            gitea_api  = f"http://localhost:{gitea_port}/api/v1"
-            new_token  = ""
+            gitea_api = _gitea_api_url()
+            new_token = ""
             try:
-                async with _httpx.AsyncClient() as c:
+                async with _httpx.AsyncClient(verify=False) as c:
                     # Delete existing token with same name (ignore errors)
                     await c.delete(
                         f"{gitea_api}/users/{user}/tokens/autoflow-registry",
@@ -1248,14 +1264,15 @@ async def init_awx_token():
 @app.get("/api/runner/status")
 def runner_status():
     env = _load_env()
-    gitea_url = f"http://localhost:{env.get('GITEA_HTTP_PORT', '3001')}"
-    user = env.get("GITEA_ADMIN_USER", "admin")
+    gitea_api = _gitea_api_url()
+    user   = env.get("GITEA_ADMIN_USER", "admin")
     passwd = env.get("GITEA_ADMIN_PASSWORD", "")
     try:
         resp = httpx.get(
-            f"{gitea_url}/api/v1/admin/runners",
+            f"{gitea_api}/admin/runners",
             params={"limit": 20},
             auth=(user, passwd),
+            verify=False,
             timeout=5,
         )
         if resp.status_code != 200:
