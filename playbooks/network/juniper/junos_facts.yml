@@ -1,0 +1,51 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Juniper Junos — Collecte de Facts
+#
+# Collecte les informations système, interfaces, routes et
+# voisins LLDP via NETCONF.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: juniper)
+# ─────────────────────────────────────────────────────────────
+- name: "Juniper Junos — Collecte des facts réseau"
+  hosts: "{{ target_hosts | default('juniper') }}"
+  gather_facts: false
+
+  tasks:
+
+    - name: "Collecter les facts Junos"
+      junipernetworks.junos.junos_facts:
+        gather_subset:
+          - hardware
+          - interfaces
+          - config
+      register: junos_facts
+
+    - name: "Informations système"
+      ansible.builtin.debug:
+        msg:
+          hostname:  "{{ ansible_net_hostname }}"
+          version:   "{{ ansible_net_version }}"
+          model:     "{{ ansible_net_model }}"
+          serial:    "{{ ansible_net_serialnum }}"
+
+    - name: "Interfaces Junos actives"
+      ansible.builtin.debug:
+        msg: >-
+          Interface {{ item.key }} :
+          {{ item.value.ipv4 | default([{}]) | first | json_query('address') | default('no IP') }}
+          UP={{ item.value.operstatus | default('unknown') }}
+      loop: "{{ ansible_net_interfaces | default({}) | dict2items }}"
+      when: (item.value.operstatus | default('')) == 'up'
+
+    - name: "Version Junos détaillée (RPC)"
+      junipernetworks.junos.junos_command:
+        commands: "show version"
+        display:  text
+      register: junos_version
+
+    - name: "Afficher la version"
+      ansible.builtin.debug:
+        msg: "{{ junos_version.stdout[0] }}"

@@ -1,0 +1,12 @@
+---
+# Variables de connexion Cisco IOS
+# En production, ces valeurs viennent des credentials AWX (Network type)
+ansible_user:     "{{ lookup('env', 'ANSIBLE_NET_USERNAME') | default('admin') }}"
+ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD') | default('') }}"
+ansible_become_password: "{{ lookup('env', 'ANSIBLE_NET_AUTHORIZE_PASSWORD') | default('') }}"
+
+# Timeout SSH (secondes)
+ansible_command_timeout: 60
+
+# Répertoire de sauvegarde des configs
+backup_dir: "/tmp/backups/cisco"

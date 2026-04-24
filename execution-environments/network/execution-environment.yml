@@ -1,0 +1,94 @@
+---
+# Autoflow EE — Network
+# =====================
+# Environnement dédié à l'automatisation réseau multi-vendeurs.
+# Contient : NAPALM · Netmiko · Nornir + collections Ansible réseau
+# Vendeurs couverts : Cisco IOS/NX-OS/ASA · Juniper Junos · Arista EOS · F5
+#
+# Build : make ee-build EE=network VERSION=1.0.0
+# Push  : make ee-push  EE=network VERSION=1.0.0
+
+version: 3
+
+images:
+  base_image:
+    name: 'quay.io/ansible/awx-ee:latest'
+
+dependencies:
+
+  galaxy:
+    collections:
+      # ── Framework réseau Ansible ────────────────────────────
+      - name: ansible.netcommon
+        version: ">=6.1.0"
+      - name: ansible.utils
+        version: ">=4.0.0"
+
+      # ── Cisco ───────────────────────────────────────────────
+      - name: cisco.ios
+        version: ">=8.0.0"
+      - name: cisco.nxos
+        version: ">=8.0.0"
+      - name: cisco.asa
+        version: ">=5.0.0"
+      - name: cisco.iosxr
+        version: ">=9.0.0"
+
+      # ── Juniper ─────────────────────────────────────────────
+      - name: junipernetworks.junos
+        version: ">=8.0.0"
+
+      # ── Arista ──────────────────────────────────────────────
+      - name: arista.eos
+        version: ">=10.0.0"
+
+      # ── F5 ──────────────────────────────────────────────────
+      - name: f5networks.f5_modules
+        version: ">=1.28.0"
+
+      # ── Collections communes ─────────────────────────────────
+      - name: community.general
+        version: ">=9.0.0"
+      - name: community.network
+        version: ">=5.0.0"
+      - name: ansible.posix
+        version: ">=1.5.0"
+
+  python:
+    # ── NAPALM — abstraction multi-vendeurs ─────────────────
+    - napalm>=5.0.0
+    - napalm-ansible>=2.0.0
+
+    # ── Netmiko — SSH/Telnet bas niveau ─────────────────────
+    - netmiko>=4.3.0
+
+    # ── Nornir — framework d'automation réseau ──────────────
+    - nornir>=3.4.0
+    - nornir-napalm>=0.4.0
+    - nornir-netmiko>=1.0.0
+    - nornir-utils>=0.2.0
+
+    # ── Utilitaires réseau ───────────────────────────────────
+    - netaddr>=1.2.0          # manipulation d'adresses IP/CIDR
+    - ipaddress>=1.0.23       # compat Python stdlib
+    - jmespath>=1.0.1         # filtrage JSON (Junos RPC responses)
+    - textfsm>=1.1.3          # parsing de sorties CLI (NTC Templates)
+    - ntc-templates>=6.0.0    # bibliothèque de templates TextFSM
+
+    # ── SNMP ─────────────────────────────────────────────────
+    - pysnmp>=6.1.0
+
+    # ── Commun ───────────────────────────────────────────────
+    - requests>=2.31.0
+    - pyyaml>=6.0
+    - jinja2>=3.1.0
+    - cryptography>=42.0.0
+    - paramiko>=3.4.0
+
+  system:
+    - openssh-clients [platform:rpm]   # ssh pour les connexions réseau
+    - net-snmp-utils [platform:rpm]    # snmpwalk / snmpget
+    - git [platform:rpm]
+
+options:
+  package_manager_path: /usr/bin/dnf

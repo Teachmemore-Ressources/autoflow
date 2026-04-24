@@ -1,0 +1,71 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Cisco IOS — Gestion des VLANs
+#
+# Crée, modifie ou supprime un VLAN sur les switches IOS.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: cisco_ios)
+#   vlan_state   : present | absent            (défaut: present)
+#   vlan_id      : ID numérique du VLAN        (OBLIGATOIRE)
+#   vlan_name    : Nom du VLAN                 (défaut: VLAN_{{ vlan_id }})
+#   vlan_shutdown: oui/non (désactiver le VLAN)(défaut: false)
+#
+# Exemple AWX extra_vars :
+#   vlan_id: 100
+#   vlan_name: PROD_SERVERS
+#   vlan_state: present
+# ─────────────────────────────────────────────────────────────
+- name: "Cisco IOS — Gestion des VLANs"
+  hosts: "{{ target_hosts | default('cisco_ios') }}"
+  gather_facts: false
+
+  vars:
+    _vlan_state:    "{{ vlan_state | default('present') }}"
+    _vlan_id:       "{{ vlan_id | mandatory }}"
+    _vlan_name:     "{{ vlan_name | default('VLAN_' ~ vlan_id) }}"
+    _vlan_shutdown: "{{ vlan_shutdown | default(false) | bool }}"
+
+  tasks:
+
+    - name: "Vérifier que vlan_id est fourni"
+      ansible.builtin.assert:
+        that:
+          - _vlan_id is defined
+          - _vlan_id | int > 0
+          - _vlan_id | int < 4095
+        fail_msg: "vlan_id doit être un entier entre 1 et 4094"
+
+    - name: "Récupérer les VLANs existants"
+      cisco.ios.ios_vlans:
+        state: gathered
+      register: vlans_before
+
+    - name: "Afficher les VLANs existants"
+      ansible.builtin.debug:
+        msg: "VLANs actuels : {{ vlans_before.gathered | map(attribute='vlan_id') | sort | join(', ') }}"
+
+    - name: "Configurer le VLAN {{ _vlan_id }}"
+      cisco.ios.ios_vlans:
+        config:
+          - vlan_id: "{{ _vlan_id | int }}"
+            name:    "{{ _vlan_name }}"
+            state:   "{{ 'suspend' if _vlan_shutdown else 'active' }}"
+        state: "{{ _vlan_state }}"
+      register: vlan_result
+
+    - name: "Afficher les changements appliqués"
+      ansible.builtin.debug:
+        msg: "{{ vlan_result.commands | default(['Aucun changement']) }}"
+
+    - name: "Vérifier le VLAN après configuration"
+      cisco.ios.ios_command:
+        commands: "show vlan id {{ _vlan_id }}"
+      register: vlan_check
+      when: _vlan_state == 'present'
+
+    - name: "Résultat vérification"
+      ansible.builtin.debug:
+        msg: "{{ vlan_check.stdout[0] }}"
+      when: _vlan_state == 'present'

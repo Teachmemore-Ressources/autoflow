@@ -1,0 +1,93 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Cisco IOS — Vérification de conformité baseline
+#
+# Vérifie que les lignes de configuration obligatoires sont
+# présentes sur chaque équipement (NTP, AAA, SSH v2, banners…).
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: cisco_ios)
+#   ntp_servers  : liste des serveurs NTP (défaut: [])
+#   syslog_server: IP du serveur syslog
+# ─────────────────────────────────────────────────────────────
+- name: "Cisco IOS — Vérification conformité baseline"
+  hosts: "{{ target_hosts | default('cisco_ios') }}"
+  gather_facts: false
+
+  vars:
+    _ntp_servers:   "{{ ntp_servers | default([]) }}"
+    _syslog_server: "{{ syslog_server | default('') }}"
+    _compliance_ok: true
+
+  tasks:
+
+    - name: "Collecter la running-config"
+      cisco.ios.ios_command:
+        commands: "show running-config"
+      register: running_cfg
+
+    # ── Vérifications SSH ─────────────────────────────────────
+
+    - name: "✅ Vérifier SSH version 2"
+      ansible.builtin.assert:
+        that: "'ip ssh version 2' in running_cfg.stdout[0]"
+        fail_msg:  "❌ SSH version 2 NON configuré sur {{ inventory_hostname }}"
+        success_msg: "✅ SSH v2 configuré"
+      ignore_errors: true
+      register: check_ssh
+
+    # ── Vérifications NTP ─────────────────────────────────────
+
+    - name: "✅ Vérifier les serveurs NTP"
+      ansible.builtin.assert:
+        that: "'ntp server ' ~ item in running_cfg.stdout[0]"
+        fail_msg:    "❌ Serveur NTP {{ item }} manquant sur {{ inventory_hostname }}"
+        success_msg: "✅ NTP {{ item }} configuré"
+      loop: "{{ _ntp_servers }}"
+      ignore_errors: true
+      register: check_ntp
+      when: _ntp_servers | length > 0
+
+    # ── Vérifications AAA ─────────────────────────────────────
+
+    - name: "✅ Vérifier AAA new-model"
+      ansible.builtin.assert:
+        that: "'aaa new-model' in running_cfg.stdout[0]"
+        fail_msg:    "❌ AAA new-model NON configuré sur {{ inventory_hostname }}"
+        success_msg: "✅ AAA new-model configuré"
+      ignore_errors: true
+      register: check_aaa
+
+    # ── Vérifications Syslog ──────────────────────────────────
+
+    - name: "✅ Vérifier syslog"
+      ansible.builtin.assert:
+        that: "'logging ' ~ _syslog_server in running_cfg.stdout[0]"
+        fail_msg:    "❌ Syslog {{ _syslog_server }} NON configuré sur {{ inventory_hostname }}"
+        success_msg: "✅ Syslog configuré"
+      ignore_errors: true
+      register: check_syslog
+      when: _syslog_server | length > 0
+
+    # ── Vérifications Service Password Encryption ─────────────
+
+    - name: "✅ Vérifier service password-encryption"
+      ansible.builtin.assert:
+        that: "'service password-encryption' in running_cfg.stdout[0]"
+        fail_msg:    "❌ service password-encryption manquant sur {{ inventory_hostname }}"
+        success_msg: "✅ password-encryption actif"
+      ignore_errors: true
+      register: check_pwd_enc
+
+    # ── Rapport de conformité ─────────────────────────────────
+
+    - name: "📋 Rapport de conformité {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg:
+          host:          "{{ inventory_hostname }}"
+          ssh_v2:        "{{ 'PASS' if check_ssh is not failed else 'FAIL' }}"
+          aaa_new_model: "{{ 'PASS' if check_aaa is not failed else 'FAIL' }}"
+          pwd_encryption:"{{ 'PASS' if check_pwd_enc is not failed else 'FAIL' }}"
+          ntp:           "{{ 'SKIP (aucun NTP défini)' if _ntp_servers | length == 0 else ('PASS' if check_ntp is not failed else 'FAIL') }}"
+          syslog:        "{{ 'SKIP (aucun syslog défini)' if not _syslog_server else ('PASS' if check_syslog is not failed else 'FAIL') }}"

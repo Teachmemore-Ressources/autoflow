@@ -1,0 +1,7 @@
+---
+# Variables de connexion Arista EOS
+ansible_user:     "{{ lookup('env', 'ANSIBLE_NET_USERNAME') | default('admin') }}"
+ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD') | default('') }}"
+ansible_command_timeout: 60
+
+backup_dir: "/tmp/backups/arista"

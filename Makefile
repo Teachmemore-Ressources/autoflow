@@ -23,7 +23,8 @@ GITEA_REGISTRY ?= localhost:3001/admin
 
 .PHONY: help start stop restart logs status build pull setup \
         backup restore monitoring-up monitoring-down \
-        ee-build ee-push ee-build-push ee-list \
+        ee-build ee-push ee-build-push ee-list ee-network \
+        gitea-init-network \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update
 
@@ -122,6 +123,14 @@ ee-build-push:  ## Build + push in one step  (e.g. make ee-build-push EE=base VE
 ee-list:        ## List available EE definitions
 	@echo "Available Execution Environments:"
 	@ls execution-environments/ | sed 's/^/  /'
+
+# ── Network Automation ───────────────────────────────────────
+
+gitea-init-network: ## Push network-playbooks repo to Gitea (run after: make start)
+	@bash scripts/gitea-init-network.sh
+
+ee-network:     ## Build + push the network EE  (shortcut for EE=network)
+	$(MAKE) ee-build-push EE=network VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)
 
 # ── Utilities ────────────────────────────────────────────────
 

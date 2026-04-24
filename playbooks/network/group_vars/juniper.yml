@@ -1,0 +1,14 @@
+---
+# Variables de connexion Juniper Junos (NETCONF)
+ansible_user:     "{{ lookup('env', 'ANSIBLE_NET_USERNAME') | default('admin') }}"
+ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD') | default('') }}"
+ansible_port:     830
+
+# Timeout NETCONF
+ansible_command_timeout: 60
+
+# Répertoire de sauvegarde
+backup_dir: "/tmp/backups/juniper"
+
+# Format de sauvegarde : 'set' ou 'text' ou 'xml'
+junos_backup_format: "set"

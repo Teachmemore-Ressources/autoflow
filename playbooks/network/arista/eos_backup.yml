@@ -1,0 +1,40 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Arista EOS — Sauvegarde des configurations
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: arista)
+#   backup_dir   : répertoire de destination
+# ─────────────────────────────────────────────────────────────
+- name: "Arista EOS — Sauvegarde des configurations"
+  hosts: "{{ target_hosts | default('arista') }}"
+  gather_facts: false
+
+  vars:
+    _backup_dir: "{{ backup_dir | default('/tmp/backups/arista') }}"
+    _timestamp:  "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+  tasks:
+
+    - name: "Créer le répertoire de sauvegarde"
+      ansible.builtin.file:
+        path: "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+
+    - name: "Sauvegarder la running-config EOS"
+      arista.eos.eos_config:
+        backup: true
+        backup_options:
+          filename: "running-config_{{ _timestamp }}.cfg"
+          dir_path:  "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}"
+      register: backup_result
+
+    - name: "Rapport de sauvegarde"
+      ansible.builtin.debug:
+        msg:
+          host:   "{{ inventory_hostname }}"
+          dest:   "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}/"
+          status: "SUCCESS"

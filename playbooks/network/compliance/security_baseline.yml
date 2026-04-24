@@ -1,0 +1,98 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Network Compliance — Baseline Sécurité Multi-Vendeurs
+#
+# Vérifie les contrôles de sécurité fondamentaux sur l'ensemble
+# du parc réseau : SSH v2, NTP, AAA, banners, chiffrement.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: network)
+#   ntp_servers  : liste des serveurs NTP attendus
+#   syslog_server: serveur syslog centralisé
+# ─────────────────────────────────────────────────────────────
+
+# ── Cisco IOS ─────────────────────────────────────────────────
+- name: "Baseline Sécurité — Cisco IOS"
+  hosts: "{{ target_hosts | default('cisco_ios') }}"
+  gather_facts: false
+
+  vars:
+    _ntp_servers:   "{{ ntp_servers | default([]) }}"
+    _syslog_server: "{{ syslog_server | default('') }}"
+    _checks:        []
+
+  tasks:
+    - name: "Récupérer la running-config"
+      cisco.ios.ios_command:
+        commands: "show running-config"
+      register: cfg
+
+    - name: "Contrôles sécurité IOS"
+      ansible.builtin.set_fact:
+        _checks:
+          - name: "SSH version 2"
+            pass: "{{ 'ip ssh version 2' in cfg.stdout[0] }}"
+          - name: "Service password-encryption"
+            pass: "{{ 'service password-encryption' in cfg.stdout[0] }}"
+          - name: "AAA new-model"
+            pass: "{{ 'aaa new-model' in cfg.stdout[0] }}"
+          - name: "No ip http server (désactivé)"
+            pass: "{{ 'no ip http server' in cfg.stdout[0] }}"
+          - name: "No ip http secure-server OU https configuré"
+            pass: "{{ 'no ip http secure-server' in cfg.stdout[0] or 'ip http secure-server' in cfg.stdout[0] }}"
+          - name: "Login block-for (protection brute-force)"
+            pass: "{{ 'login block-for' in cfg.stdout[0] }}"
+          - name: "Banner login configuré"
+            pass: "{{ 'banner login' in cfg.stdout[0] }}"
+          - name: "Transport input ssh (VTY)"
+            pass: "{{ 'transport input ssh' in cfg.stdout[0] }}"
+
+    - name: "Rapport sécurité {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════╗
+          ║  Sécurité Baseline — {{ inventory_hostname | truncate(25, true) }}
+          ╠══════════════════════════════════════════╣
+          {% for check in _checks %}
+          ║  {{ '✅' if check.pass else '❌' }}  {{ check.name | truncate(35, true) }}
+          {% endfor %}
+          ╚══════════════════════════════════════════╝
+          Score: {{ _checks | selectattr('pass') | list | length }}/{{ _checks | length }}
+
+    - name: "Compteur de conformité"
+      ansible.builtin.set_fact:
+        compliance_score: "{{ _checks | selectattr('pass') | list | length }}"
+        compliance_total: "{{ _checks | length }}"
+
+    - name: "Alerter si score < 80%"
+      ansible.builtin.debug:
+        msg: "⚠️  ATTENTION : Score de conformité {{ compliance_score }}/{{ compliance_total }} ({{ (compliance_score|int / compliance_total|int * 100) | round(0) }}%) sur {{ inventory_hostname }}"
+      when: (compliance_score|int / compliance_total|int) < 0.8
+
+# ── Arista EOS ───────────────────────────────────────────────
+- name: "Baseline Sécurité — Arista EOS"
+  hosts: "{{ target_hosts | default('arista') }}"
+  gather_facts: false
+
+  tasks:
+    - name: "Récupérer la config EOS"
+      arista.eos.eos_command:
+        commands: "show running-config"
+      register: cfg
+
+    - name: "Contrôles sécurité EOS"
+      ansible.builtin.set_fact:
+        _checks:
+          - name: "SSH configuré"
+            pass: "{{ 'management ssh' in cfg.stdout[0] }}"
+          - name: "AAA configuré"
+            pass: "{{ 'aaa' in cfg.stdout[0] }}"
+          - name: "NTP configuré"
+            pass: "{{ 'ntp server' in cfg.stdout[0] }}"
+          - name: "Logging configuré"
+            pass: "{{ 'logging' in cfg.stdout[0] }}"
+
+    - name: "Rapport sécurité {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg: "Score EOS {{ inventory_hostname }}: {{ _checks | selectattr('pass') | list | length }}/{{ _checks | length }}"

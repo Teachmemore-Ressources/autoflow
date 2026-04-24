@@ -1,0 +1,138 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Network Compliance — Détection de dérive de configuration
+#
+# Compare la running-config actuelle avec la golden config
+# (référence) stockée dans golden_config_dir/<hostname>.cfg.
+# Génère un rapport de dérive pour chaque équipement.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts      : groupe inventaire (défaut: network)
+#   golden_config_dir : chemin des configs de référence (OBLIGATOIRE)
+#   report_dir        : répertoire de sortie des rapports
+#   fail_on_drift     : arrêter si dérive détectée (défaut: false)
+#
+# Structure golden_config_dir attendue :
+#   golden_config_dir/
+#     ios-core-01.cfg
+#     ios-access-01.cfg
+#     eos-spine-01.cfg
+#     ...
+# ─────────────────────────────────────────────────────────────
+- name: "Network Compliance — Détection de dérive de config"
+  hosts: "{{ target_hosts | default('network') }}"
+  gather_facts: false
+
+  vars:
+    _golden_dir:     "{{ golden_config_dir | mandatory }}"
+    _report_dir:     "{{ report_dir | default('/tmp/drift-reports') }}"
+    _fail_on_drift:  "{{ fail_on_drift | default(false) | bool }}"
+    _timestamp:      "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+    _golden_file:    "{{ _golden_dir }}/{{ inventory_hostname }}.cfg"
+
+  tasks:
+
+    - name: "Vérifier que la golden config existe"
+      ansible.builtin.stat:
+        path: "{{ _golden_file }}"
+      register: golden_stat
+      delegate_to: localhost
+
+    - name: "Warning — Pas de golden config pour {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg: "⚠️ Aucune golden config trouvée : {{ _golden_file }} — skip."
+      when: not golden_stat.stat.exists
+
+    # ── Collecte de la config courante ────────────────────────
+
+    - name: "Récupérer la running-config"
+      ansible.builtin.raw: "show running-config"
+      register: current_cfg_raw
+      when: golden_stat.stat.exists
+
+    # ── Comparaison ───────────────────────────────────────────
+
+    - name: "Créer le répertoire de rapport"
+      ansible.builtin.file:
+        path: "{{ _report_dir }}/{{ _timestamp }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+      when: golden_stat.stat.exists
+      run_once: true
+
+    - name: "Sauvegarder la config courante pour comparaison"
+      ansible.builtin.copy:
+        content: "{{ current_cfg_raw.stdout }}"
+        dest:    "{{ _report_dir }}/{{ _timestamp }}/{{ inventory_hostname }}_current.cfg"
+        mode:    "0640"
+      delegate_to: localhost
+      when: golden_stat.stat.exists
+
+    - name: "Générer le diff (golden ↔ current)"
+      ansible.builtin.shell: |
+        diff -u \
+          "{{ _golden_file }}" \
+          "{{ _report_dir }}/{{ _timestamp }}/{{ inventory_hostname }}_current.cfg" \
+          || true
+      register: config_diff
+      delegate_to: localhost
+      changed_when: false
+      when: golden_stat.stat.exists
+
+    - name: "Écrire le rapport de dérive"
+      ansible.builtin.copy:
+        content: |
+          ============================================================
+          Config Drift Report — {{ inventory_hostname }}
+          Date    : {{ _timestamp }}
+          Golden  : {{ _golden_file }}
+          ============================================================
+          {{ config_diff.stdout if config_diff.stdout else 'NO DRIFT DETECTED' }}
+        dest: "{{ _report_dir }}/{{ _timestamp }}/{{ inventory_hostname }}_drift.txt"
+        mode: "0640"
+      delegate_to: localhost
+      when: golden_stat.stat.exists
+
+    - name: "Afficher le résumé de dérive"
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} :
+          {% if not golden_stat.stat.exists %}
+            ⚠️  Golden config manquante
+          {% elif config_diff.stdout | length == 0 %}
+            ✅  Aucune dérive détectée
+          {% else %}
+            ❌  DÉRIVE DÉTECTÉE — {{ config_diff.stdout.split('\n') | length }} lignes de différence
+          {% endif %}
+      when: golden_stat.stat.exists
+
+    - name: "Échec si dérive et fail_on_drift=true"
+      ansible.builtin.fail:
+        msg: "❌ Dérive de configuration détectée sur {{ inventory_hostname }} !"
+      when:
+        - golden_stat.stat.exists
+        - _fail_on_drift | bool
+        - config_diff.stdout | length > 0
+
+# ── Rapport global ────────────────────────────────────────────
+- name: "Rapport global de dérive"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    _report_dir: "{{ report_dir | default('/tmp/drift-reports') }}"
+    _timestamp:  "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+  tasks:
+    - name: "Lister les rapports générés"
+      ansible.builtin.find:
+        paths:   "{{ _report_dir }}"
+        recurse: true
+        patterns: "*_drift.txt"
+      register: drift_reports
+
+    - name: "Résumé"
+      ansible.builtin.debug:
+        msg: "{{ drift_reports.files | length }} rapports de dérive générés dans {{ _report_dir }}"

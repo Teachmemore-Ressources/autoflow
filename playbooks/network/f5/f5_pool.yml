@@ -1,0 +1,95 @@
+---
+# ─────────────────────────────────────────────────────────────
+# F5 BIG-IP — Gestion des Pools LTM
+#
+# Ajoute, supprime ou active/désactive un membre d'un pool.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts  : groupe inventaire (défaut: f5)
+#   pool_name     : nom du pool LTM         (OBLIGATOIRE)
+#   pool_state    : present | absent        (défaut: present)
+#   member_host   : IP du membre            (si gestion d'un membre)
+#   member_port   : port du membre          (défaut: 80)
+#   member_state  : enabled | disabled | forced_offline (défaut: enabled)
+#   f5_partition  : partition BIG-IP        (défaut: Common)
+#   lb_method     : méthode LB             (défaut: round-robin)
+#   monitors      : liste de monitors      (défaut: ['/Common/http'])
+#
+# Exemple — créer un pool :
+#   pool_name: prod-web-pool
+#   pool_state: present
+#   lb_method: least-connections-member
+#
+# Exemple — désactiver un membre :
+#   pool_name: prod-web-pool
+#   member_host: 10.0.0.5
+#   member_port: 8080
+#   member_state: disabled
+# ─────────────────────────────────────────────────────────────
+- name: "F5 BIG-IP — Gestion des pools LTM"
+  hosts: "{{ target_hosts | default('f5') }}"
+  gather_facts: false
+  connection: local
+
+  vars:
+    provider:
+      server:         "{{ ansible_host }}"
+      user:           "{{ ansible_user }}"
+      password:       "{{ ansible_password }}"
+      validate_certs: "{{ validate_certs | default(false) }}"
+      server_port:    "{{ server_port | default(443) }}"
+    _partition: "{{ f5_partition | default('Common') }}"
+    _pool_name: "{{ pool_name | mandatory }}"
+    _pool_state: "{{ pool_state | default('present') }}"
+
+  tasks:
+
+    - name: "Vérification des paramètres"
+      ansible.builtin.assert:
+        that: _pool_name is defined and _pool_name | length > 0
+        fail_msg: "pool_name est obligatoire"
+
+    # ── Gestion du pool ───────────────────────────────────────
+
+    - name: "Configurer le pool {{ _pool_name }}"
+      f5networks.f5_modules.bigip_pool:
+        provider:    "{{ provider }}"
+        partition:   "{{ _partition }}"
+        name:        "{{ _pool_name }}"
+        state:       "{{ _pool_state }}"
+        lb_method:   "{{ lb_method | default('round-robin') }}"
+        monitors:    "{{ monitors | default(['/Common/http']) }}"
+      register: pool_result
+      when: member_host is not defined
+
+    - name: "Résultat pool"
+      ansible.builtin.debug:
+        msg: "Pool '{{ _pool_name }}' {{ _pool_state }} — Changements: {{ pool_result.changed | default(false) }}"
+      when: member_host is not defined
+
+    # ── Gestion d'un membre ───────────────────────────────────
+
+    - name: "Configurer le membre {{ member_host }}:{{ member_port | default(80) }}"
+      f5networks.f5_modules.bigip_pool_member:
+        provider:   "{{ provider }}"
+        partition:  "{{ _partition }}"
+        pool:       "{{ _pool_name }}"
+        host:       "{{ member_host }}"
+        port:       "{{ member_port | default(80) | int }}"
+        state:      "{{ member_state | default('enabled') }}"
+      register: member_result
+      when: member_host is defined
+
+    - name: "Résultat membre"
+      ansible.builtin.debug:
+        msg: "Membre {{ member_host }}:{{ member_port | default(80) }} → {{ member_state | default('enabled') }} — Changements: {{ member_result.changed | default(false) }}"
+      when: member_host is defined
+
+    # ── Sauvegarde de la configuration ───────────────────────
+
+    - name: "Sauvegarder la configuration BIG-IP"
+      f5networks.f5_modules.bigip_config:
+        provider: "{{ provider }}"
+        save:     true
+      when: (pool_result.changed | default(false)) or (member_result.changed | default(false))

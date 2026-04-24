@@ -1,0 +1,53 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Juniper Junos — Sauvegarde des configurations
+#
+# Sauvegarde la configuration active en format 'set', 'text'
+# ou 'xml' selon le paramètre junos_backup_format.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts        : groupe inventaire (défaut: juniper)
+#   backup_dir          : répertoire de destination
+#   junos_backup_format : set | text | xml  (défaut: set)
+# ─────────────────────────────────────────────────────────────
+- name: "Juniper Junos — Sauvegarde des configurations"
+  hosts: "{{ target_hosts | default('juniper') }}"
+  gather_facts: false
+
+  vars:
+    _backup_dir:    "{{ backup_dir | default('/tmp/backups/juniper') }}"
+    _backup_format: "{{ junos_backup_format | default('set') }}"
+    _timestamp:     "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+  tasks:
+
+    - name: "Créer le répertoire de sauvegarde"
+      ansible.builtin.file:
+        path: "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+
+    - name: "Récupérer la configuration active"
+      junipernetworks.junos.junos_command:
+        commands: "show configuration | display {{ _backup_format }}"
+        display:  text
+      register: junos_config
+
+    - name: "Écrire la configuration sur disque"
+      ansible.builtin.copy:
+        content: "{{ junos_config.stdout[0] }}"
+        dest:    "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}/config_{{ _backup_format }}_{{ _timestamp }}.conf"
+        mode:    "0640"
+      delegate_to: localhost
+
+    - name: "Rapport de sauvegarde"
+      ansible.builtin.debug:
+        msg:
+          host:      "{{ inventory_hostname }}"
+          format:    "{{ _backup_format }}"
+          dest:      "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}/"
+          timestamp: "{{ _timestamp }}"
+          status:    "SUCCESS"
+          lines:     "{{ junos_config.stdout[0].split('\n') | length }}"

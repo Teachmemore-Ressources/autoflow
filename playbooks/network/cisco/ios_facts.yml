@@ -1,0 +1,58 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Cisco IOS — Collecte de Facts
+#
+# Collecte les informations système, interfaces, voisins CDP
+# et routes de tous les équipements Cisco IOS/IOS-XE.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts  : groupe inventaire (défaut: cisco_ios)
+#   gather_subset : facts à collecter  (défaut: all)
+# ─────────────────────────────────────────────────────────────
+- name: "Cisco IOS — Collecte des facts réseau"
+  hosts: "{{ target_hosts | default('cisco_ios') }}"
+  gather_facts: false
+
+  tasks:
+
+    - name: "Collecter les facts IOS"
+      cisco.ios.ios_facts:
+        gather_subset: "{{ gather_subset | default('all') }}"
+      register: facts_result
+
+    - name: "Afficher les informations système"
+      ansible.builtin.debug:
+        msg:
+          hostname:       "{{ ansible_net_hostname }}"
+          version:        "{{ ansible_net_version }}"
+          model:          "{{ ansible_net_model }}"
+          serial:         "{{ ansible_net_serialnum }}"
+          image:          "{{ ansible_net_image }}"
+          uptime:         "{{ ansible_net_stacked_models | default('N/A') }}"
+          api_enabled:    "{{ ansible_net_api | default('N/A') }}"
+
+    - name: "Afficher les interfaces actives"
+      ansible.builtin.debug:
+        msg: >-
+          Interface {{ item.key }} :
+          IP={{ item.value.ipv4[0].address | default('no IP') }}/{{ item.value.ipv4[0].masklen | default('') }}
+          | UP={{ item.value.operstatus }}
+          | Description={{ item.value.description | default('—') }}
+      loop: "{{ ansible_net_interfaces | dict2items }}"
+      when: item.value.operstatus == 'up'
+
+    - name: "Afficher les voisins CDP"
+      ansible.builtin.debug:
+        msg: >-
+          CDP voisin {{ item.key }} :
+          {{ item.value | map(attribute='host') | join(', ') }}
+      loop: "{{ ansible_net_neighbors | default({}) | dict2items }}"
+      when: ansible_net_neighbors is defined and ansible_net_neighbors | length > 0
+
+    - name: "Résumé des interfaces (nombre)"
+      ansible.builtin.debug:
+        msg:
+          total_interfaces:  "{{ ansible_net_interfaces | length }}"
+          interfaces_up:     "{{ ansible_net_interfaces.values() | selectattr('operstatus', 'eq', 'up') | list | length }}"
+          interfaces_down:   "{{ ansible_net_interfaces.values() | selectattr('operstatus', 'ne', 'up') | list | length }}"

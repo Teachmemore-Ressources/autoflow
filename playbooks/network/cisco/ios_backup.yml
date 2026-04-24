@@ -1,0 +1,56 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Cisco IOS — Sauvegarde des configurations
+#
+# Sauvegarde la running-config et la startup-config de chaque
+# équipement dans backup_dir/<hostname>/<date>/.
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: cisco_ios)
+#   backup_dir   : répertoire de destination (défaut: /tmp/backups/cisco)
+# ─────────────────────────────────────────────────────────────
+- name: "Cisco IOS — Sauvegarde des configurations"
+  hosts: "{{ target_hosts | default('cisco_ios') }}"
+  gather_facts: false
+
+  vars:
+    _backup_dir: "{{ backup_dir | default('/tmp/backups/cisco') }}"
+    _timestamp:  "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+  tasks:
+
+    - name: "Créer le répertoire de sauvegarde"
+      ansible.builtin.file:
+        path: "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+
+    - name: "Sauvegarder la running-config"
+      cisco.ios.ios_config:
+        backup: true
+        backup_options:
+          filename: "running-config_{{ _timestamp }}.cfg"
+          dir_path:  "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}"
+      register: backup_result
+
+    - name: "Copier la startup-config"
+      cisco.ios.ios_command:
+        commands: "show startup-config"
+      register: startup_cfg
+
+    - name: "Écrire la startup-config sur disque"
+      ansible.builtin.copy:
+        content: "{{ startup_cfg.stdout[0] }}"
+        dest:    "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}/startup-config_{{ _timestamp }}.cfg"
+        mode:    "0640"
+      delegate_to: localhost
+
+    - name: "Rapport de sauvegarde"
+      ansible.builtin.debug:
+        msg:
+          host:      "{{ inventory_hostname }}"
+          dest:      "{{ _backup_dir }}/{{ inventory_hostname }}/{{ _timestamp }}/"
+          timestamp: "{{ _timestamp }}"
+          status:    "SUCCESS"

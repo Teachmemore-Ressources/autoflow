@@ -1,0 +1,46 @@
+---
+# ─────────────────────────────────────────────────────────────
+# Arista EOS — Collecte de Facts
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: arista)
+# ─────────────────────────────────────────────────────────────
+- name: "Arista EOS — Collecte des facts réseau"
+  hosts: "{{ target_hosts | default('arista') }}"
+  gather_facts: false
+
+  tasks:
+
+    - name: "Collecter les facts EOS"
+      arista.eos.eos_facts:
+        gather_subset: all
+      register: eos_facts
+
+    - name: "Informations système"
+      ansible.builtin.debug:
+        msg:
+          hostname:  "{{ ansible_net_hostname }}"
+          version:   "{{ ansible_net_version }}"
+          model:     "{{ ansible_net_model }}"
+          serial:    "{{ ansible_net_serialnum }}"
+          image:     "{{ ansible_net_image }}"
+
+    - name: "Interfaces EOS actives"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.key }} :
+          {{ item.value.ipv4[0].address | default('no IP') }}/{{ item.value.ipv4[0].masklen | default('') }}
+          UP={{ item.value.operstatus }}
+          {{ '| ' ~ item.value.description if item.value.description | default('') else '' }}
+      loop: "{{ ansible_net_interfaces | dict2items }}"
+      when: item.value.operstatus == 'up'
+
+    - name: "Voisins LLDP"
+      arista.eos.eos_command:
+        commands: "show lldp neighbors"
+      register: lldp_output
+
+    - name: "Afficher les voisins LLDP"
+      ansible.builtin.debug:
+        msg: "{{ lldp_output.stdout[0] }}"

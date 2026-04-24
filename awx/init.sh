@@ -97,6 +97,11 @@ try:
             'description': 'Sécurité et conformité — boto3, openssl, community.crypto',
             'image': f'{host}/{user}/ee-security:1.0.0',
         },
+        {
+            'name': 'EE Network',
+            'description': 'Automatisation réseau multi-vendeurs — NAPALM, Netmiko, Nornir, cisco.ios, junipernetworks.junos, arista.eos, f5networks.f5_modules',
+            'image': f'{host}/{user}/ee-network:1.0.0',
+        },
     ]
 
     for ee_def in ees:

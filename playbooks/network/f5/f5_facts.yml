@@ -1,0 +1,59 @@
+---
+# ─────────────────────────────────────────────────────────────
+# F5 BIG-IP — Collecte de Facts
+#
+# EE requis : ee-network
+# Paramètres AWX (extra_vars) :
+#   target_hosts : groupe inventaire (défaut: f5)
+#   f5_partition : partition BIG-IP (défaut: Common)
+# ─────────────────────────────────────────────────────────────
+- name: "F5 BIG-IP — Collecte des facts"
+  hosts: "{{ target_hosts | default('f5') }}"
+  gather_facts: false
+  connection: local
+
+  vars:
+    provider:
+      server:         "{{ ansible_host }}"
+      user:           "{{ ansible_user }}"
+      password:       "{{ ansible_password }}"
+      validate_certs: "{{ validate_certs | default(false) }}"
+      server_port:    "{{ server_port | default(443) }}"
+
+  tasks:
+
+    - name: "Collecter les facts BIG-IP"
+      f5networks.f5_modules.bigip_device_facts:
+        provider:    "{{ provider }}"
+        gather_subset:
+          - system-info
+          - ltm-pools
+          - virtual-servers
+          - interfaces
+      register: f5_facts
+
+    - name: "Informations système"
+      ansible.builtin.debug:
+        msg:
+          hostname:  "{{ f5_facts.system_info.base_mac_address | default('N/A') }}"
+          version:   "{{ f5_facts.system_info.product_version | default('N/A') }}"
+          build:     "{{ f5_facts.system_info.product_build | default('N/A') }}"
+          platform:  "{{ f5_facts.system_info.platform | default('N/A') }}"
+
+    - name: "Pools LTM"
+      ansible.builtin.debug:
+        msg: >-
+          Pool {{ item.name }} :
+          membres={{ item.members | default([]) | length }}
+          monitor={{ item.monitor | default('none') }}
+          état={{ item.availability_status | default('unknown') }}
+      loop: "{{ f5_facts.ltm_pools | default([]) }}"
+
+    - name: "Virtual Servers"
+      ansible.builtin.debug:
+        msg: >-
+          VS {{ item.name }} :
+          {{ item.destination }}
+          pool={{ item.default_pool | default('none') }}
+          état={{ item.availability_status | default('unknown') }}
+      loop: "{{ f5_facts.virtual_servers | default([]) }}"

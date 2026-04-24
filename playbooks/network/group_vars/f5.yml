@@ -1,0 +1,9 @@
+---
+# Variables de connexion F5 BIG-IP (REST API)
+ansible_user:  "{{ lookup('env', 'ANSIBLE_NET_USERNAME') | default('admin') }}"
+ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD') | default('') }}"
+validate_certs: false
+server_port:   443
+
+# Partition par défaut
+f5_partition: "Common"
