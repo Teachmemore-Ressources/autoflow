@@ -164,17 +164,75 @@ else
   ok "${REGISTRY} se résout correctement."
 fi
 
-# ── 6. Test de connexion Docker ───────────────────────────────
+# ── 6. Test de connexion Docker + génération auto du token ────
 
 echo ""
 log "Test de connexion au registry ${REGISTRY}..."
-if docker login "${REGISTRY}" \
-    -u "${GITEA_ADMIN_USER:-admin}" \
-    -p "${GITEA_REGISTRY_TOKEN:-${GITEA_ADMIN_PASSWORD:-}}" 2>&1 | grep -q "Login Succeeded"; then
-  ok "docker login ${REGISTRY} → SUCCESS ✔"
-else
-  warn "docker login a échoué (le token GITEA_REGISTRY_TOKEN est peut-être vide dans .env)."
-  warn "Connecte-toi manuellement : docker login ${REGISTRY} -u admin"
+
+_GITEA_USER="${GITEA_ADMIN_USER:-admin}"
+_GITEA_PASS="${GITEA_ADMIN_PASSWORD:-}"
+_GITEA_PORT="${GITEA_HTTP_PORT:-3001}"
+_GITEA_API="http://localhost:${_GITEA_PORT}/api/v1"
+
+_docker_login() {
+  echo "$1" | docker login "${REGISTRY}" -u "${_GITEA_USER}" --password-stdin 2>&1
+}
+
+# Essai 1 : GITEA_REGISTRY_TOKEN existant
+if [[ -n "${GITEA_REGISTRY_TOKEN:-}" ]]; then
+  OUT=$(_docker_login "${GITEA_REGISTRY_TOKEN}")
+  if echo "${OUT}" | grep -q "Login Succeeded"; then
+    ok "docker login ${REGISTRY} → SUCCESS ✔"
+  else
+    warn "GITEA_REGISTRY_TOKEN invalide (${OUT##*: }) — génération d'un nouveau token..."
+    GITEA_REGISTRY_TOKEN=""
+  fi
+fi
+
+# Essai 2 : générer un token via l'API Gitea
+if [[ -z "${GITEA_REGISTRY_TOKEN:-}" ]] && [[ -n "${_GITEA_PASS}" ]]; then
+  log "Génération du token registry via l'API Gitea..."
+  # Supprimer l'ancien token (ignore les erreurs)
+  curl -s -X DELETE -u "${_GITEA_USER}:${_GITEA_PASS}" \
+    "${_GITEA_API}/users/${_GITEA_USER}/tokens/autoflow-registry" >/dev/null 2>&1 || true
+  # Créer un nouveau token
+  TOKEN_RESP=$(curl -s -X POST \
+    -u "${_GITEA_USER}:${_GITEA_PASS}" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"autoflow-registry","scopes":["read:package","write:package"]}' \
+    "${_GITEA_API}/users/${_GITEA_USER}/tokens")
+  NEW_TOKEN=$(echo "${TOKEN_RESP}" | python3 -c \
+    "import sys,json; print(json.load(sys.stdin).get('sha1',''))" 2>/dev/null || true)
+
+  if [[ -n "${NEW_TOKEN}" ]]; then
+    ok "Token généré — écriture dans .env (GITEA_REGISTRY_TOKEN)..."
+    if grep -q "^GITEA_REGISTRY_TOKEN=" "${PROJECT_ROOT}/.env" 2>/dev/null; then
+      sed -i "s|^GITEA_REGISTRY_TOKEN=.*|GITEA_REGISTRY_TOKEN=${NEW_TOKEN}|" "${PROJECT_ROOT}/.env"
+    else
+      echo "GITEA_REGISTRY_TOKEN=${NEW_TOKEN}" >> "${PROJECT_ROOT}/.env"
+    fi
+    OUT=$(_docker_login "${NEW_TOKEN}")
+    if echo "${OUT}" | grep -q "Login Succeeded"; then
+      ok "docker login ${REGISTRY} → SUCCESS ✔"
+    else
+      warn "docker login KO malgré le nouveau token : ${OUT##*: }"
+    fi
+  else
+    warn "Impossible de générer le token (API Gitea dispo ?)"
+    warn "Réponse : ${TOKEN_RESP:0:200}"
+  fi
+fi
+
+# Essai 3 : mot de passe admin en dernier recours
+if [[ -z "${GITEA_REGISTRY_TOKEN:-}" ]] && [[ -n "${_GITEA_PASS}" ]]; then
+  OUT=$(_docker_login "${_GITEA_PASS}")
+  if echo "${OUT}" | grep -q "Login Succeeded"; then
+    ok "docker login avec mot de passe admin → SUCCESS ✔"
+    warn "Génère un token dédié : Gitea > ${_GITEA_USER} > Settings > Applications"
+  else
+    warn "docker login KO — Gitea est-il démarré ?"
+    warn "Connecte-toi manuellement : docker login ${REGISTRY} -u ${_GITEA_USER}"
+  fi
 fi
 
 # ── Résumé ────────────────────────────────────────────────────

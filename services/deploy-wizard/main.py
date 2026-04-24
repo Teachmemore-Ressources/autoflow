@@ -950,23 +950,72 @@ async def docker_trust_ca():
             else:
                 yield _sse(f"Entrée déjà présente dans /etc/hosts pour {registry}.")
 
-        # Test docker login
-        token = config.get("GITEA_REGISTRY_TOKEN", "") or config.get("GITEA_ADMIN_PASSWORD", "")
-        user  = config.get("GITEA_ADMIN_USER", "admin")
-        if token:
-            yield _sse(f"Test docker login {registry}...")
-            login = subprocess.run(
+        # Test docker login — auto-generate registry token if needed
+        user     = config.get("GITEA_ADMIN_USER", "admin")
+        password = config.get("GITEA_ADMIN_PASSWORD", "")
+        reg_token = config.get("GITEA_REGISTRY_TOKEN", "")
+
+        def _try_docker_login(secret: str) -> bool:
+            r = subprocess.run(
                 ["docker", "login", registry, "-u", user, "--password-stdin"],
-                input=token, capture_output=True, text=True,
+                input=secret, capture_output=True, text=True,
             )
-            if login.returncode == 0:
-                yield _sse(f"[SUCCESS] docker login {registry} → OK ✔")
-            else:
-                yield _sse(f"[WARN] docker login échoué: {login.stderr.strip()}")
-                yield _sse("[WARN] CA installé mais login KO — vérifie GITEA_REGISTRY_TOKEN dans .env > Gitea")
+            return r.returncode == 0
+
+        yield _sse(f"Test docker login {registry}...")
+
+        if reg_token and _try_docker_login(reg_token):
+            yield _sse(f"[SUCCESS] docker login {registry} → OK ✔")
         else:
-            yield _sse("[SUCCESS] CA Docker installé ✔")
-            yield _sse("[WARN] GITEA_REGISTRY_TOKEN vide — configure-le dans .env > Gitea pour pusher des images.")
+            if reg_token:
+                yield _sse("[WARN] GITEA_REGISTRY_TOKEN invalide — génération d'un nouveau token via l'API Gitea...")
+            else:
+                yield _sse("GITEA_REGISTRY_TOKEN absent — génération automatique via l'API Gitea...")
+
+            # Try to generate a token via the Gitea API using admin credentials
+            gitea_port = config.get("GITEA_HTTP_PORT", "3001")
+            gitea_api  = f"http://localhost:{gitea_port}/api/v1"
+            new_token  = ""
+            try:
+                async with _httpx.AsyncClient() as c:
+                    # Delete existing token with same name (ignore errors)
+                    await c.delete(
+                        f"{gitea_api}/users/{user}/tokens/autoflow-registry",
+                        auth=(user, password), timeout=5,
+                    )
+                    # Create new token with package scope
+                    resp = await c.post(
+                        f"{gitea_api}/users/{user}/tokens",
+                        auth=(user, password),
+                        json={"name": "autoflow-registry", "scopes": ["read:package", "write:package"]},
+                        timeout=5,
+                    )
+                    if resp.status_code == 201:
+                        new_token = resp.json().get("sha1", "")
+                    else:
+                        yield _sse(f"[WARN] API Gitea {resp.status_code}: {resp.text[:200]}")
+            except Exception as exc:
+                yield _sse(f"[WARN] Connexion API Gitea échouée: {exc}")
+
+            if new_token:
+                yield _sse("Token généré — écriture dans .env (GITEA_REGISTRY_TOKEN)...")
+                current = _load_env()
+                current["GITEA_REGISTRY_TOKEN"] = new_token
+                _write_env(current)
+                if _try_docker_login(new_token):
+                    yield _sse(f"[SUCCESS] docker login {registry} → OK ✔")
+                else:
+                    yield _sse("[WARN] Token généré mais docker login toujours KO.")
+                    yield _sse("[WARN] Vérifie que Gitea est démarré et que les packages sont activés.")
+            else:
+                # Last resort: try with admin password directly
+                if password and _try_docker_login(password):
+                    yield _sse(f"[SUCCESS] docker login avec mot de passe admin → OK ✔")
+                    yield _sse("[WARN] Utilise le mot de passe admin — génère un token dédié dans Gitea > Settings > Applications")
+                else:
+                    yield _sse("[WARN] docker login KO — Gitea est-il démarré et accessible ?")
+                    yield _sse(f"[WARN] Génère manuellement : Gitea > {user} > Settings > Applications > Generate Token (scopes: package)")
+                    yield _sse(f"[WARN] Puis écris dans .env : GITEA_REGISTRY_TOKEN=<token>")
         yield _sse("[DONE]")
 
     return StreamingResponse(stream(), media_type="text/event-stream",
