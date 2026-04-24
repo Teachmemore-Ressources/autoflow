@@ -948,15 +948,31 @@ async def docker_trust_ca():
 
         # Restart Docker daemon so it trusts the new CA cert
         yield _sse("Redémarrage du daemon Docker pour charger le nouveau CA...")
-        restart = subprocess.run(
-            ["sudo", "systemctl", "restart", "docker"],
-            capture_output=True, text=True, timeout=30,
+        yield _sse("(Arrêt des conteneurs en cours — peut prendre 30–60 s...)")
+        restart_proc = await asyncio.create_subprocess_exec(
+            "sudo", "systemctl", "restart", "docker",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if restart.returncode == 0:
+        # Heartbeat while waiting (up to 90 s)
+        deadline = asyncio.get_running_loop().time() + 90
+        while True:
+            try:
+                rc = await asyncio.wait_for(restart_proc.wait(), timeout=10)
+                break
+            except asyncio.TimeoutError:
+                if asyncio.get_running_loop().time() > deadline:
+                    restart_proc.kill()
+                    yield _sse("[WARN] Redémarrage Docker trop long — relance manuellement : sudo systemctl restart docker")
+                    rc = -1
+                    break
+                yield _sse("…en attente du daemon Docker…")
+        if rc == 0:
             yield _sse("Docker daemon redémarré ✔ (les conteneurs Autoflow reviennent automatiquement)")
-            await asyncio.sleep(4)  # wait for daemon to accept connections
+            await asyncio.sleep(3)
         else:
-            yield _sse(f"[WARN] Redémarrage Docker échoué: {restart.stderr.strip()}")
+            stderr_out = (await restart_proc.stderr.read()).decode().strip() if restart_proc.stderr else ""
+            yield _sse(f"[WARN] Redémarrage Docker échoué (code {rc}): {stderr_out}")
             yield _sse("[WARN] Relance manuellement : sudo systemctl restart docker")
 
         # Ensure registry hostname resolves (add to /etc/hosts if needed)

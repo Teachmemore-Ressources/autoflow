@@ -132,7 +132,7 @@ fi
 log "Redémarrage du daemon Docker pour charger le nouveau CA..."
 if sudo systemctl restart docker 2>/dev/null; then
   ok "Docker daemon redémarré ✔ (les conteneurs Autoflow reviennent automatiquement)"
-  sleep 3  # laisser le daemon démarrer avant les tests
+  sleep 5  # laisser le daemon démarrer avant les tests
 else
   warn "Redémarrage Docker échoué — relance manuellement : sudo systemctl restart docker"
 fi
