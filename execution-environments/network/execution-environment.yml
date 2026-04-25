@@ -57,7 +57,7 @@ dependencies:
   python:
     # ── NAPALM — abstraction multi-vendeurs ─────────────────
     - napalm>=5.0.0
-    - napalm-ansible>=2.0.0
+    - napalm-ansible>=1.0.0
 
     # ── Netmiko — SSH/Telnet bas niveau ─────────────────────
     - netmiko>=4.3.0
