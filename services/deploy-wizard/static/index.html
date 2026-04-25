@@ -245,7 +245,67 @@ async function boot() {
   buildSections();
   activateSection('preflight');
   pollStatus();
+  checkPermissionsStatus();
   checkPreflightStatus();
+}
+
+// ── Permissions ────────────────────────────────────────────────────────────
+async function checkPermissionsStatus() {
+  try {
+    const d = await fetch('/api/permissions/status').then(r => r.json());
+    const checks = d.checks || [];
+    const failing = checks.filter(c => !c.ok);
+    const dot  = document.getElementById('perms-dot');
+    const txt  = document.getElementById('perms-status-text');
+    const detail = document.getElementById('perms-detail');
+
+    if (d.all_ok) {
+      dot.className = 'pf-dot ok';
+      txt.textContent = 'Toutes les permissions sont correctes ✔';
+    } else {
+      dot.className = 'pf-dot err';
+      txt.textContent = `${failing.length} problème(s) détecté(s) — cliquez "Corriger les permissions"`;
+      detail.style.display = 'block';
+      detail.innerHTML = failing.map(c =>
+        `<div style="color:var(--warning);margin:2px 0">⚠ ${c.detail}</div>`
+      ).join('');
+    }
+  } catch {
+    document.getElementById('perms-dot').className = 'pf-dot err';
+    document.getElementById('perms-status-text').textContent = 'Impossible de vérifier';
+  }
+}
+
+function runPermissionsFix() {
+  const dot = document.getElementById('perms-dot');
+  const txt = document.getElementById('perms-status-text');
+  dot.className = 'pf-dot running';
+  txt.textContent = 'Correction en cours…';
+  document.getElementById('pf-log-perms').innerHTML = '';
+  document.getElementById('perms-detail').style.display = 'none';
+
+  const evts = new EventSource('/api/permissions/fix');
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') {
+      evts.close();
+      checkPermissionsStatus();
+      return;
+    }
+    const log = document.getElementById('pf-log-perms');
+    log.classList.add('open');
+    const line = document.createElement('div');
+    if (msg.startsWith('[SUCCESS]')) line.className = 'ok';
+    else if (msg.startsWith('[ERROR]')) line.className = 'err';
+    else if (msg.startsWith('[WARN]') || msg.startsWith('  ⚠')) line.className = 'warn';
+    line.textContent = msg;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  };
+  evts.onerror = () => {
+    evts.close();
+    checkPermissionsStatus();
+  };
 }
 
 // ── Pre-flight ──────────────────────────────────────────────────────────────
@@ -396,6 +456,29 @@ function buildSections() {
       <div class="sec-title">Pre-flight checks</div>
       <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
       <div class="preflight-card">
+
+        <!-- ── Permissions ── -->
+        <div class="pf-item">
+          <div class="pf-icon">🔧</div>
+          <div class="pf-body">
+            <div class="pf-title">Permissions &amp; Prérequis système</div>
+            <div class="pf-desc">
+              Vérifie et corrige les droits nécessaires après un <code>git clone</code> :
+              scripts exécutables, <code>traefik/certs/</code> accessible, groupe <code>docker</code>, <code>.env</code> modifiable.<br>
+              <em>À lancer en premier sur toute nouvelle machine.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="perms-dot"></span>
+              <span id="perms-status-text">Vérification…</span>
+            </div>
+            <div id="perms-detail" style="margin-top:6px;font-size:12px;display:none"></div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runPermissionsFix()">🔧 Corriger les permissions</button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('perms')">📋 Logs</button>
+            </div>
+            <div class="pf-log" id="pf-log-perms"></div>
+          </div>
+        </div>
 
         <div class="pf-item">
           <div class="pf-icon">🔒</div>

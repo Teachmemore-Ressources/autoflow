@@ -616,6 +616,187 @@ def _update_tls_yml(domain: str) -> None:
     )
 
 
+# ── Permissions ───────────────────────────────────────────────────────────────
+
+_PERM_CHECKS = [
+    {
+        "id": "scripts",
+        "label": "Scripts exécutables",
+        "desc": "Tous les fichiers .sh du repo doivent être exécutables après un git clone.",
+        "fix": "find scripts/ awx/ -name '*.sh' -exec chmod +x {} +",
+    },
+    {
+        "id": "certs_dir",
+        "label": "traefik/certs/ accessible",
+        "desc": "Le répertoire des certificats doit appartenir à l'utilisateur courant.",
+        "fix": "chown_certs",
+    },
+    {
+        "id": "docker_group",
+        "label": "Groupe docker",
+        "desc": "L'utilisateur doit être dans le groupe docker pour lancer des commandes sans sudo.",
+        "fix": "docker_group",
+    },
+    {
+        "id": "env_writable",
+        "label": ".env accessible en écriture",
+        "desc": "Le fichier .env doit être modifiable par l'utilisateur courant.",
+        "fix": "env_writable",
+    },
+]
+
+
+def _check_permissions() -> list[dict]:
+    import grp, pwd
+    results = []
+    current_user = os.environ.get("USER", "") or os.environ.get("LOGNAME", "")
+    deploy_user  = _load_env().get("DEPLOY_USER", current_user) or current_user
+
+    # 1. Scripts executable
+    non_exec = [
+        str(p) for p in (ROOT / "scripts").glob("**/*.sh")
+        if not os.access(p, os.X_OK)
+    ]
+    for extra in ["awx/init.sh", "awx/init-ees.sh"]:
+        p = ROOT / extra
+        if p.exists() and not os.access(p, os.X_OK):
+            non_exec.append(str(p))
+    results.append({
+        "id": "scripts",
+        "ok": len(non_exec) == 0,
+        "detail": f"{len(non_exec)} script(s) non exécutables" if non_exec else "Tous les scripts sont exécutables",
+        "items": non_exec[:5],
+    })
+
+    # 2. traefik/certs/ writable
+    certs = ROOT / "traefik" / "certs"
+    certs_ok = certs.exists() and os.access(certs, os.W_OK)
+    results.append({
+        "id": "certs_dir",
+        "ok": certs_ok,
+        "detail": "traefik/certs/ accessible en écriture" if certs_ok else "traefik/certs/ non accessible en écriture",
+    })
+
+    # 3. Docker group
+    try:
+        docker_gid  = grp.getgrnam("docker").gr_gid
+        user_groups = os.getgroups()
+        in_docker   = docker_gid in user_groups
+    except KeyError:
+        in_docker = False
+    results.append({
+        "id": "docker_group",
+        "ok": in_docker,
+        "detail": "Utilisateur dans le groupe docker" if in_docker else "Utilisateur hors du groupe docker — sudo requis pour docker",
+        "warn_relogin": not in_docker,
+    })
+
+    # 4. .env writable
+    env_ok = (not ENV_FILE.exists()) or os.access(ENV_FILE, os.W_OK)
+    results.append({
+        "id": "env_writable",
+        "ok": env_ok,
+        "detail": ".env accessible en écriture" if env_ok else ".env en lecture seule — le wizard ne peut pas sauvegarder la config",
+    })
+
+    return results
+
+
+@app.get("/api/permissions/status")
+def permissions_status():
+    checks = _check_permissions()
+    return {"checks": checks, "all_ok": all(c["ok"] for c in checks)}
+
+
+@app.get("/api/permissions/fix")
+async def permissions_fix():
+    """SSE: fix all permission issues found."""
+
+    async def stream():
+        config      = _load_env()
+        deploy_user = config.get("DEPLOY_USER", "") or os.environ.get("USER", "")
+
+        yield _sse(f"Correction des permissions (utilisateur : {deploy_user or 'courant'})…")
+
+        # 1. Scripts executable
+        yield _sse("→ chmod +x sur tous les scripts .sh…")
+        sh_files = list((ROOT / "scripts").glob("**/*.sh"))
+        for extra in ["awx/init.sh", "awx/init-ees.sh"]:
+            p = ROOT / extra
+            if p.exists():
+                sh_files.append(p)
+        fixed_scripts = 0
+        for p in sh_files:
+            if not os.access(p, os.X_OK):
+                try:
+                    p.chmod(p.stat().st_mode | 0o111)
+                    fixed_scripts += 1
+                except PermissionError:
+                    _sudo_run(["chmod", "+x", str(p)], capture_output=True)
+                    fixed_scripts += 1
+        yield _sse(f"  {fixed_scripts} script(s) rendu(s) exécutables ✔")
+
+        # 2. traefik/certs/ ownership
+        certs_dir = ROOT / "traefik" / "certs"
+        if not os.access(certs_dir, os.W_OK):
+            yield _sse(f"→ Correction ownership de traefik/certs/…")
+            target = deploy_user or os.environ.get("USER", "")
+            r = _sudo_run(
+                ["chown", "-R", f"{target}:{target}", str(certs_dir)],
+                capture_output=True, text=True,
+            )
+            if r.returncode == 0:
+                yield _sse(f"  traefik/certs/ → {target} ✔")
+            else:
+                yield _sse(f"  [WARN] chown échoué: {r.stderr.strip()}")
+        else:
+            yield _sse("→ traefik/certs/ déjà accessible ✔")
+
+        # 3. Docker group
+        import grp as _grp
+        try:
+            _grp.getgrnam("docker")
+            target = deploy_user or os.environ.get("USER", "")
+            if target:
+                r = _sudo_run(
+                    ["usermod", "-aG", "docker", target],
+                    capture_output=True, text=True,
+                )
+                if r.returncode == 0:
+                    yield _sse(f"→ {target} ajouté au groupe docker ✔")
+                    yield _sse("  ⚠ Déconnecte-toi et reconnecte-toi (ou 'newgrp docker') pour activer.")
+                else:
+                    yield _sse(f"  [WARN] usermod échoué: {r.stderr.strip()}")
+        except KeyError:
+            yield _sse("→ [WARN] Groupe docker introuvable — Docker est-il installé ?")
+
+        # 4. .env writable
+        if ENV_FILE.exists() and not os.access(ENV_FILE, os.W_OK):
+            yield _sse("→ Correction ownership de .env…")
+            target = deploy_user or os.environ.get("USER", "")
+            r = _sudo_run(
+                ["chown", f"{target}:{target}", str(ENV_FILE)],
+                capture_output=True, text=True,
+            )
+            yield _sse("  .env → accessible en écriture ✔" if r.returncode == 0
+                       else f"  [WARN] {r.stderr.strip()}")
+        else:
+            yield _sse("→ .env accessible en écriture ✔")
+
+        # Final check
+        checks = _check_permissions()
+        remaining = [c for c in checks if not c["ok"]]
+        if not remaining:
+            yield _sse("[SUCCESS] Toutes les permissions sont correctes ✔")
+        else:
+            for c in remaining:
+                yield _sse(f"[WARN] {c['id']}: {c['detail']}")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/cert-status")
 def cert_status():
     config = _load_env()
