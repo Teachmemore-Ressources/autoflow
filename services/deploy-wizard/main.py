@@ -1081,6 +1081,27 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
         push_rc = push_proc.returncode
 
         if push_rc == 0:
+            # Push immutable dated tag for rollback capability
+            from datetime import datetime as _dt, timezone as _tz
+            dated_tag = _dt.now(_tz.utc).strftime("%Y%m%d-%H%M%S")
+            dated_image = f"{registry}/{gitea_user}/ee-{ee}:{dated_tag}"
+            yield _sse(f"Pushing dated tag {dated_tag} for rollback…")
+            tag_r = subprocess.run(
+                ["docker", "tag", tag, dated_image],
+                capture_output=True, text=True,
+            )
+            if tag_r.returncode == 0:
+                dt_push = await asyncio.create_subprocess_exec(
+                    "docker", "push", dated_image,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                )
+                await dt_push.wait()
+                if dt_push.returncode == 0:
+                    yield _sse(f"  Dated tag pushed: {dated_tag} ✔")
+                else:
+                    yield _sse(f"  [WARN] Dated tag push failed — rollback won't include this build")
+            else:
+                yield _sse(f"  [WARN] docker tag failed: {tag_r.stderr.strip()}")
             yield _sse(f"[SUCCESS] ee-{ee}:{version} buildé et poussé ✔")
         else:
             push_out = "\n".join(push_lines)
@@ -1113,6 +1134,121 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
             else:
                 yield _sse(f"[ERROR] docker push échoué (code {push_rc})")
                 yield _sse("[WARN] Vérifie: 1) 'Configurer CA Docker' 2) GITEA_REGISTRY_TOKEN dans .env")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/ee/versions/{ee}")
+def ee_versions(ee: str):
+    """List available tags in the Gitea container registry for a given EE."""
+    import urllib.request, urllib.error, base64, json as _j
+    config     = _load_env()
+    domain     = config.get("DOMAIN", "localhost")
+    gitea_user = config.get("GITEA_ADMIN_USER", "admin")
+    registry   = f"git.{domain}"
+    token      = config.get("GITEA_REGISTRY_TOKEN", "") or config.get("GITEA_ADMIN_PASSWORD", "")
+    creds      = base64.b64encode(f"{gitea_user}:{token}".encode()).decode()
+
+    # Use Docker Registry v2 API on the intra-stack hostname (no TLS needed)
+    # Fallback to the external hostname if intra-stack is not available
+    for base in (f"http://gitea:3001", f"https://{registry}"):
+        url = f"{base}/v2/{gitea_user}/ee-{ee}/tags/list"
+        req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}"})
+        try:
+            ctx = None
+            if base.startswith("https"):
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode    = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=6, context=ctx) as resp:
+                data  = _j.loads(resp.read())
+                tags  = data.get("tags") or []
+                dated = sorted([t for t in tags if len(t) == 15 and t[8] == "-"], reverse=True)
+                other = [t for t in tags if t not in dated]
+                return {
+                    "ee":         ee,
+                    "image_base": f"{registry}/{gitea_user}/ee-{ee}",
+                    "dated_tags": dated,
+                    "other_tags": other,
+                    "total":      len(tags),
+                }
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {"ee": ee, "image_base": f"{registry}/{gitea_user}/ee-{ee}",
+                        "dated_tags": [], "other_tags": [], "total": 0}
+        except Exception:
+            continue
+
+    raise HTTPException(502, "Could not reach Gitea container registry — is Gitea running?")
+
+
+@app.get("/api/ee/rollback")
+async def ee_rollback(ee: str, version: str):
+    """SSE: roll back an EE image by re-tagging a dated version as 'latest' and pushing."""
+
+    async def stream():
+        config     = _load_env()
+        domain     = config.get("DOMAIN", "localhost")
+        gitea_user = config.get("GITEA_ADMIN_USER", "admin")
+        registry   = f"git.{domain}"
+        default_v  = config.get("EE_DEFAULT_VERSION", "latest")
+
+        source = f"{registry}/{gitea_user}/ee-{ee}:{version}"
+        target = f"{registry}/{gitea_user}/ee-{ee}:{default_v}"
+
+        yield _sse(f"Rolling back ee-{ee} to {version}…")
+        yield _sse(f"Source : {source}")
+        yield _sse(f"Target : {target}")
+        yield _sse("")
+
+        # Step 1: pull the dated image
+        yield _sse(f"[1/3] docker pull {source}…")
+        pull_proc = await asyncio.create_subprocess_exec(
+            "docker", "pull", source,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        async for raw in pull_proc.stdout:
+            ln = raw.decode().rstrip()
+            if ln:
+                yield _sse(f"  {ln}")
+        await pull_proc.wait()
+        if pull_proc.returncode != 0:
+            yield _sse(f"[ERROR] docker pull failed (exit {pull_proc.returncode})")
+            yield _sse("[DONE]")
+            return
+        yield _sse("[1/3] Pull OK ✔")
+
+        # Step 2: re-tag
+        yield _sse(f"[2/3] docker tag → {target}…")
+        tag_r = subprocess.run(["docker", "tag", source, target], capture_output=True, text=True)
+        if tag_r.returncode != 0:
+            yield _sse(f"[ERROR] docker tag failed: {tag_r.stderr.strip()}")
+            yield _sse("[DONE]")
+            return
+        yield _sse("[2/3] Tag OK ✔")
+
+        # Step 3: push floating tag
+        yield _sse(f"[3/3] docker push {target}…")
+        push_proc = await asyncio.create_subprocess_exec(
+            "docker", "push", target,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        async for raw in push_proc.stdout:
+            ln = raw.decode().rstrip()
+            if ln:
+                yield _sse(f"  {ln}")
+        await push_proc.wait()
+        if push_proc.returncode != 0:
+            yield _sse(f"[ERROR] docker push failed (exit {push_proc.returncode})")
+            yield _sse("[DONE]")
+            return
+        yield _sse("[3/3] Push OK ✔")
+        yield _sse("")
+        yield _sse(f"[SUCCESS] ee-{ee} rolled back to {version} → now serves as {default_v} ✔")
+        yield _sse("AWX will use the rolled-back image on next job run.")
         yield _sse("[DONE]")
 
     return StreamingResponse(stream(), media_type="text/event-stream",

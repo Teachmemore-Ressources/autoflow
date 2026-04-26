@@ -215,6 +215,15 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .ee-log .err{color:#f87171}
 .ee-log .ok{color:#4ade80;font-weight:700}
 .ee-log .warn{color:#fbbf24}
+.ee-rollback-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-top:4px}
+.ee-rollback-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
+.ee-rollback-list{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.ee-version-row{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.ee-version-tag{font-size:12px;color:var(--text);flex:1}
+.ee-version-raw{font-size:10px;font-family:'Courier New',monospace;color:var(--muted);flex-shrink:0}
+.btn-xs{padding:3px 10px;font-size:11px;border-radius:5px}
+.btn-warn{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.btn-warn:hover{background:rgba(245,158,11,.25)}
 
 /* ── Sub-section header ── */
 .sub-section{margin-top:24px}
@@ -1519,13 +1528,89 @@ function buildEECards(ees) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
           Build &amp; Push
         </button>
+        <button class="btn btn-ghost btn-sm" onclick="showRollbackPanel('${ee.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Rollback
+        </button>
         <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ee-${ee.id}')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           Logs
         </button>
       </div>
       <div class="ee-log" id="ee-log-ee-${ee.id}"></div>
+      <div class="ee-rollback-panel" id="ee-rb-${ee.id}" style="display:none">
+        <div class="ee-rollback-title">Version History</div>
+        <div class="ee-rollback-list" id="ee-rb-list-${ee.id}">
+          <span style="opacity:.6;font-size:.82rem">Loading…</span>
+        </div>
+        <div class="ee-log" id="ee-log-rb-${ee.id}"></div>
+      </div>
     </div>`).join('');
+}
+
+async function showRollbackPanel(eeId) {
+  const panel = document.getElementById(`ee-rb-${eeId}`);
+  if (!panel) return;
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const listEl = document.getElementById(`ee-rb-list-${eeId}`);
+  listEl.innerHTML = '<span style="opacity:.6;font-size:.82rem">Loading versions…</span>';
+
+  try {
+    const d = await fetch(`/api/ee/versions/${encodeURIComponent(eeId)}`).then(r => r.json());
+    if (!d.dated_tags || d.dated_tags.length === 0) {
+      listEl.innerHTML = '<span style="opacity:.6;font-size:.82rem">No dated tags found — build at least once to enable rollback.</span>';
+      return;
+    }
+    listEl.innerHTML = d.dated_tags.slice(0, 20).map(tag => {
+      // Format: YYYYMMDD-HHmmss → YYYY-MM-DD HH:MM:SS
+      const dt = tag.length === 15
+        ? `${tag.slice(0,4)}-${tag.slice(4,6)}-${tag.slice(6,8)} ${tag.slice(9,11)}:${tag.slice(11,13)}:${tag.slice(13,15)}`
+        : tag;
+      return `<div class="ee-version-row">
+        <span class="ee-version-tag">${dt}</span>
+        <span class="ee-version-raw">${tag}</span>
+        <button class="btn btn-xs btn-warn" onclick="runRollback('${eeId}','${tag}')">Restore</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = `<span style="color:var(--err)">Failed to load versions: ${e.message}</span>`;
+  }
+}
+
+function runRollback(eeId, version) {
+  const log = document.getElementById(`ee-log-rb-${eeId}`);
+  if (!log) return;
+  log.innerHTML = '';
+  log.style.display = 'block';
+
+  const dot = document.getElementById(`ee-dot-${eeId}`);
+  const status = document.getElementById(`ee-status-${eeId}`);
+  if (dot) dot.className = 'ee-dot running';
+  if (status) status.textContent = `Rolling back to ${version}…`;
+
+  const evts = new EventSource(`/api/ee/rollback?ee=${encodeURIComponent(eeId)}&version=${encodeURIComponent(version)}`);
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') {
+      evts.close();
+      checkEEStatus();
+      return;
+    }
+    const line = document.createElement('div');
+    line.className = msg.startsWith('[ERROR]') ? 'log-err'
+                   : msg.startsWith('[SUCCESS]') ? 'log-ok'
+                   : msg.startsWith('[WARN]') ? 'log-warn' : '';
+    line.textContent = msg;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  };
+  evts.onerror = () => {
+    evts.close();
+    if (dot) dot.className = 'ee-dot err';
+    if (status) status.textContent = 'Rollback connection lost';
+    checkEEStatus();
+  };
 }
 
 function runEEInstallDeps() {
