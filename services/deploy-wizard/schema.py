@@ -16,6 +16,7 @@ SECTIONS = [
     {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority"},
     {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
     {"id": "backup",         "label": "Disaster Recovery","desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore."},
+    {"id": "compliance",     "label": "Compliance & Audit","desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0."},
 ]
 
 # generate_type: hex32 | hex64 | urlsafe32
@@ -394,6 +395,15 @@ FIELDS = [
         "key": "BACKUP_RPO_HOURS", "label": "RPO Target (hours)", "section": "backup",
         "type": "number", "default": "24",
         "description": "Recovery Point Objective — maximum acceptable data loss window. Should match your backup frequency (daily cron = 24h RPO).",
+    },
+
+    # ── Compliance & Audit ─────────────────────────────────────────
+    {
+        "key": "COMPLIANCE_ADMIN_TOKEN", "label": "Compliance Admin Token", "section": "compliance",
+        "type": "password", "sensitive": True,
+        "auto_generate": True, "generate_type": "hex32",
+        "placeholder": "auto-generated",
+        "description": "Bearer token required to call the security-scanner compliance endpoints. Auto-generated — copy the value into COMPLIANCE_ADMIN_TOKEN in the scanner's environment. Leave empty to disable auth (not recommended).",
     },
 
     # ── Advanced ───────────────────────────────────────────────────

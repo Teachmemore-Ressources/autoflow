@@ -35,5 +35,10 @@ class Settings(BaseSettings):
     # ── CORS ─────────────────────────────────────────────────────────────────
     cors_origins: str = "*"
 
+    # ── Compliance ────────────────────────────────────────────────────────────
+    # Bearer token required for all /compliance/* endpoints (leave empty to
+    # disable auth — not recommended for production)
+    compliance_admin_token: str = ""
+
 
 settings = Settings()
