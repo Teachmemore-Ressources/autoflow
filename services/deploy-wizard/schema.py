@@ -15,6 +15,7 @@ SECTIONS = [
     {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry"},
     {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority"},
     {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
+    {"id": "backup",         "label": "Disaster Recovery","desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore."},
 ]
 
 # generate_type: hex32 | hex64 | urlsafe32
@@ -316,6 +317,83 @@ FIELDS = [
         "key": "PKI_KEY_PASSPHRASE", "label": "Key Passphrase", "section": "pki",
         "type": "password",
         "description": "Optional passphrase to encrypt private keys at rest (leave empty to disable)",
+    },
+
+    # ── Disaster Recovery ──────────────────────────────────────────────────────
+    {
+        "key": "BACKUP_RESTIC_PASSWORD", "label": "Restic Repository Password", "section": "backup",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
+        "description": "Encrypts the entire backup repository (AES-256). Generate once — losing this password means losing access to all backups. Store it in a password manager separate from the server.",
+    },
+    {
+        "key": "BACKUP_BACKEND", "label": "Storage Backend", "section": "backup",
+        "type": "select", "default": "local",
+        "options": ["local", "sftp", "s3", "b2"],
+        "description": "Where to push backups: local (same machine — unsafe for DR), sftp (remote SSH server), s3 (AWS S3, MinIO, Wasabi, Scaleway, OVH), b2 (Backblaze B2).",
+    },
+    {
+        "key": "BACKUP_LOCAL_PATH", "label": "Local / SFTP Repository Path", "section": "backup",
+        "type": "text", "default": "/var/backups/autoflow/restic",
+        "placeholder": "/var/backups/autoflow  or  sftp://user@host:22/backups/autoflow",
+        "description": "Local backend: absolute path on this host. SFTP backend: sftp://user@host:port/path (e.g. sftp://backup@192.168.1.10:22/backups/autoflow).",
+    },
+    {
+        "key": "BACKUP_S3_ENDPOINT", "label": "S3 Endpoint URL", "section": "backup",
+        "type": "text",
+        "placeholder": "https://s3.wasabisys.com  (empty = AWS S3)",
+        "description": "S3-compatible API endpoint. Leave empty for AWS S3. Examples: http://minio:9000 (MinIO), https://s3.wasabisys.com (Wasabi), https://s3.fr-par.scw.cloud (Scaleway Paris).",
+    },
+    {
+        "key": "BACKUP_S3_BUCKET", "label": "S3 / B2 Bucket Name", "section": "backup",
+        "type": "text",
+        "placeholder": "autoflow-backup",
+        "description": "Bucket name for S3-compatible backends (AWS S3, MinIO, Wasabi, Scaleway) and Backblaze B2.",
+    },
+    {
+        "key": "BACKUP_S3_ACCESS_KEY", "label": "S3 Access Key / B2 Account ID", "section": "backup",
+        "type": "text",
+        "description": "Access key ID for S3-compatible storage, or Backblaze B2 Account ID.",
+    },
+    {
+        "key": "BACKUP_S3_SECRET_KEY", "label": "S3 Secret Key / B2 Application Key", "section": "backup",
+        "type": "password", "sensitive": True,
+        "description": "Secret access key for S3-compatible storage, or Backblaze B2 Application Key.",
+    },
+    {
+        "key": "BACKUP_RETENTION_DAILY", "label": "Keep Daily Snapshots", "section": "backup",
+        "type": "number", "default": "7",
+        "description": "GFS retention — keep the last N daily snapshots (7 = one week of daily backups).",
+    },
+    {
+        "key": "BACKUP_RETENTION_WEEKLY", "label": "Keep Weekly Snapshots", "section": "backup",
+        "type": "number", "default": "4",
+        "description": "GFS retention — keep the last N weekly snapshots (4 = one month of weekly backups).",
+    },
+    {
+        "key": "BACKUP_RETENTION_MONTHLY", "label": "Keep Monthly Snapshots", "section": "backup",
+        "type": "number", "default": "12",
+        "description": "GFS retention — keep the last N monthly snapshots (12 = one year of monthly backups).",
+    },
+    {
+        "key": "BACKUP_RETENTION_YEARLY", "label": "Keep Yearly Snapshots", "section": "backup",
+        "type": "number", "default": "3",
+        "description": "GFS retention — keep the last N yearly snapshots.",
+    },
+    {
+        "key": "BACKUP_CRON", "label": "Backup Schedule (cron)", "section": "backup",
+        "type": "text", "default": "0 2 * * *",
+        "placeholder": "0 2 * * *",
+        "description": "Cron expression for automated backups. Default: 2:00 AM daily. Use crontab.guru to build expressions. Click 'Install cron' in the DR section after saving.",
+    },
+    {
+        "key": "BACKUP_RTO_HOURS", "label": "RTO Target (hours)", "section": "backup",
+        "type": "number", "default": "4",
+        "description": "Recovery Time Objective — maximum acceptable downtime before service is restored. Document your team's SLA here.",
+    },
+    {
+        "key": "BACKUP_RPO_HOURS", "label": "RPO Target (hours)", "section": "backup",
+        "type": "number", "default": "24",
+        "description": "Recovery Point Objective — maximum acceptable data loss window. Should match your backup frequency (daily cron = 24h RPO).",
     },
 
     # ── Advanced ───────────────────────────────────────────────────
