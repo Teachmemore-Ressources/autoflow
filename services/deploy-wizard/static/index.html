@@ -221,6 +221,17 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .sub-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-.01em}
 .sub-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
 
+/* ── System preflight checks grid ── */
+.sys-checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin:8px 0 2px}
+.sys-check{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.sys-check-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.sys-check-dot.ok{background:var(--success);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
+.sys-check-dot.err{background:var(--danger);box-shadow:0 0 0 2px rgba(239,68,68,.2)}
+.sys-check-body{min-width:0}
+.sys-check-label{font-size:11px;font-weight:700;color:var(--text);margin-bottom:1px}
+.sys-check-detail{font-size:11px;color:var(--muted);line-height:1.4;word-break:break-word}
+.sys-check-detail.err{color:#fca5a5}
+
 /* ── DR status row ── */
 .dr-status-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:20px}
 .dr-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
@@ -378,8 +389,49 @@ async function boot() {
   buildSections();
   activateSection('preflight');
   pollStatus();
+  checkSysPreflight();
   checkPermissionsStatus();
   checkPreflightStatus();
+}
+
+// ── System preflight ───────────────────────────────────────────────────────
+async function checkSysPreflight() {
+  let d = {};
+  try { d = await fetch('/api/system/preflight').then(r => r.json()); } catch {
+    document.getElementById('sys-dot').className = 'pf-dot err';
+    document.getElementById('sys-status-text').textContent = 'Unable to check';
+    return;
+  }
+  const checks  = d.checks || [];
+  const failing = checks.filter(c => !c.ok);
+  const dot = document.getElementById('sys-dot');
+  const txt = document.getElementById('sys-status-text');
+  const box = document.getElementById('sys-checks');
+
+  dot.className = `pf-dot ${d.all_ok ? 'ok' : 'err'}`;
+  txt.textContent = d.all_ok
+    ? 'All requirements met'
+    : `${failing.length} requirement(s) not met`;
+
+  if (box) {
+    box.style.display = 'grid';
+    box.innerHTML = checks.map(c => `
+      <div class="sys-check">
+        <span class="sys-check-dot ${c.ok ? 'ok' : 'err'}"></span>
+        <div class="sys-check-body">
+          <div class="sys-check-label">${c.label}</div>
+          <div class="sys-check-detail ${c.ok ? '' : 'err'}">${c.detail}</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function runSysPreflight() {
+  document.getElementById('sys-dot').className = 'pf-dot running';
+  document.getElementById('sys-status-text').textContent = 'Checking…';
+  const box = document.getElementById('sys-checks');
+  if (box) box.style.display = 'none';
+  checkSysPreflight();
 }
 
 // ── Permissions ────────────────────────────────────────────────────────────
@@ -607,6 +659,31 @@ function buildSections() {
         <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
       </div>
       <div class="preflight-stack">
+
+        <!-- System Requirements -->
+        <div class="pf-item">
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div class="pf-body">
+            <div class="pf-title">System Requirements</div>
+            <div class="pf-desc">
+              Verifies Docker version, available RAM, free disk space and DNS connectivity before deployment.<br>
+              A failing check here will cause <code>docker compose up</code> to fail mid-way and leave the stack in an inconsistent state.
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="sys-dot"></span>
+              <span id="sys-status-text">Checking…</span>
+            </div>
+            <div class="sys-checks" id="sys-checks" style="display:none"></div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runSysPreflight()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                Check system
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- Permissions -->
         <div class="pf-item">

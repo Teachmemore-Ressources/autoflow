@@ -1645,6 +1645,100 @@ async def runner_register():
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+# ── System preflight ─────────────────────────────────────────────────────────
+
+@app.get("/api/system/preflight")
+def system_preflight():
+    """Check Docker version, RAM, disk space and DNS before deployment."""
+    import re, socket, shutil as _sh
+
+    checks: list[dict] = []
+
+    # ── Docker engine ─────────────────────────────────────────────────────────
+    r = subprocess.run(["docker", "--version"], capture_output=True, text=True)
+    if r.returncode == 0:
+        m = re.search(r"(\d+)\.(\d+)", r.stdout)
+        if m:
+            major, minor = int(m.group(1)), int(m.group(2))
+            ok = major >= 24
+            checks.append({
+                "id": "docker", "label": "Docker ≥ 24",
+                "ok": ok,
+                "detail": f"Docker {major}.{minor}" + ("" if ok else " — need ≥ 24, upgrade: https://docs.docker.com/engine/install/"),
+            })
+        else:
+            checks.append({"id": "docker", "label": "Docker ≥ 24", "ok": False, "detail": r.stdout.strip()})
+    else:
+        checks.append({"id": "docker", "label": "Docker ≥ 24", "ok": False, "detail": "docker not found in PATH"})
+
+    # ── Docker Compose plugin ─────────────────────────────────────────────────
+    rc = subprocess.run(["docker", "compose", "version"], capture_output=True, text=True)
+    if rc.returncode == 0:
+        version_line = rc.stdout.strip().split("\n")[0]
+        checks.append({"id": "compose", "label": "Docker Compose plugin", "ok": True, "detail": version_line})
+    else:
+        checks.append({
+            "id": "compose", "label": "Docker Compose plugin", "ok": False,
+            "detail": "docker compose plugin not found — install: sudo apt install docker-compose-plugin",
+        })
+
+    # ── RAM ≥ 4 GB ────────────────────────────────────────────────────────────
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    kb = int(line.split()[1])
+                    gb = kb / 1024 / 1024
+                    ok = gb >= 4.0
+                    checks.append({
+                        "id": "ram", "label": "RAM ≥ 4 GB",
+                        "ok": ok,
+                        "detail": f"{gb:.1f} GB available" + ("" if ok else " — AWX alone needs ≥ 4 GB"),
+                    })
+                    break
+    except Exception as exc:
+        checks.append({"id": "ram", "label": "RAM ≥ 4 GB", "ok": False, "detail": f"could not read /proc/meminfo: {exc}"})
+
+    # ── Disk ≥ 20 GB free ─────────────────────────────────────────────────────
+    try:
+        usage  = _sh.disk_usage(str(ROOT))
+        free   = usage.free  / 1024 ** 3
+        total  = usage.total / 1024 ** 3
+        ok     = free >= 20.0
+        checks.append({
+            "id": "disk", "label": "Disk ≥ 20 GB free",
+            "ok": ok,
+            "detail": f"{free:.1f} GB free / {total:.1f} GB total" + ("" if ok else " — AWX images + DB need ≥ 20 GB"),
+        })
+    except Exception as exc:
+        checks.append({"id": "disk", "label": "Disk ≥ 20 GB free", "ok": False, "detail": str(exc)})
+
+    # ── DNS resolution ────────────────────────────────────────────────────────
+    dns_hosts = ["github.com", "registry-1.docker.io"]
+    dns_ok    = True
+    dns_parts: list[str] = []
+    prev_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(3)
+    try:
+        for host in dns_hosts:
+            try:
+                socket.getaddrinfo(host, 443)
+                dns_parts.append(f"{host} OK")
+            except Exception:
+                dns_ok = False
+                dns_parts.append(f"{host} FAILED")
+    finally:
+        socket.setdefaulttimeout(prev_timeout)
+
+    checks.append({
+        "id": "dns", "label": "DNS resolution",
+        "ok": dns_ok,
+        "detail": "  |  ".join(dns_parts) + ("" if dns_ok else " — check /etc/resolv.conf and network connectivity"),
+    })
+
+    return {"checks": checks, "all_ok": all(c["ok"] for c in checks)}
+
+
 # ── Stack status ──────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
