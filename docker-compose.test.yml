@@ -1,0 +1,163 @@
+# docker-compose.test.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Override file for end-to-end integration testing.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#   make test-e2e
+#
+# What this file changes compared to docker-compose.yml:
+#   • Replaces real AWX (awx_web, awx_task, awx_ee, awx_rsyslog, receptor)
+#     with a lightweight in-process AWX stub (tests/stubs/awx.py).
+#   • Adds a notification callback stub (tests/stubs/callback.py).
+#   • Points event_engine and api at the stub services.
+#   • Sets test-friendly values (fast polling, no Redis password, etc.).
+#   • Exposes stub ports so the test runner (outside Docker) can reach them.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── AWX stub ─────────────────────────────────────────────────────────────────
+  awx_stub:
+    image: python:3.11-slim
+    container_name: autoflow_awx_stub
+    working_dir: /app
+    command: >
+      sh -c "pip install --quiet fastapi uvicorn httpx &&
+             python awx.py"
+    volumes:
+      - ./tests/stubs:/app:ro
+    ports:
+      - "8052:8052"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8052/api/v2/ping/')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Callback stub ─────────────────────────────────────────────────────────────
+  callback_stub:
+    image: python:3.11-slim
+    container_name: autoflow_callback_stub
+    working_dir: /app
+    command: >
+      sh -c "pip install --quiet fastapi uvicorn &&
+             python callback.py"
+    volumes:
+      - ./tests/stubs:/app:ro
+    ports:
+      - "9999:9999"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:9999/_test/count')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Event engine — point at stub AWX ─────────────────────────────────────────
+  event_engine:
+    environment:
+      AWX_URL:              http://awx_stub:8052
+      AWX_TOKEN:            test-awx-token
+      AWX_JOB_TEMPLATE_ID:  "1"
+      REDIS_URL:            ""            # fire-and-forget — no Redis needed
+      DEDUP_TTL:            "60"
+      RULES_FILE:           ""
+      SCHEDULES_FILE:       ""
+      ADMIN_TOKEN:          test-admin-token
+      GITHUB_WEBHOOK_SECRET: ""
+      RATE_LIMIT:           "10000/minute"
+      RATE_LIMIT_WEBHOOKS:  "10000/minute"
+      LOG_LEVEL:            warning
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""    # disable tracing
+    depends_on:
+      awx_stub:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    # Remove the production dependency on real AWX
+    # (override is additive, so the original depends_on entries are merged)
+
+  # ── API — point at stub AWX ───────────────────────────────────────────────────
+  api:
+    environment:
+      AWX_URL:                  http://awx_stub:8052
+      AWX_ADMIN_USER:           admin
+      AWX_ADMIN_PASSWORD:       test-awx-password
+      API_SECRET_KEY:           test-api-secret-32chars-long-xxxxxxxx
+      API_USERNAME:             admin
+      API_PASSWORD:             test-api-secret-32chars-long-xxxxxxxx
+      JOB_WATCHER_INTERVAL:     "1"       # poll every second for fast test feedback
+      AWX_METRICS_INTERVAL:     "0"       # disable AWX metrics background task
+      NOTIFICATION_WEBHOOK_URL: ""
+      NOTIFICATION_SLACK_WEBHOOK: ""
+      CORS_ORIGINS:             "*"
+      LOG_LEVEL:                warning
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+    depends_on:
+      awx_stub:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  # ── Disable production-only services ─────────────────────────────────────────
+  # These services are not needed for E2E tests and are excluded to keep
+  # the stack lightweight.  Any service listed here with scale=0 is removed
+  # from the test stack.
+  traefik:
+    profiles: ["prod"]
+
+  postgres:
+    profiles: ["prod"]
+
+  redis:
+    profiles: ["prod"]
+
+  receptor:
+    profiles: ["prod"]
+
+  prometheus:
+    profiles: ["prod"]
+
+  grafana:
+    profiles: ["prod"]
+
+  postgres_exporter:
+    profiles: ["prod"]
+
+  node_exporter:
+    profiles: ["prod"]
+
+  redis_exporter:
+    profiles: ["prod"]
+
+  gitea:
+    profiles: ["prod"]
+
+  act_runner:
+    profiles: ["prod"]
+
+  loki:
+    profiles: ["prod"]
+
+  promtail:
+    profiles: ["prod"]
+
+  alertmanager:
+    profiles: ["prod"]
+
+  otel_collector:
+    profiles: ["prod"]
+
+  tempo:
+    profiles: ["prod"]
+
+  ee_builder:
+    profiles: ["prod"]
+
+  deploy_wizard:
+    profiles: ["prod"]
+
+  security_scanner:
+    profiles: ["prod"]

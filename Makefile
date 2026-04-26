@@ -32,7 +32,8 @@ GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
         ee-build ee-push ee-build-push ee-list ee-network \
         ee-deps docker-trust-ca gitea-init-network gitea-init-runner \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
-        awx-build awx-push awx-pull awx-tag images-update
+        awx-build awx-push awx-pull awx-tag images-update \
+        test test-unit test-integration test-e2e test-stack-up test-stack-down
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -255,6 +256,53 @@ awx-pull:        ## Pull AWX image from Gitea registry (faster than rebuilding)
 	docker pull $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION)
 	docker tag  $(GITEA_REGISTRY)/awx-patched:$(AWX_VERSION) $(AWX_IMAGE):$(AWX_VERSION)
 	@echo "  Pulled and tagged as $(AWX_IMAGE):$(AWX_VERSION)"
+
+# ── Tests ────────────────────────────────────────────────────
+
+# Virtual-env for the test suite (created on first use)
+TEST_VENV := .test-venv
+_PYTEST   := $(TEST_VENV)/bin/pytest
+
+$(TEST_VENV):
+	python3 -m venv $(TEST_VENV)
+	$(TEST_VENV)/bin/pip install --quiet -r tests/requirements.txt
+
+test-deps: $(TEST_VENV)  ## Install Python test dependencies into .test-venv
+
+test-unit: $(TEST_VENV)  ## Run unit tests (parsers, rules, dedup)
+	$(TEST_VENV)/bin/pip install --quiet \
+		-r services/event-engine/requirements.txt 2>/dev/null || true
+	cd $(shell pwd) && $(_PYTEST) -m "not integration and not e2e" \
+		tests/unit/ -v --tb=short
+
+test-integration: $(TEST_VENV)  ## Run integration tests (in-process stubs, no Docker)
+	$(TEST_VENV)/bin/pip install --quiet \
+		-r services/event-engine/requirements.txt \
+		-r services/api/requirements.txt 2>/dev/null || true
+	cd $(shell pwd) && $(_PYTEST) -m "integration" \
+		tests/integration/ -v --tb=short
+
+test: test-unit test-integration  ## Run unit + integration tests (default CI target)
+
+test-stack-up:  ## Start the test stack (AWX stub + callback stub + services)
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.test.yml \
+		up -d event_engine api awx_stub callback_stub
+	@echo "  Waiting for stubs to be healthy..."
+	@$(COMPOSE) -f docker-compose.yml -f docker-compose.test.yml \
+		exec awx_stub python -c "import time; time.sleep(2)" 2>/dev/null || true
+
+test-stack-down:  ## Stop and remove the test stack
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.test.yml \
+		down awx_stub callback_stub event_engine api
+
+test-e2e: $(TEST_VENV)  ## Run E2E tests against a live test stack (requires test-stack-up)
+	EE_URL=http://localhost:8001 \
+	AWX_STUB_URL=http://localhost:8052 \
+	CALLBACK_URL=http://localhost:9999 \
+	CALLBACK_RECEIVE_URL=http://callback_stub:9999/callback \
+	API_URL=http://localhost:8000 \
+	API_SECRET_KEY=test-api-secret-32chars-long-xxxxxxxx \
+		$(_PYTEST) -m "e2e" tests/e2e/ -v --tb=short
 
 secrets-check:   ## Verify the Age key is present and .env.enc is decryptable
 	@echo "  Checking Age key at $(SOPS_AGE_KEY_FILE)..."

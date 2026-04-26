@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+asyncio_mode   = "auto"
+testpaths      = ["tests"]
+timeout        = 30
+log_cli        = false
+log_level      = "WARNING"
+
+markers = [
+    "unit: fast, no external services",
+    "integration: in-process with mocked dependencies",
+    "e2e: requires a running docker compose stack (--run-e2e flag)",
+]
+
+# E2E tests are opt-in: pytest -m e2e --run-e2e
+addopts = "-m 'not e2e'"
+
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
