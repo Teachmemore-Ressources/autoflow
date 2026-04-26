@@ -167,6 +167,9 @@ logging.basicConfig(
 log       = logging.getLogger("pki")
 audit_log = logging.getLogger("pki.audit")
 
+from tracing import instrument_app, setup_tracing  # noqa: E402
+setup_tracing("autoflow-pki")
+
 # ── Auth ─────────────────────────────────────────────────────────────────────
 def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password[:72].encode(), bcrypt.gensalt(rounds=12)).decode()
@@ -1110,6 +1113,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+instrument_app(app, "autoflow-pki")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

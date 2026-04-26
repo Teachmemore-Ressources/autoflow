@@ -21,6 +21,7 @@ volumes:
   gitea_data:           # Gitea repositories + config
   gitea_postgres_data:  # Dedicated PostgreSQL instance for Gitea
   act_runner_data:      # Gitea Actions runner state + cache
+  tempo_data:           # Tempo trace storage (WAL + blocks)
 
 # ── Shared environment anchors ───────────────────────────────
 
@@ -353,6 +354,9 @@ services:
       NOTIFICATION_WEBHOOK_URL:    ${NOTIFICATION_WEBHOOK_URL:-}
       NOTIFICATION_SLACK_WEBHOOK:  ${NOTIFICATION_SLACK_WEBHOOK:-}
       JOB_WATCHER_INTERVAL:        ${JOB_WATCHER_INTERVAL:-15}
+      # OpenTelemetry distributed tracing
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME:           autoflow-api
     depends_on:
       awx_web:
         condition: service_healthy
@@ -408,6 +412,9 @@ services:
       RATE_LIMIT_WEBHOOKS:  ${RATE_LIMIT_WEBHOOKS:-60/minute}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       ADMIN_TOKEN:           ${EVENT_ENGINE_ADMIN_TOKEN:-}
+      # OpenTelemetry distributed tracing
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME:           autoflow-event-engine
     volumes:
       - ./event-engine/rules.yml:/etc/event-engine/rules.yml:ro
       - ./event-engine/schedules.yml:/etc/event-engine/schedules.yml:ro
@@ -649,6 +656,9 @@ services:
       AWX_VERSION:              ${AWX_VERSION:-24.6.1}
       LOG_LEVEL:                ${LOG_LEVEL:-info}
       RATE_LIMIT:               ${RATE_LIMIT:-60/minute}
+      # OpenTelemetry distributed tracing
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME:           autoflow-security-scanner
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - trivy_db:/home/autoflow/.cache/trivy
@@ -850,6 +860,9 @@ services:
       BUILD_PYCMD:          /usr/bin/python3.12
       EE_DEFAULT_VERSION:   ${EE_DEFAULT_VERSION:-latest}
       LOG_LEVEL:            ${LOG_LEVEL:-info}
+      # OpenTelemetry distributed tracing
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME:           autoflow-ee-builder
     volumes:
       - ./execution-environments:/execution-environments:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -1084,6 +1097,9 @@ services:
       # Si LDAP injoignable, autoriser les comptes locaux en fallback
       # true = haute disponibilité / false = authentification LDAP obligatoire
       LDAP_FALLBACK_LOCAL: ${LDAP_FALLBACK_LOCAL:-true}
+      # OpenTelemetry distributed tracing
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME:           autoflow-pki
     volumes:
       - pki_data:/data/pki
       - ./traefik/certs:/traefik/certs:rw
@@ -1116,6 +1132,78 @@ services:
         reservations:
           cpus: '0.05'
           memory: 64M
+
+  # ── OpenTelemetry Collector ──────────────────────────────────────────────
+  # Central telemetry gateway: receives OTLP traces from all FastAPI services,
+  # filters noise (health/metrics spans), forwards to Tempo.
+  # Also exposes span-derived Prometheus metrics on :8889.
+  #
+  # Endpoints (internal):
+  #   gRPC OTLP : otel-collector:4317
+  #   HTTP OTLP : otel-collector:4318
+  #   Prometheus : otel-collector:8889
+  #   Health     : otel-collector:13133
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: autoflow_otel_collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/otel-collector.yml"]
+    volumes:
+      - ./monitoring/otel-collector/otel-collector.yml:/etc/otel/otel-collector.yml:ro
+    depends_on:
+      - tempo
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # ── Tempo (distributed tracing backend) ─────────────────────────────────
+  # Grafana Tempo stores and queries traces received from the OTEL Collector.
+  # Grafana queries it via the Tempo datasource (HTTP API on port 3200).
+  # Metrics generator produces RED metrics written back to Prometheus.
+  #
+  # Port 4317 : OTLP gRPC  (collector → Tempo)
+  # Port 3200 : HTTP API   (Grafana → Tempo)
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: autoflow_tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./monitoring/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    networks:
+      - autoflow
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3200/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    <<: *log-default
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Add to your volumes: section

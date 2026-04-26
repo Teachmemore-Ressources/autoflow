@@ -14,7 +14,9 @@ datasources:
       # Lier Loki à Prometheus pour la corrélation logs ↔ métriques
       # Un clic sur un log ouvre la vue Prometheus au même instant
       derivedFields:
-        - name:          TraceID
-          matcherRegex:  "trace_id=(\\w+)"
-          url:           "$${__value.raw}"
-          datasourceUid: prometheus
+        # Extract trace_id from log lines and open it in Tempo
+        - name:            TraceID
+          matcherRegex:    "trace_id=(\\w+)"
+          url:             "$${__value.raw}"
+          datasourceUid:   tempo
+          urlDisplayLabel: "View trace in Tempo"

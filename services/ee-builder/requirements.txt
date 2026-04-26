@@ -1,17 +1,9 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-httpx==0.28.1
-pydantic==2.10.3
-pydantic-settings==2.7.0
-pyyaml==6.0.2
-prometheus-fastapi-instrumentator==6.1.0
 prometheus-client==0.21.1
-slowapi==0.1.9
-apscheduler==3.10.4
 # ── OpenTelemetry distributed tracing ──
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
 opentelemetry-exporter-otlp-proto-grpc==1.27.0
 opentelemetry-instrumentation-fastapi==0.48b0
-opentelemetry-instrumentation-httpx==0.48b0
 opentelemetry-instrumentation-logging==0.48b0

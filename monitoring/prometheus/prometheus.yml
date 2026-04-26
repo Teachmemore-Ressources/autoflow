@@ -103,3 +103,21 @@ scrape_configs:
     static_configs:
       - targets: ['promtail:9080']
     metrics_path: /metrics
+
+  # OpenTelemetry Collector — self-metrics (pipeline health, queue depth, etc.)
+  - job_name: otel_collector
+    static_configs:
+      - targets: ['otel-collector:8888']
+    metrics_path: /metrics
+
+  # OTEL Collector — span-derived RED metrics (request rate, error rate, duration)
+  - job_name: otel_span_metrics
+    static_configs:
+      - targets: ['otel-collector:8889']
+    metrics_path: /metrics
+
+  # Tempo — tracing backend self-metrics + metrics generator output
+  - job_name: tempo
+    static_configs:
+      - targets: ['tempo:3200']
+    metrics_path: /metrics

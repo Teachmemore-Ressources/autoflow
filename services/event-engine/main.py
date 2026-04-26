@@ -43,6 +43,7 @@ from parsers import parse_alertmanager, parse_github
 from rules import RuleEngine
 from scheduler import EventScheduler
 from settings import settings
+from tracing import instrument_app, setup_tracing
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
 )
 logger = logging.getLogger("event_engine")
+
+setup_tracing("autoflow-event-engine")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 
@@ -174,6 +177,9 @@ app.add_middleware(SlowAPIMiddleware)
 
 # ── Prometheus HTTP instrumentation ──────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
+
+# ── OpenTelemetry FastAPI instrumentation ─────────────────────────────────────
+instrument_app(app, "autoflow-event-engine")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

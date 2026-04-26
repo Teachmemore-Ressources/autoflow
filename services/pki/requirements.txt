@@ -7,3 +7,10 @@ PyJWT==2.10.1
 bcrypt==4.2.1
 slowapi==0.1.9
 ldap3==2.9.1
+# ── OpenTelemetry distributed tracing ──
+opentelemetry-api==1.27.0
+opentelemetry-sdk==1.27.0
+opentelemetry-exporter-otlp-proto-grpc==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-httpx==0.48b0
+opentelemetry-instrumentation-logging==0.48b0

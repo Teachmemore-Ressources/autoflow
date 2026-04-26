@@ -26,6 +26,7 @@ from slowapi.util import get_remote_address
 import scanner
 from version_check import VersionCheckLoop
 from settings import settings
+from tracing import instrument_app, setup_tracing
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -34,6 +35,8 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
 )
+
+setup_tracing("autoflow-security-scanner")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 
@@ -91,6 +94,9 @@ app.add_middleware(
 
 # ── Prometheus HTTP instrumentation ───────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
+
+# ── OpenTelemetry FastAPI instrumentation ─────────────────────────────────────
+instrument_app(app, "autoflow-security-scanner")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

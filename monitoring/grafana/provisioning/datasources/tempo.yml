@@ -1,0 +1,56 @@
+apiVersion: 1
+
+datasources:
+  - name:   Tempo
+    type:   tempo
+    uid:    tempo
+    url:    http://tempo:3200
+    access: proxy
+    isDefault: false
+    editable: false
+    jsonData:
+      httpMethod: GET
+
+      # ── TraceQL search ──────────────────────────────────────
+      search:
+        hide: false
+
+      # ── Node graph (service dependency map) ─────────────────
+      nodeGraph:
+        enabled: true
+
+      # ── Span bar — show duration as bar in trace view ───────
+      spanBar:
+        type: "duration"
+
+      # ── Trace to logs — jump from a span directly to Loki ───
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift:   "1m"
+        filterByTraceID:    true
+        filterBySpanID:     false
+        customQuery:        false
+        tags:
+          - key:   service.name
+            value: service
+
+      # ── Trace to metrics — jump from a span to Prometheus ───
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: "-15s"
+        spanEndTimeShift:   "15s"
+        tags:
+          - key:   service.name
+            value: service
+        queries:
+          - name:  "Request rate"
+            query: "rate(http_requests_total{service=\"$${__tags.service}\"}[1m])"
+          - name:  "Error rate"
+            query: "rate(http_requests_total{service=\"$${__tags.service}\",status=~\"5..\"}[1m])"
+          - name:  "P99 latency"
+            query: "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{service=\"$${__tags.service}\"}[5m]))"
+
+      # ── Service map — powered by Tempo metrics generator ────
+      serviceMap:
+        datasourceUid: prometheus

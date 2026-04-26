@@ -1,0 +1,87 @@
+# ─────────────────────────────────────────────────────────────
+# Tempo – Distributed Tracing Backend
+# ─────────────────────────────────────────────────────────────
+# Receives traces via OTLP (gRPC:4317 / HTTP:4318) from the
+# OpenTelemetry Collector and stores them locally.
+# Grafana queries traces via the HTTP API (port 3200).
+# ─────────────────────────────────────────────────────────────
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+# ── Distributor — accepts traces ──────────────────────────────
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+# ── Ingester — batches spans before flushing to storage ───────
+ingester:
+  max_block_duration: 5m
+
+# ── Compactor — merges and prunes old blocks ──────────────────
+compactor:
+  compaction:
+    block_retention: 72h    # keep 3 days of traces
+
+# ── Storage ───────────────────────────────────────────────────
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+    pool:
+      max_workers: 100
+      queue_depth: 10000
+
+# ── Query frontend ────────────────────────────────────────────
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09
+  trace_by_id:
+    duration_slo: 5s
+
+# ── Metrics generator — derives RED metrics from traces ───────
+# Exposes span-derived metrics to Prometheus (request rate,
+# error rate, duration).  Requires remote_write to Prometheus.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      environment: autoflow
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  processor:
+    service_graphs:
+      enabled: true
+      dimensions:
+        - http.method
+        - http.status_code
+        - service.name
+    span_metrics:
+      enabled: true
+      dimensions:
+        - http.method
+        - http.status_code
+        - http.route
+        - service.name
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics

@@ -39,6 +39,7 @@ from routers.compliance import _generate_and_cache
 from routers.compliance import router as compliance_router
 from routers.jobs_history import router as jobs_history_router
 from settings import settings
+from tracing import instrument_app, setup_tracing
 
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -47,6 +48,8 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
 )
+
+setup_tracing("autoflow-api")
 _audit_log = logging.getLogger("audit")
 
 
@@ -149,6 +152,9 @@ app.add_middleware(
 
 # ── Prometheus HTTP instrumentation ──────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
+
+# ── OpenTelemetry FastAPI instrumentation ─────────────────────────────────────
+instrument_app(app, "autoflow-api")
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(health.router)

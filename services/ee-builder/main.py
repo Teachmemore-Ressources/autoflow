@@ -39,6 +39,9 @@ DEFAULT_VERSION = os.getenv("EE_DEFAULT_VERSION", "latest")
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 log = logging.getLogger("ee-builder")
 
+from tracing import instrument_app, setup_tracing  # noqa: E402
+setup_tracing("autoflow-ee-builder")
+
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
 builds_total   = Counter("ee_builder_builds_total",   "Total EE build attempts", ["ee", "status"])
@@ -52,6 +55,7 @@ _build_lock = asyncio.Semaphore(2)   # max 2 concurrent builds
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="EE Builder", version="1.0.0")
+instrument_app(app, "autoflow-ee-builder")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

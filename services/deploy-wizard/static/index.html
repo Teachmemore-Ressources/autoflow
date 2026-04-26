@@ -4,195 +4,291 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Autoflow — Deploy Wizard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:       #0f172a;
-  --surface:  #1e293b;
-  --surface2: #263548;
-  --border:   #334155;
-  --text:     #f1f5f9;
-  --muted:    #94a3b8;
-  --accent:   #3b82f6;
+  --bg:       #0a0f1e;
+  --surface:  #111827;
+  --surface2: #1a2235;
+  --surface3: #1f2d42;
+  --border:   #1e2d45;
+  --border2:  #263552;
+  --text:     #f0f4ff;
+  --muted:    #6b7fa3;
+  --muted2:   #4a5a7a;
+  --accent:   #3b7bff;
   --acc-h:    #2563eb;
+  --acc-glow: rgba(59,123,255,.18);
   --success:  #10b981;
   --warning:  #f59e0b;
   --danger:   #ef4444;
-  --radius:   8px;
-  --sw:       230px;
+  --radius:   10px;
+  --radius-sm:6px;
+  --sw:       240px;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font:14px/1.5 'Inter',system-ui,sans-serif;height:100vh;overflow:hidden;display:grid;grid-template-rows:1fr}
+html{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100%;overflow:hidden}
+
+/* ── Layout ── */
 .layout{display:grid;grid-template-columns:var(--sw) 1fr;height:100vh;overflow:hidden}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;backdrop-filter:blur(2px)}
 
 /* ── Sidebar ── */
-.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-.sb-head{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sb-head img{width:36px;height:36px;object-fit:contain;flex-shrink:0}
-.sb-head-text{}
-.sb-head h1{font-size:15px;font-weight:700;color:var(--accent)}
-.sb-head p{font-size:11px;color:var(--muted);margin-top:2px}
-.sb-nav{flex:1;overflow-y:auto;padding:6px 0}
-.sb-nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer;transition:.12s;user-select:none}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:transform .25s;z-index:60}
+.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sb-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b7bff,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo svg{width:18px;height:18px;color:#fff}
+.sb-brand h1{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.sb-brand p{font-size:11px;color:var(--muted);margin-top:1px}
+.sb-close{display:none;margin-left:auto;padding:4px;cursor:pointer;color:var(--muted);border-radius:4px}
+.sb-close:hover{color:var(--text)}
+
+.sb-nav{flex:1;overflow-y:auto;padding:8px 8px}
+.nav-group-label{font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;padding:10px 8px 4px}
+.sb-nav a{display:flex;align-items:center;gap:9px;padding:8px 10px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;cursor:pointer;transition:.12s;border-radius:var(--radius-sm);user-select:none;margin-bottom:1px}
+.sb-nav a svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
 .sb-nav a:hover{background:var(--surface2);color:var(--text)}
-.sb-nav a.active{background:var(--surface2);color:var(--accent);border-left:3px solid var(--accent);padding-left:13px;font-weight:600}
-.sb-nav a .badge{margin-left:auto;font-size:10px;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;display:none}
+.sb-nav a:hover svg{opacity:1}
+.sb-nav a.active{background:var(--acc-glow);color:var(--accent);font-weight:600}
+.sb-nav a.active svg{opacity:1}
+.sb-nav a .badge{margin-left:auto;font-size:10px;background:var(--danger);color:#fff;border-radius:99px;padding:1px 6px;display:none;font-weight:700}
 .sb-nav a.has-errors .badge{display:inline}
-.sb-foot{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px}
+
+.sb-foot{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
 
 /* ── Main ── */
-.main{display:flex;flex-direction:column;overflow:hidden}
-.topbar{padding:11px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
-.tb-title{font-weight:600;font-size:14px}
-.tb-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
-.sdot{width:8px;height:8px;border-radius:50%;background:var(--border)}
-.sdot.up{background:var(--success);box-shadow:0 0 6px var(--success)}
+.main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0;gap:12px}
+.tb-left{display:flex;align-items:center;gap:10px}
+.tb-menu{display:none;padding:5px;cursor:pointer;color:var(--muted);border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;transition:.12s}
+.tb-menu:hover{background:var(--surface2);color:var(--text)}
+.tb-menu svg{width:16px;height:16px;display:block}
+.tb-title{font-weight:600;font-size:14px;color:var(--text)}
+.tb-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);flex-shrink:0}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0}
+.sdot.up{background:var(--success);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
 
 .content{flex:1;overflow-y:auto;padding:28px 32px}
 .section{display:none}
 .section.active{display:block}
-.sec-title{font-size:20px;font-weight:700;margin-bottom:4px}
-.sec-desc{color:var(--muted);font-size:13px;margin-bottom:24px}
+.sec-header{margin-bottom:24px}
+.sec-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:4px}
+.sec-desc{color:var(--muted);font-size:13px;line-height:1.6}
 
 /* ── Fields grid ── */
-.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .field-wide{grid-column:1/-1}
 .field{display:flex;flex-direction:column;gap:5px}
-.field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:5px}
-.field label .req{color:var(--danger);font-size:13px}
-.field label .derived-tag{background:rgba(59,130,246,.2);color:var(--accent);font-size:10px;padding:1px 5px;border-radius:4px;text-transform:none;letter-spacing:0;font-weight:600}
-.field-desc{font-size:11px;color:var(--muted);margin-top:1px}
+.field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:5px}
+.field label .req{color:var(--danger);font-size:13px;font-weight:700}
+.field label .derived-tag{background:rgba(59,123,255,.15);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:4px;text-transform:none;letter-spacing:0;font-weight:600}
+.field-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
 .iw{display:flex;gap:6px}
 .iw input,.iw select,.iw textarea{flex:1;min-width:0}
-input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 11px;color:var(--text);font:inherit;width:100%;transition:border-color .12s;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px;color:var(--text);font:inherit;width:100%;transition:border-color .12s,box-shadow .12s;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--acc-glow)}
 input.error,select.error{border-color:var(--danger)}
-input[readonly]{opacity:.55;cursor:not-allowed}
+input[readonly]{opacity:.5;cursor:not-allowed}
 input[type=number]{-moz-appearance:textfield}
 textarea{resize:vertical;min-height:56px;font-size:13px}
 select option{background:var(--surface2)}
 
 /* ── Buttons ── */
-.btn{padding:8px 14px;border-radius:var(--radius);border:none;cursor:pointer;font:600 13px/1 inherit;transition:.12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+.btn{padding:8px 14px;border-radius:var(--radius-sm);border:none;cursor:pointer;font:600 13px/1 var(--font);transition:.12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
 .btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:var(--acc-h)}
+.btn-primary:hover{background:var(--acc-h);box-shadow:0 2px 12px rgba(59,123,255,.3)}
 .btn-success{background:var(--success);color:#fff}
 .btn-success:hover{background:#059669}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 .btn-ghost:hover{background:var(--surface2);color:var(--text)}
-.btn-icon{padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;transition:.12s;font-size:13px}
-.btn-icon:hover{background:var(--surface2);color:var(--text)}
-.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:7px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;transition:.12s}
+.btn-icon svg{width:14px;height:14px;display:block}
+.btn-icon:hover{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn-sm svg{width:13px;height:13px}
 .btn-block{width:100%;justify-content:center}
 .btn-danger{background:var(--danger);color:#fff}
+.btn-warning{background:var(--warning);color:#000;font-weight:700}
 
 /* ── Log panel ── */
-.log-panel{border-top:1px solid var(--border);background:#070d1a;flex-shrink:0;max-height:0;transition:max-height .35s ease;overflow:hidden}
+.log-panel{border-top:1px solid var(--border);background:#05080f;flex-shrink:0;max-height:0;transition:max-height .3s ease;overflow:hidden}
 .log-panel.open{max-height:240px}
 .log-head{display:flex;align-items:center;justify-content:space-between;padding:7px 16px;border-bottom:1px solid var(--border)}
-.log-head span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.log-head span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 #log{padding:10px 16px;height:195px;overflow-y:auto;font:12px/1.7 'Courier New',monospace;color:#7dd3a8}
 #log .err{color:#f87171}
 #log .ok{color:#4ade80;font-weight:700}
 #log .info{color:#60a5fa}
 
 /* ── Toast ── */
-#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 16px;font-size:13px;box-shadow:0 4px 24px rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform .25s;pointer-events:none}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 16px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform .25s;pointer-events:none}
 #toast.show{transform:translateY(0)}
 #toast.ok{border-color:var(--success);color:var(--success)}
 #toast.err{border-color:var(--danger);color:var(--danger)}
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
 /* ── Misc ── */
 .divider{height:1px;background:var(--border);margin:24px 0}
 .hint{font-size:11px;color:var(--warning);display:flex;align-items:center;gap:4px;margin-top:4px}
+code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface3);padding:1px 5px;border-radius:3px;color:var(--accent)}
 
 /* ── Apply banner ── */
-#apply-banner{display:none;background:rgba(245,158,11,.08);border-bottom:1px solid rgba(245,158,11,.35);padding:9px 24px;flex-shrink:0;align-items:center;gap:10px;flex-wrap:wrap}
+#apply-banner{display:none;background:rgba(245,158,11,.07);border-bottom:1px solid rgba(245,158,11,.25);padding:9px 24px;flex-shrink:0;align-items:center;gap:10px;flex-wrap:wrap}
 #apply-banner.show{display:flex}
-.ab-label{color:var(--warning);font-weight:700;font-size:13px;flex-shrink:0}
+.ab-label{color:var(--warning);font-weight:700;font-size:12px;flex-shrink:0;display:flex;align-items:center;gap:5px}
+.ab-label svg{width:13px;height:13px}
 .ab-chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;flex:1}
-.ab-chip{background:rgba(245,158,11,.2);color:var(--warning);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:600}
+.ab-chip{background:rgba(245,158,11,.15);color:var(--warning);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:600}
 .ab-recreate{font-size:11px;color:var(--danger);font-style:italic}
-#apply-warnings{display:none;padding:7px 24px;background:rgba(239,68,68,.07);border-bottom:1px solid rgba(239,68,68,.25);font-size:12px;color:#fca5a5;line-height:1.8}
+#apply-warnings{display:none;padding:7px 24px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.2);font-size:12px;color:#fca5a5;line-height:1.8}
 
-/* ── Pre-flight ── */
-.preflight-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
-.pf-item{display:flex;align-items:flex-start;gap:14px;padding:14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
-.pf-icon{font-size:22px;flex-shrink:0;width:32px;text-align:center;margin-top:2px}
+/* ── Pre-flight cards ── */
+.preflight-stack{display:flex;flex-direction:column;gap:8px}
+.pf-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;display:flex;align-items:flex-start;gap:16px;transition:.12s}
+.pf-item:hover{border-color:var(--border2)}
+.pf-icon-wrap{width:36px;height:36px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid var(--border)}
+.pf-icon-wrap svg{width:18px;height:18px;color:var(--accent)}
 .pf-body{flex:1;min-width:0}
-.pf-title{font-weight:700;font-size:14px;margin-bottom:3px}
-.pf-desc{font-size:12px;color:var(--muted);margin-bottom:10px}
-.pf-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px}
-.pf-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
-.pf-dot.ok{background:var(--success);box-shadow:0 0 5px var(--success)}
-.pf-dot.err{background:var(--danger)}
+.pf-title{font-weight:700;font-size:14px;margin-bottom:3px;color:var(--text)}
+.pf-desc{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6}
+.pf-status{display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:10px}
+.pf-dot{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0}
+.pf-dot.ok{background:var(--success);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
+.pf-dot.err{background:var(--danger);box-shadow:0 0 0 2px rgba(239,68,68,.2)}
 .pf-dot.running{background:var(--warning);animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.pf-actions{display:flex;gap:8px;flex-wrap:wrap}
-.pf-log{margin-top:10px;background:#070d1a;border-radius:6px;padding:8px 12px;font:11px/1.6 'Courier New',monospace;color:#7dd3a8;max-height:120px;overflow-y:auto;display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pf-actions{display:flex;gap:7px;flex-wrap:wrap}
+.pf-log{margin-top:10px;background:#05080f;border-radius:var(--radius-sm);padding:8px 12px;font:11px/1.7 'Courier New',monospace;color:#7dd3a8;max-height:120px;overflow-y:auto;display:none;border:1px solid var(--border)}
 .pf-log.open{display:block}
 .pf-log .err{color:#f87171}
 .pf-log .ok{color:#4ade80;font-weight:700}
+.pf-log .warn{color:#fbbf24}
 
-/* ── Execution Environments ── */
-.ee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;margin-bottom:24px}
+.post-deploy-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:16px 0 8px;display:flex;align-items:center;gap:8px}
+.post-deploy-label::before,.post-deploy-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── Section: CA import hint ── */
+.ca-hint-box{margin-top:10px;padding:9px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius-sm);font-size:12px;color:var(--warning);display:flex;align-items:flex-start;gap:7px}
+.ca-hint-box svg{width:14px;height:14px;flex-shrink:0;margin-top:1px}
+
+/* ── EE section ── */
+.ee-prereq{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+.ee-prereq-title{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.ee-prereq-title svg{width:14px;height:14px;color:var(--accent)}
+.ee-prereq-items{display:flex;flex-direction:column;gap:10px}
+
+.pi-item{display:flex;align-items:flex-start;gap:14px;padding:14px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.pi-icon-wrap{width:32px;height:32px;border-radius:7px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid var(--border)}
+.pi-icon-wrap svg{width:16px;height:16px;color:var(--accent)}
+.pi-body{flex:1;min-width:0}
+.pi-title{font-weight:700;font-size:13px;margin-bottom:2px}
+.pi-desc{font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+.pi-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}
+
+.ee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-bottom:24px}
 .ee-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:10px;transition:.15s}
-.ee-card:hover{border-color:var(--accent)}
-.ee-card-head{display:flex;align-items:center;gap:10px}
-.ee-badge{font-size:22px}
+.ee-card:hover{border-color:var(--border2)}
+.ee-card-head{display:flex;align-items:center;gap:12px}
+.ee-card-icon{width:38px;height:38px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ee-card-icon svg{width:20px;height:20px}
 .ee-name{font-weight:700;font-size:14px}
 .ee-desc{font-size:11px;color:var(--muted);line-height:1.5}
-.ee-tag{font-size:10px;font-family:'Courier New',monospace;background:var(--surface2);color:var(--muted);border-radius:4px;padding:2px 7px;margin-top:2px;word-break:break-all}
+.ee-tag{font-size:10px;font-family:'Courier New',monospace;background:var(--surface2);color:var(--muted);border-radius:4px;padding:2px 7px;margin-top:2px;display:inline-block;word-break:break-all}
 .ee-status{display:flex;align-items:center;gap:6px;font-size:12px}
-.ee-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
-.ee-dot.ok{background:var(--success);box-shadow:0 0 5px var(--success)}
-.ee-dot.err{background:var(--danger)}
+.ee-dot{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0}
+.ee-dot.ok{background:var(--success);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
+.ee-dot.err{background:var(--danger);box-shadow:0 0 0 2px rgba(239,68,68,.15)}
 .ee-dot.running{background:var(--warning);animation:pulse 1s infinite}
 .ee-actions{display:flex;gap:6px;flex-wrap:wrap}
-.ee-log{background:#070d1a;border-radius:6px;padding:8px 12px;font:11px/1.6 'Courier New',monospace;color:#7dd3a8;max-height:180px;overflow-y:auto;display:none}
+.ee-log{background:#05080f;border-radius:var(--radius-sm);padding:8px 12px;font:11px/1.7 'Courier New',monospace;color:#7dd3a8;max-height:180px;overflow-y:auto;display:none;border:1px solid var(--border);margin-top:4px}
 .ee-log.open{display:block}
 .ee-log .err{color:#f87171}
 .ee-log .ok{color:#4ade80;font-weight:700}
 .ee-log .warn{color:#fbbf24}
-.ee-prereq{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
-.ee-prereq-title{font-weight:700;font-size:13px;margin-bottom:14px;color:var(--accent)}
-.ee-prereq-items{display:flex;flex-direction:column;gap:10px}
-.ee-prereq-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
-.ee-prereq-item .pi-icon{font-size:20px;flex-shrink:0;width:28px;text-align:center}
-.ee-prereq-item .pi-body{flex:1;min-width:0}
-.ee-prereq-item .pi-title{font-weight:700;font-size:13px;margin-bottom:2px}
-.ee-prereq-item .pi-desc{font-size:11px;color:var(--muted);margin-bottom:8px}
-.ee-prereq-item .pi-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}
+
+/* ── Sub-section header ── */
+.sub-section{margin-top:24px}
+.sub-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-.01em}
+.sub-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+
+/* ── Responsive ── */
+@media (max-width:768px) {
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sw);transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .overlay.open{display:block}
+  .tb-menu{display:flex}
+  .content{padding:20px 16px}
+  .fields{grid-template-columns:1fr}
+  .ee-grid{grid-template-columns:1fr}
+  .sb-close{display:flex}
+}
+@media (max-width:520px) {
+  .topbar{padding:10px 14px}
+  .tb-title{font-size:13px}
+}
 </style>
 </head>
 <body>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 <div class="layout">
 
 <!-- ── Sidebar ─────────────────────────────────── -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sb-head">
-    <img src="/logo.png" alt="Autoflow"/>
-    <div class="sb-head-text">
+    <div class="sb-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+    <div class="sb-brand">
       <h1>Autoflow</h1>
       <p>Deploy Wizard</p>
     </div>
+    <button class="sb-close" onclick="closeSidebar()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
   <nav class="sb-nav" id="nav">
-    <a id="nav-preflight"  onclick="activateSection('preflight')"  class="active">🚀 Pre-flight</a>
-    <a id="nav-ee"         onclick="activateSection('ee')"                        >📦 Exec Environments</a>
+    <div class="nav-group-label">Setup</div>
+    <a id="nav-preflight" onclick="activateSection('preflight')" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.51 0 2.93.37 4.18 1.02"/><path d="M21 3l-9 9"/><path d="M15 3h6v6"/></svg>
+      Pre-flight
+    </a>
+    <a id="nav-ee" onclick="activateSection('ee')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      Exec Environments
+    </a>
+    <div class="nav-group-label" style="margin-top:4px">Configuration</div>
   </nav>
   <div class="sb-foot">
-    <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">⚙ Generate all secrets</button>
-    <button class="btn btn-primary btn-block" onclick="saveConfig()">💾 Save config</button>
-    <button class="btn btn-success btn-block" onclick="deploy(false)" id="btn-deploy">🚀 Save &amp; Deploy</button>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">🔐 Save, Encrypt &amp; Deploy</button>
-    <div id="preflight-warn" style="display:none;font-size:11px;color:var(--warning);text-align:center;padding:4px 0">
-      ⚠ Complete Pre-flight first
+    <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Generate all secrets
+    </button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="saveConfig()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save config
+    </button>
+    <button class="btn btn-primary btn-block" onclick="deploy(false)" id="btn-deploy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Save &amp; Deploy
+    </button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Save, Encrypt &amp; Deploy
+    </button>
+    <div id="preflight-warn" style="display:none;font-size:11px;color:var(--warning);text-align:center;padding:4px 0;display:flex;align-items:center;justify-content:center;gap:4px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Complete Pre-flight first
     </div>
   </div>
 </aside>
@@ -200,24 +296,42 @@ select option{background:var(--surface2)}
 <!-- ── Main ────────────────────────────────────── -->
 <div class="main">
   <div class="topbar">
-    <div class="tb-title" id="section-label">Loading…</div>
+    <div class="tb-left">
+      <button class="tb-menu" onclick="openSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="tb-title" id="section-label">Loading…</div>
+    </div>
     <div class="tb-status">
       <span class="sdot" id="sdot"></span>
       <span id="stext">Checking stack…</span>
     </div>
   </div>
+
   <div id="apply-banner">
-    <span class="ab-label">⚡ Unsaved changes applied</span>
+    <span class="ab-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Unsaved changes applied
+    </span>
     <div class="ab-chips" id="ab-chips"></div>
-    <button class="btn btn-sm" style="background:var(--warning);color:#000;font-weight:700;flex-shrink:0" onclick="applyChanges()">🔄 Restart affected services</button>
-    <button class="btn-icon btn-sm" onclick="hideBanner()" title="Dismiss">✕</button>
+    <button class="btn btn-sm btn-warning" style="flex-shrink:0" onclick="applyChanges()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Restart affected services
+    </button>
+    <button class="btn-icon btn-sm" onclick="hideBanner()" title="Dismiss">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
   <div id="apply-warnings"></div>
+
   <div class="content" id="content"></div>
+
   <div class="log-panel" id="log-panel">
     <div class="log-head">
       <span>Deployment log</span>
-      <button class="btn-icon btn-sm" onclick="toggleLog()">✕</button>
+      <button class="btn-icon btn-sm" onclick="toggleLog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
     <div id="log"></div>
   </div>
@@ -232,6 +346,16 @@ let SCHEMA = null;
 let CONFIG = {};
 let currentSection = null;
 let pendingServices = [];
+
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 async function boot() {
@@ -261,18 +385,18 @@ async function checkPermissionsStatus() {
 
     if (d.all_ok) {
       dot.className = 'pf-dot ok';
-      txt.textContent = 'Toutes les permissions sont correctes ✔';
+      txt.textContent = 'All permissions are correct';
     } else {
       dot.className = 'pf-dot err';
-      txt.textContent = `${failing.length} problème(s) détecté(s) — cliquez "Corriger les permissions"`;
+      txt.textContent = `${failing.length} issue(s) detected — click "Fix permissions"`;
       detail.style.display = 'block';
       detail.innerHTML = failing.map(c =>
-        `<div style="color:var(--warning);margin:2px 0">⚠ ${c.detail}</div>`
+        `<div style="color:var(--warning);margin:2px 0;font-size:12px">${c.detail}</div>`
       ).join('');
     }
   } catch {
     document.getElementById('perms-dot').className = 'pf-dot err';
-    document.getElementById('perms-status-text').textContent = 'Impossible de vérifier';
+    document.getElementById('perms-status-text').textContent = 'Unable to verify';
   }
 }
 
@@ -280,7 +404,7 @@ function runPermissionsFix() {
   const dot = document.getElementById('perms-dot');
   const txt = document.getElementById('perms-status-text');
   dot.className = 'pf-dot running';
-  txt.textContent = 'Correction en cours…';
+  txt.textContent = 'Fixing…';
   document.getElementById('pf-log-perms').innerHTML = '';
   document.getElementById('perms-detail').style.display = 'none';
 
@@ -327,7 +451,7 @@ async function checkPreflightStatus() {
         : `Certificate not found — run "Setup PKI & Generate cert"`
   );
   document.getElementById('btn-dl-ca').style.display    = cert.ca_exists ? 'inline-flex' : 'none';
-  document.getElementById('ca-import-hint').style.display = cert.ca_exists ? 'block' : 'none';
+  document.getElementById('ca-import-hint').style.display = cert.ca_exists ? 'flex' : 'none';
 
   document.getElementById('awx-tag').textContent = awx.tag;
   setStatus('awx', awx.exists,
@@ -352,7 +476,7 @@ async function checkPreflightStatus() {
 
   // Warn on deploy buttons if pre-flight incomplete
   const preflightOk = certOk && awx.exists;
-  document.getElementById('preflight-warn').style.display = preflightOk ? 'none' : 'block';
+  document.getElementById('preflight-warn').style.display = preflightOk ? 'none' : 'flex';
   document.getElementById('btn-deploy').style.opacity     = preflightOk ? '1' : '0.6';
 }
 
@@ -422,11 +546,25 @@ function runPostDeploy(id) {
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
+const NAV_ICONS = {
+  system:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>',
+  infrastructure: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+  postgresql:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>',
+  redis:          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  awx:            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  api:            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>',
+  monitoring:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  event_engine:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32"/></svg>',
+  gitea:          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>',
+  pki:            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  advanced:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34L5.5 6.58A7 7 0 0 1 18 12l1.5 3.24A10 10 0 0 0 19.07 4.93zM4.93 19.07A10 10 0 0 0 17.01 20.66l1.49-3.24A7 7 0 0 1 6 12L4.5 8.76A10 10 0 0 0 4.93 19.07z"/></svg>',
+};
+
 function buildNav() {
   const nav = document.getElementById('nav');
-  // Append schema sections after the static pre-flight entry
   nav.innerHTML += SCHEMA.sections.map(s => `
-    <a id="nav-${s.id}" onclick="activateSection('${s.id}')">
+    <a id="nav-${s.id}" onclick="activateSection('${s.id}');closeSidebar()">
+      ${NAV_ICONS[s.id] || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'}
       ${s.label}
       <span class="badge">!</span>
     </a>`).join('');
@@ -450,65 +588,90 @@ function activateSection(id) {
 function buildSections() {
   const content = document.getElementById('content');
 
-  // ── Pre-flight section (built in JS so it isn't overwritten) ──
+  // ── Pre-flight section ──
   const preflightHtml = `
     <div class="section" id="sec-preflight">
-      <div class="sec-title">Pre-flight checks</div>
-      <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
-      <div class="preflight-card">
+      <div class="sec-header">
+        <div class="sec-title">Pre-flight checks</div>
+        <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
+      </div>
+      <div class="preflight-stack">
 
-        <!-- ── Permissions ── -->
+        <!-- Permissions -->
         <div class="pf-item">
-          <div class="pf-icon">🔧</div>
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
           <div class="pf-body">
-            <div class="pf-title">Permissions &amp; Prérequis système</div>
+            <div class="pf-title">Permissions &amp; System prerequisites</div>
             <div class="pf-desc">
-              Vérifie et corrige les droits nécessaires après un <code>git clone</code> :
-              scripts exécutables, <code>traefik/certs/</code> accessible, groupe <code>docker</code>, <code>.env</code> modifiable.<br>
-              <em>À lancer en premier sur toute nouvelle machine.</em>
+              Verifies and fixes permissions after a <code>git clone</code>:
+              executable scripts, <code>traefik/certs/</code> accessible, <code>docker</code> group membership, <code>.env</code> writable.<br>
+              <em>Run this first on any new machine.</em>
             </div>
             <div class="pf-status">
               <span class="pf-dot" id="perms-dot"></span>
-              <span id="perms-status-text">Vérification…</span>
+              <span id="perms-status-text">Checking…</span>
             </div>
-            <div id="perms-detail" style="margin-top:6px;font-size:12px;display:none"></div>
+            <div id="perms-detail" style="margin-top:4px;display:none"></div>
             <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPermissionsFix()">🔧 Corriger les permissions</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('perms')">📋 Logs</button>
+              <button class="btn btn-primary btn-sm" onclick="runPermissionsFix()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                Fix permissions
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('perms')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Logs
+              </button>
             </div>
             <div class="pf-log" id="pf-log-perms"></div>
           </div>
         </div>
 
+        <!-- TLS Certificate -->
         <div class="pf-item">
-          <div class="pf-icon">🔒</div>
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
           <div class="pf-body">
-            <div class="pf-title">Root CA + Wildcard Certificate <em style="font-weight:400;font-size:12px;color:var(--muted)">(via PKI service)</em></div>
+            <div class="pf-title">Root CA + Wildcard Certificate <span style="font-weight:400;font-size:12px;color:var(--muted)">via PKI service</span></div>
             <div class="pf-desc">
               Starts the PKI service, creates the <strong>Autoflow Root CA</strong>,
               then issues a wildcard certificate for <strong id="cert-domain">your domain</strong>.<br>
               Writes <code>traefik/certs/wildcard.&lt;domain&gt;.crt/.key</code> and updates <code>traefik/dynamic/tls.yml</code>.<br>
-              <em>⚠ Set <strong>PKI_ADMIN_PASSWORD</strong> in the PKI section before running.</em>
+              <em>Set <strong>PKI_ADMIN_PASSWORD</strong> in the PKI section before running.</em>
             </div>
             <div class="pf-status">
               <span class="pf-dot" id="cert-dot"></span>
               <span id="cert-status-text">Checking…</span>
             </div>
             <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPreflight('cert')">🏗 Setup PKI &amp; Generate cert</button>
-              <button class="btn btn-ghost btn-sm" id="btn-dl-ca" style="display:none"
-                onclick="window.location='/api/download-ca'">⬇ Download Root CA (.crt)</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('cert')">📋 Logs</button>
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('cert')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Setup PKI &amp; Generate cert
+              </button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-ca" style="display:none" onclick="window.location='/api/download-ca'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download Root CA
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('cert')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Logs
+              </button>
             </div>
-            <div id="ca-import-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.1);border:1px solid var(--warning);border-radius:6px;font-size:12px;color:var(--warning)">
-              📥 Import <strong>autoflow-root-ca.crt</strong> into your OS/browser trust store to avoid SSL warnings.
+            <div id="ca-import-hint" class="ca-hint-box" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Import <strong>autoflow-root-ca.crt</strong> into your OS / browser trust store to avoid SSL warnings.
             </div>
             <div class="pf-log" id="pf-log-cert"></div>
           </div>
         </div>
 
+        <!-- AWX Image -->
         <div class="pf-item">
-          <div class="pf-icon">🐳</div>
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </div>
           <div class="pf-body">
             <div class="pf-title">AWX Custom Image</div>
             <div class="pf-desc">
@@ -521,56 +684,77 @@ function buildSections() {
               <span id="awx-status-text">Checking…</span>
             </div>
             <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPreflight('awx')">🔨 Build AWX image</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">📋 Logs</button>
+              <button class="btn btn-primary btn-sm" onclick="runPreflight('awx')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/><line x1="12" y1="2" x2="12" y2="8.5"/></svg>
+                Build AWX image
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awx')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Logs
+              </button>
             </div>
             <div class="pf-log" id="pf-log-awx"></div>
           </div>
         </div>
 
-        <div class="pf-item" style="border-top:1px dashed var(--border);margin-top:4px;padding-top:18px">
-          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;width:100%;margin-bottom:10px">
-            Post-deploy — run these after the first <code>docker compose up</code>
-          </div>
-        </div>
+        <!-- Post-deploy separator -->
+        <div class="post-deploy-label">Post-deploy — run after first <code>docker compose up</code></div>
 
+        <!-- Gitea Admin -->
         <div class="pf-item">
-          <div class="pf-icon">🦊</div>
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </div>
           <div class="pf-body">
             <div class="pf-title">Gitea Admin Account</div>
             <div class="pf-desc">
               Creates the admin user in Gitea. Gitea does not read <code>GITEA_ADMIN_*</code> env vars —
               the account must be created via CLI after the first start.<br>
-              <em>⚠ Requires the stack to be running.</em>
+              <em>Requires the stack to be running.</em>
             </div>
             <div class="pf-status">
               <span class="pf-dot" id="gitea-dot"></span>
               <span id="gitea-status-text">Checking…</span>
             </div>
             <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('gitea')">👤 Create Gitea admin</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('gitea')">📋 Logs</button>
+              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('gitea')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Create Gitea admin
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('gitea')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Logs
+              </button>
             </div>
             <div class="pf-log" id="pf-log-gitea"></div>
           </div>
         </div>
 
+        <!-- AWX Token -->
         <div class="pf-item">
-          <div class="pf-icon">🔑</div>
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          </div>
           <div class="pf-body">
             <div class="pf-title">AWX API Token</div>
             <div class="pf-desc">
               Generates an AWX API token and writes it to <code>.env</code> as <code>AWX_TOKEN</code>,
               then restarts <code>event_engine</code> to pick it up.<br>
-              <em>⚠ AWX must be fully started (check <code>docker compose ps</code>).</em>
+              <em>AWX must be fully started — check <code>docker compose ps</code>.</em>
             </div>
             <div class="pf-status">
               <span class="pf-dot" id="awxtoken-dot"></span>
               <span id="awxtoken-status-text">Checking…</span>
             </div>
             <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('awxtoken')">🔐 Generate AWX token</button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awxtoken')">📋 Logs</button>
+              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('awxtoken')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32"/></svg>
+                Generate AWX token
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('awxtoken')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Logs
+              </button>
             </div>
             <div class="pf-log" id="pf-log-awxtoken"></div>
           </div>
@@ -584,8 +768,10 @@ function buildSections() {
     const fields = SCHEMA.fields.filter(f => f.section === s.id);
     return `
       <div class="section" id="sec-${s.id}">
-        <div class="sec-title">${s.label}</div>
-        <div class="sec-desc">${s.desc}</div>
+        <div class="sec-header">
+          <div class="sec-title">${s.label}</div>
+          <div class="sec-desc">${s.desc}</div>
+        </div>
         <div class="fields">
           ${fields.map(f => renderField(f)).join('')}
         </div>
@@ -626,11 +812,14 @@ function renderField(f) {
       placeholder="${esc(f.placeholder || '')}">`;
   }
 
+  const eyeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  const genIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+
   const eyeBtn = f.type === 'password'
-    ? `<button class="btn-icon" title="Show/hide" onclick="togglePass('field-${f.key}')">👁</button>`
+    ? `<button class="btn-icon" title="Show/hide" onclick="togglePass('field-${f.key}')">${eyeIcon}</button>`
     : '';
   const genBtn = f.auto_generate
-    ? `<button class="btn-icon" title="Generate" onclick="generateField('${f.key}','${f.generate_type||'hex32'}')">⚡</button>`
+    ? `<button class="btn-icon" title="Generate" onclick="generateField('${f.key}','${f.generate_type||'hex32'}')">${genIcon}</button>`
     : '';
 
   return `
@@ -691,7 +880,6 @@ function deriveDomainFields(domain) {
     CORS_ORIGINS:   `https://awx.${domain},https://api.${domain},https://pki.${domain}`,
   };
   for (const [key, val] of Object.entries(derived)) {
-    // Only override if the field is currently empty or still matches the old derived value
     const el = document.getElementById(`field-${key}`);
     if (el) {
       el.value = val;
@@ -754,7 +942,7 @@ function showApplyBanner(data) {
   if (pendingServices.length > 0) {
     let chips = pendingServices.map(s => `<span class="ab-chip">${s}</span>`).join('');
     if (data.needs_recreate) {
-      chips += `<span class="ab-recreate">⚠ requires recreate — use "Save &amp; Deploy" instead</span>`;
+      chips += `<span class="ab-recreate">requires recreate — use "Save &amp; Deploy" instead</span>`;
     }
     chipsDiv.innerHTML = chips;
     banner.classList.add('show');
@@ -763,7 +951,7 @@ function showApplyBanner(data) {
   }
 
   if (data.warnings && data.warnings.length > 0) {
-    warnDiv.innerHTML = data.warnings.map(w => `<div>⚠ ${w.message}</div>`).join('');
+    warnDiv.innerHTML = data.warnings.map(w => `<div>${w.message}</div>`).join('');
     warnDiv.style.display = 'block';
   } else {
     warnDiv.style.display = 'none';
@@ -811,7 +999,6 @@ function validateAll() {
 async function deploy(withEncrypt) {
   if (!validateAll()) return;
 
-  // ── Pre-flight gate ───────────────────────────────────────
   const [cert, awx] = await Promise.all([
     fetch('/api/cert-status').then(r => r.json()),
     fetch('/api/awx-image-status').then(r => r.json()),
@@ -823,11 +1010,10 @@ async function deploy(withEncrypt) {
     toast('Pre-flight incomplete — see Pre-flight section', 'err');
     activateSection('preflight');
     openLog();
-    logLine('⛔ Deployment blocked — complete pre-flight first:', 'err');
+    logLine('Deployment blocked — complete pre-flight first:', 'err');
     missing.forEach(m => logLine('   • ' + m, 'err'));
     return;
   }
-  // ─────────────────────────────────────────────────────────
 
   await saveConfig();
   openLog();
@@ -902,48 +1088,67 @@ function toast(msg, type) {
 // ── Execution Environments section HTML ───────────────────────────────────
 const EE_SECTION_HTML = `
 <div class="section" id="sec-ee">
-  <div class="sec-title">📦 Execution Environments</div>
-  <div class="sec-desc">
-    Build les images d'Execution Environments AWX et pousse-les dans le registry Gitea privé.<br>
-    <span style="color:var(--warning);font-size:12px">⚠ Requiert que le stack soit déployé (Gitea running) et le Pre-flight complété (CA cert).</span>
+  <div class="sec-header">
+    <div class="sec-title">Execution Environments</div>
+    <div class="sec-desc">
+      Build AWX Execution Environment images and push them to the private Gitea registry.<br>
+      <span style="color:var(--warning);font-size:12px">Requires the stack to be deployed (Gitea running) and Pre-flight completed (CA cert).</span>
+    </div>
   </div>
 
-  <!-- Prérequis -->
+  <!-- Prerequisites -->
   <div class="ee-prereq">
-    <div class="ee-prereq-title">⚙ Prérequis</div>
+    <div class="ee-prereq-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Prerequisites
+    </div>
     <div class="ee-prereq-items">
 
-      <div class="ee-prereq-item">
-        <div class="pi-icon">🔧</div>
+      <div class="pi-item">
+        <div class="pi-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
         <div class="pi-body">
           <div class="pi-title">ansible-builder</div>
-          <div class="pi-desc">Outil de build des Execution Environments Ansible. Utilise pipx (compatible Debian/Ubuntu 22+).</div>
+          <div class="pi-desc">Ansible Execution Environment build tool. Uses pipx (compatible Debian/Ubuntu 22+).</div>
           <div class="pi-status">
             <span class="ee-dot" id="ab-dot"></span>
-            <span id="ab-status-text">Vérification…</span>
+            <span id="ab-status-text">Checking…</span>
           </div>
           <div class="pf-actions">
-            <button class="btn btn-primary btn-sm" onclick="runEEInstallDeps()">⬇ Installer ansible-builder</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ab')">📋 Logs</button>
+            <button class="btn btn-primary btn-sm" onclick="runEEInstallDeps()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Install ansible-builder
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ab')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Logs
+            </button>
           </div>
           <div class="ee-log" id="ee-log-ab"></div>
         </div>
       </div>
 
-      <div class="ee-prereq-item">
-        <div class="pi-icon">🔐</div>
+      <div class="pi-item">
+        <div class="pi-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
         <div class="pi-body">
-          <div class="pi-title">CA Docker pour le registry git.${CONFIG.DOMAIN||'<domain>'}</div>
-          <div class="pi-desc">
-            Configure Docker pour faire confiance au CA Autoflow — nécessaire pour pusher les images EE vers le registry Gitea privé (HTTPS).
-          </div>
+          <div class="pi-title">Docker CA trust — <code id="ca-registry-label">git.&lt;domain&gt;</code></div>
+          <div class="pi-desc">Configures Docker to trust the Autoflow Root CA — required to push EE images to the private Gitea registry (HTTPS).</div>
           <div class="pi-status">
             <span class="ee-dot" id="ca-dot"></span>
-            <span id="ca-status-text">Vérification…</span>
+            <span id="ca-status-text">Checking…</span>
           </div>
           <div class="pf-actions">
-            <button class="btn btn-primary btn-sm" onclick="runDockerTrustCA()">🔑 Configurer CA Docker</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ca')">📋 Logs</button>
+            <button class="btn btn-primary btn-sm" onclick="runDockerTrustCA()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Configure Docker CA
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ca')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Logs
+            </button>
           </div>
           <div class="ee-log" id="ee-log-ca"></div>
         </div>
@@ -956,58 +1161,65 @@ const EE_SECTION_HTML = `
   <div id="ee-grid" class="ee-grid"></div>
 
   <!-- CI/CD Runner -->
-  <div class="divider"></div>
-  <div class="sec-title" style="font-size:16px;margin-bottom:4px">⚙️ CI/CD — Gitea Actions Runner</div>
-  <div class="sec-desc" style="margin-bottom:16px">
-    Enregistre le runner <code>act_runner</code> dans Gitea Actions pour exécuter les pipelines CI/CD
-    (build EE, lint playbooks réseau).<br>
-    <span style="font-size:11px;color:var(--muted)">Prérequis : Gitea running + admin créé.</span>
-  </div>
-  <div class="ee-prereq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:8px">
-    <div class="pi-icon">🏃</div>
-    <div class="pi-body">
-      <div class="pi-title">Runner <code>autoflow-runner</code></div>
-      <div class="pi-desc">
-        Obtient un token d'enregistrement depuis l'API Gitea et configure le conteneur
-        <code>act_runner</code> pour exécuter des jobs Actions avec les labels
-        <code>autoflow · linux · docker · ansible</code>.
+  <div class="sub-section">
+    <div class="sub-title">CI/CD — Gitea Actions Runner</div>
+    <div class="sub-desc">Register the <code>act_runner</code> in Gitea Actions to run CI/CD pipelines (EE builds, network playbook linting).<br>Prerequisites: Gitea running + admin account created.</div>
+    <div class="pi-item">
+      <div class="pi-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       </div>
-      <div class="pi-status">
-        <span class="ee-dot" id="runner-dot"></span>
-        <span id="runner-status-text">Vérification…</span>
+      <div class="pi-body">
+        <div class="pi-title">Runner <code>autoflow-runner</code></div>
+        <div class="pi-desc">
+          Gets a registration token from the Gitea API and configures the <code>act_runner</code> container
+          to run Actions jobs with labels <code>autoflow · linux · docker · ansible</code>.
+        </div>
+        <div class="pi-status">
+          <span class="ee-dot" id="runner-dot"></span>
+          <span id="runner-status-text">Checking…</span>
+        </div>
+        <div class="pf-actions">
+          <button class="btn btn-primary btn-sm" onclick="runRunnerRegister()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Register runner
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleEELog('runner')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Logs
+          </button>
+        </div>
+        <div class="ee-log" id="ee-log-runner"></div>
       </div>
-      <div class="pf-actions">
-        <button class="btn btn-primary btn-sm" onclick="runRunnerRegister()">🏃 Enregistrer le runner</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('runner')">📋 Logs</button>
-      </div>
-      <div class="ee-log" id="ee-log-runner"></div>
     </div>
   </div>
 
-  <!-- Playbooks réseau -->
-  <div class="divider"></div>
-  <div class="sec-title" style="font-size:16px;margin-bottom:4px">🌐 Playbooks Réseau</div>
-  <div class="sec-desc" style="margin-bottom:16px">
-    Pousse la bibliothèque de playbooks réseau (Cisco, Juniper, Arista, F5) dans un repo Gitea dédié.<br>
-    <span style="font-size:11px;color:var(--muted)">Prérequis : Gitea running + admin créé (Post-deploy dans Pre-flight).</span>
-  </div>
-  <div class="ee-prereq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:8px">
-    <div class="pi-icon">📁</div>
-    <div class="pi-body">
-      <div class="pi-title">Repo <code>network-playbooks</code> dans Gitea</div>
-      <div class="pi-desc">
-        Crée le repo et pousse les playbooks : cisco/ · juniper/ · arista/ · f5/ · compliance/<br>
-        15 playbooks prêts à l'emploi + inventaires d'exemple + group_vars.
+  <!-- Network Playbooks -->
+  <div class="sub-section" style="margin-top:24px">
+    <div class="sub-title">Network Playbooks</div>
+    <div class="sub-desc">Push the network playbook library (Cisco, Juniper, Arista, F5) to a dedicated Gitea repository.<br>Prerequisites: Gitea running + admin account created.</div>
+    <div class="pi-item">
+      <div class="pi-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       </div>
-      <div class="pi-status">
-        <span class="ee-dot" id="np-dot"></span>
-        <span id="np-status-text">Non vérifié</span>
+      <div class="pi-body">
+        <div class="pi-title">Repo <code>network-playbooks</code> in Gitea</div>
+        <div class="pi-desc">Creates the repo and pushes playbooks: cisco/ · juniper/ · arista/ · f5/ · compliance/<br>15 ready-to-use playbooks + sample inventories + group_vars.</div>
+        <div class="pi-status">
+          <span class="ee-dot" id="np-dot"></span>
+          <span id="np-status-text">Not checked</span>
+        </div>
+        <div class="pf-actions">
+          <button class="btn btn-primary btn-sm" onclick="runGiteaInitNetwork()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Push network playbooks
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleEELog('np')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Logs
+          </button>
+        </div>
+        <div class="ee-log" id="ee-log-np"></div>
       </div>
-      <div class="pf-actions">
-        <button class="btn btn-primary btn-sm" onclick="runGiteaInitNetwork()">🚀 Pousser les playbooks réseau</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('np')">📋 Logs</button>
-      </div>
-      <div class="ee-log" id="ee-log-np"></div>
     </div>
   </div>
 </div>`;
@@ -1047,7 +1259,7 @@ function runEEStream(url, logId, onDone) {
     eeLog(logId, msg, cls);
   };
   evts.onerror = () => {
-    eeLog(logId, '[ERROR] Connexion interrompue', 'err');
+    eeLog(logId, '[ERROR] Connection interrupted', 'err');
     evts.close();
     if (onDone) onDone();
   };
@@ -1061,13 +1273,15 @@ async function checkEEStatus() {
   // ansible-builder
   const ab = EE_STATUS.ansible_builder_version;
   setEEDot('ab', ab ? 'ok' : 'err',
-    ab ? `Installé : ${ab}` : 'Non installé — cliquez "Installer ansible-builder"');
+    ab ? `Installed: ${ab}` : 'Not installed — click "Install ansible-builder"');
 
   // Docker CA
+  const caLabel = document.getElementById('ca-registry-label');
+  if (caLabel) caLabel.textContent = EE_STATUS.registry || 'git.<domain>';
   setEEDot('ca', EE_STATUS.docker_trusted ? 'ok' : 'err',
     EE_STATUS.docker_trusted
-      ? `CA Docker configuré pour ${EE_STATUS.registry}`
-      : `CA non configuré pour ${EE_STATUS.registry} — cliquez "Configurer CA Docker"`);
+      ? `Docker CA configured for ${EE_STATUS.registry}`
+      : `CA not configured for ${EE_STATUS.registry} — click "Configure Docker CA"`);
 
   // Build EE cards
   buildEECards(EE_STATUS.ees || []);
@@ -1076,14 +1290,19 @@ async function checkEEStatus() {
   checkRunnerStatus();
 }
 
+const EE_CARD_ICONS = {
+  base:     `<svg viewBox="0 0 24 24" fill="none" stroke="#3b7bff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+  security: `<svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  network:  `<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+};
+
 function buildEECards(ees) {
-  const icons = { base: '🔵', security: '🔴', network: '🌐' };
-  const grid  = document.getElementById('ee-grid');
+  const grid = document.getElementById('ee-grid');
   if (!grid) return;
   grid.innerHTML = ees.map(ee => `
     <div class="ee-card" id="ee-card-${ee.id}">
       <div class="ee-card-head">
-        <span class="ee-badge">${icons[ee.id] || '📦'}</span>
+        <div class="ee-card-icon">${EE_CARD_ICONS[ee.id] || EE_CARD_ICONS.base}</div>
         <div>
           <div class="ee-name">${ee.label}</div>
           <div class="ee-tag">${ee.tag}</div>
@@ -1092,67 +1311,72 @@ function buildEECards(ees) {
       <div class="ee-desc">${ee.description}</div>
       <div class="ee-status">
         <span class="ee-dot ${ee.built ? 'ok' : 'err'}" id="ee-dot-${ee.id}"></span>
-        <span id="ee-status-${ee.id}">${ee.built ? 'Image disponible dans Docker ✔' : 'Image non trouvée — build requis'}</span>
+        <span id="ee-status-${ee.id}">${ee.built ? 'Image available in Docker' : 'Image not found — build required'}</span>
       </div>
       <div class="ee-actions">
-        <button class="btn btn-primary btn-sm" id="ee-btn-${ee.id}"
-          onclick="runEEBuild('${ee.id}','${ee.version}')">🔨 Build &amp; Push</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ee-${ee.id}')">📋 Logs</button>
+        <button class="btn btn-primary btn-sm" id="ee-btn-${ee.id}" onclick="runEEBuild('${ee.id}','${ee.version}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
+          Build &amp; Push
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleEELog('ee-${ee.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Logs
+        </button>
       </div>
       <div class="ee-log" id="ee-log-ee-${ee.id}"></div>
     </div>`).join('');
 }
 
 function runEEInstallDeps() {
-  setEEDot('ab', 'running', 'Installation en cours…');
+  setEEDot('ab', 'running', 'Installing…');
   document.getElementById('ee-log-ab').innerHTML = '';
   runEEStream('/api/ee/install-deps', 'ab', () => checkEEStatus());
 }
 
 function runDockerTrustCA() {
-  setEEDot('ca', 'running', 'Configuration en cours…');
+  setEEDot('ca', 'running', 'Configuring…');
   document.getElementById('ee-log-ca').innerHTML = '';
   runEEStream('/api/docker/trust-ca', 'ca', () => checkEEStatus());
 }
 
 function runEEBuild(ee, version) {
   const btn = document.getElementById(`ee-btn-${ee}`);
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Build…'; }
-  document.getElementById(`ee-dot-${ee}`)?.classList.replace('ok','running') ||
-    document.getElementById(`ee-dot-${ee}`)?.classList.replace('err','running');
-  if (document.getElementById(`ee-status-${ee}`))
-    document.getElementById(`ee-status-${ee}`).textContent = 'Build en cours…';
+  if (btn) { btn.disabled = true; btn.querySelector('span') && (btn.lastChild.textContent = ' Building…'); }
+  const dot = document.getElementById(`ee-dot-${ee}`);
+  if (dot) dot.className = 'ee-dot running';
+  const status = document.getElementById(`ee-status-${ee}`);
+  if (status) status.textContent = 'Build in progress…';
   document.getElementById(`ee-log-ee-${ee}`).innerHTML = '';
   runEEStream(
     `/api/ee/build?ee=${encodeURIComponent(ee)}&version=${encodeURIComponent(version)}`,
     `ee-${ee}`,
     () => {
-      if (btn) { btn.disabled = false; btn.textContent = '🔨 Build & Push'; }
+      if (btn) { btn.disabled = false; }
       checkEEStatus();
     }
   );
 }
 
 function runGiteaInitNetwork() {
-  setEEDot('np', 'running', 'Push en cours…');
+  setEEDot('np', 'running', 'Pushing…');
   document.getElementById('ee-log-np').innerHTML = '';
   runEEStream('/api/gitea/init-network', 'np', () => {
-    setEEDot('np', 'ok', 'Repo network-playbooks disponible dans Gitea ✔');
+    setEEDot('np', 'ok', 'Repo network-playbooks available in Gitea');
   });
 }
 
 function checkRunnerStatus() {
   fetch('/api/runner/status').then(r => r.json()).then(d => {
     if (d.registered) {
-      setEEDot('runner', 'ok', `Runner enregistré ✔ (${d.runner_count} runner(s) actif(s))`);
+      setEEDot('runner', 'ok', `Runner registered (${d.runner_count} active)`);
     } else {
-      setEEDot('runner', 'err', d.error || 'Runner non enregistré — cliquez "Enregistrer le runner"');
+      setEEDot('runner', 'err', d.error || 'Runner not registered — click "Register runner"');
     }
-  }).catch(() => setEEDot('runner', 'err', 'Gitea non joignable'));
+  }).catch(() => setEEDot('runner', 'err', 'Gitea unreachable'));
 }
 
 function runRunnerRegister() {
-  setEEDot('runner', 'running', 'Enregistrement en cours…');
+  setEEDot('runner', 'running', 'Registering…');
   document.getElementById('ee-log-runner').innerHTML = '';
   runEEStream('/api/runner/register', 'runner', () => checkRunnerStatus());
 }
