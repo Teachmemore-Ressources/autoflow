@@ -412,6 +412,9 @@ services:
       RATE_LIMIT_WEBHOOKS:  ${RATE_LIMIT_WEBHOOKS:-60/minute}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       ADMIN_TOKEN:           ${EVENT_ENGINE_ADMIN_TOKEN:-}
+      # Redis — event persistence, retry queue and durable dedup
+      # Uses DB 1 to keep event-engine data separate from AWX cache (DB 0)
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
       # OpenTelemetry distributed tracing
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
       OTEL_SERVICE_NAME:           autoflow-event-engine

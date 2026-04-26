@@ -5,6 +5,21 @@ Receives generic events and vendor webhooks (GitHub, Alertmanager),
 routes them to the correct AWX job template via a YAML rule engine,
 deduplicates repeated events, and fires events on cron schedules.
 
+Reliability model
+-----------------
+When REDIS_URL is configured:
+  • Every incoming event is persisted to Redis before processing.
+  • If AWX is unreachable the event is retried with exponential backoff
+    (30 s → 2 min → 5 min → 10 min → 20 min), then moved to a
+    dead-letter queue (DLQ) after 5 failed attempts.
+  • Dedup state is stored in Redis and survives container restarts.
+  • HTTP endpoints return 202 immediately; the background worker handles
+    the actual AWX dispatch asynchronously.
+
+When REDIS_URL is not set (fallback):
+  • Legacy fire-and-forget behaviour: events are dispatched synchronously,
+    AWX errors surface as HTTP 502/503, and dedup is in-memory only.
+
 Endpoints
 ---------
 GET  /health                       Liveness probe
@@ -17,11 +32,16 @@ GET  /admin/dedup/stats            Dedup cache info
 POST /admin/dedup/clear            Flush dedup cache
 GET  /admin/schedules              List cron schedules
 POST /admin/schedules/reload       Hot-reload schedules from disk
+GET  /admin/queue/stats            Queue depth (pending / retry / DLQ)
+GET  /admin/dlq                    List dead-letter queue events
+POST /admin/dlq/{event_id}/requeue Re-queue a specific DLQ event
+DELETE /admin/dlq                  Clear the entire DLQ
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,9 +49,9 @@ from typing import Any
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, field_validator
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -39,7 +59,9 @@ from slowapi.util import get_remote_address
 
 from awx_client import AWXClient, AWXError
 from dedup import DedupStore
+from event_store import EventStore
 from parsers import parse_alertmanager, parse_github
+from retry_worker import RetryWorker
 from rules import RuleEngine
 from scheduler import EventScheduler
 from settings import settings
@@ -62,17 +84,14 @@ limiter = Limiter(
     default_limits=[settings.rate_limit],
 )
 
-
-# ── Admin auth — Bearer token requis sur tous les endpoints /admin/* ──────────
+# ── Admin auth — Bearer token required on all /admin/* endpoints ──────────────
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+
 
 def require_admin_token(
     credentials: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
 ) -> None:
-    """Vérifie le token Bearer pour les endpoints admin.
-    Si ADMIN_TOKEN est vide, les endpoints sont bloqués (fail-secure).
-    """
     if not settings.admin_token:
         raise HTTPException(status_code=503, detail="Admin endpoints disabled — set ADMIN_TOKEN")
     if credentials is None or credentials.credentials != settings.admin_token:
@@ -83,7 +102,7 @@ def require_admin_token(
         )
 
 
-# ── Core dispatch (shared by HTTP + scheduler) ────────────────────────────────
+# ── Core dispatch (shared by HTTP fallback, worker, and scheduler) ────────────
 
 async def _dispatch_core(
     dedup: DedupStore,
@@ -92,16 +111,20 @@ async def _dispatch_core(
     source: str,
     action: str,
     data:   dict[str, Any],
+    event_id: str | None = None,
 ) -> dict:
     """
-    Resolve rule → deduplicate → launch AWX job.
-    Returns a dict describing the outcome (used by both HTTP and scheduler paths).
+    Dedup → rule resolution → AWX launch.
+    Returns a result dict describing the outcome.
     """
-    if settings.dedup_ttl > 0 and dedup.is_duplicate(source, action, data):
+    if settings.dedup_ttl > 0 and await dedup.is_duplicate(source, action, data):
         logger.info("Duplicate suppressed (source=%s action=%s)", source, action)
         return {"status": "deduplicated", "source": source, "action": action}
 
     template_id, extra_vars = rules.resolve(source, action, data)
+    if event_id:
+        extra_vars = {**extra_vars, "_event_id": event_id}
+
     job = await awx.launch_job(extra_vars=extra_vars, template_id=template_id)
 
     return {
@@ -114,10 +137,39 @@ async def _dispatch_core(
     }
 
 
+# ── Redis helpers ─────────────────────────────────────────────────────────────
+
+async def _try_connect_redis():
+    """
+    Attempt to connect to Redis.  Returns the client on success, None on failure.
+    A failed connection is not fatal — the engine falls back to fire-and-forget.
+    """
+    if not settings.redis_url:
+        return None
+    try:
+        import redis.asyncio as aioredis
+        client = aioredis.from_url(
+            settings.redis_url,
+            encoding="utf-8",
+            decode_responses=False,
+            socket_connect_timeout=3,
+            socket_timeout=5,
+        )
+        await client.ping()
+        logger.info("Redis connected — event persistence enabled (%s)", settings.redis_url)
+        return client
+    except Exception as exc:
+        logger.warning(
+            "Redis unavailable (%s) — falling back to fire-and-forget mode", exc
+        )
+        return None
+
+
 # ── App lifespan ──────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ── HTTP client for AWX ──────────────────────────────────────────────────
     http = httpx.AsyncClient(
         base_url=settings.awx_url,
         headers={"Authorization": f"Bearer {settings.awx_token}"},
@@ -127,7 +179,36 @@ async def lifespan(app: FastAPI):
     app.state.rules = RuleEngine(settings.rules_file, settings.awx_job_template_id)
     app.state.dedup = DedupStore(ttl_seconds=settings.dedup_ttl)
 
-    # Scheduler — fires events on cron without external webhooks
+    # ── Redis — event persistence + retry ────────────────────────────────────
+    redis_client = await _try_connect_redis()
+    if redis_client is not None:
+        app.state.dedup.set_redis(redis_client)
+        store = EventStore(redis_client)
+        app.state.event_store = store
+
+        # Dispatch function injected into the worker (captures app.state)
+        async def _worker_dispatch(
+            source: str,
+            action: str,
+            data: dict,
+            event_id: str,
+        ) -> dict:
+            return await _dispatch_core(
+                app.state.dedup,
+                app.state.rules,
+                app.state.awx,
+                source, action, data,
+                event_id=event_id,
+            )
+
+        worker = RetryWorker(store, _worker_dispatch)
+        worker.start()
+        app.state.retry_worker = worker
+    else:
+        app.state.event_store  = None
+        app.state.retry_worker = None
+
+    # ── Scheduler — fires cron events ────────────────────────────────────────
     async def _scheduled_dispatch(source: str, action: str, data: dict) -> None:
         try:
             result = await _dispatch_core(
@@ -147,15 +228,24 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     app.state.scheduler = scheduler
 
+    mode = "persistent (Redis)" if redis_client else "fire-and-forget (no Redis)"
     logger.info(
-        "Event engine v2 started — default template=%d  dedup_ttl=%ds  schedules=%d",
+        "Event engine v2 started — default_template=%d  dedup_ttl=%ds  "
+        "schedules=%d  mode=%s",
         settings.awx_job_template_id,
         settings.dedup_ttl,
         scheduler.loaded_count,
+        mode,
     )
+
     yield
 
+    # ── Shutdown ─────────────────────────────────────────────────────────────
     scheduler.stop()
+    if app.state.retry_worker:
+        app.state.retry_worker.stop()
+    if redis_client:
+        await redis_client.aclose()
     await http.aclose()
 
 
@@ -170,15 +260,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── Rate limiting ─────────────────────────────────────────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# ── Prometheus HTTP instrumentation ──────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
-
-# ── OpenTelemetry FastAPI instrumentation ─────────────────────────────────────
 instrument_app(app, "autoflow-event-engine")
 
 
@@ -198,7 +284,7 @@ class EventPayload(BaseModel):
         return v
 
 
-# ── HTTP dispatch wrapper ─────────────────────────────────────────────────────
+# ── HTTP dispatch ─────────────────────────────────────────────────────────────
 
 async def _dispatch(
     request: Request,
@@ -206,7 +292,43 @@ async def _dispatch(
     action: str,
     data: dict[str, Any],
 ) -> JSONResponse:
-    """HTTP-facing dispatch — wraps _dispatch_core with proper HTTP responses."""
+    """
+    HTTP-facing dispatch.
+
+    Persistent mode (Redis available):
+      Persists the event, enqueues it for the background worker and
+      returns 202 immediately with the event_id for tracking.
+
+    Fallback mode (no Redis):
+      Calls _dispatch_core synchronously and returns the AWX result.
+    """
+    store: EventStore | None = request.app.state.event_store
+
+    if store is not None:
+        # Quick dedup check before enqueuing to give immediate 200 feedback
+        if settings.dedup_ttl > 0 and await request.app.state.dedup.is_duplicate(source, action, data):
+            logger.info("Duplicate suppressed at ingestion (source=%s action=%s)", source, action)
+            return JSONResponse(
+                status_code=200,
+                content={"status": "deduplicated", "source": source, "action": action},
+            )
+
+        event_id = await store.enqueue(source, action, data)
+        logger.info(
+            "Event enqueued (source=%s action=%s event_id=%s)",
+            source, action, event_id,
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status":   "queued",
+                "event_id": event_id,
+                "source":   source,
+                "action":   action,
+            },
+        )
+
+    # ── Fallback: fire-and-forget ─────────────────────────────────────────────
     try:
         result = await _dispatch_core(
             request.app.state.dedup,
@@ -228,8 +350,20 @@ async def _dispatch(
 # ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["ops"])
-async def health():
-    return {"status": "ok", "service": "event-engine", "version": "2.0.0"}
+async def health(request: Request):
+    store: EventStore | None = request.app.state.event_store
+    info: dict[str, Any] = {
+        "status":      "ok",
+        "service":     "event-engine",
+        "version":     "2.0.0",
+        "persistence": store is not None,
+    }
+    if store:
+        try:
+            info["queue"] = await store.queue_stats()
+        except Exception:
+            pass
+    return info
 
 
 # ── Generic event ─────────────────────────────────────────────────────────────
@@ -283,7 +417,6 @@ async def webhook_github(
             )
 
     try:
-        import json
         payload = json.loads(raw_body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
@@ -329,7 +462,6 @@ async def webhook_alertmanager(request: Request):
 
 @app.get("/admin/rules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_rules(request: Request):
-    """Return the currently loaded routing rules."""
     engine: RuleEngine = request.app.state.rules
     return {
         "count":               len(engine._rules),
@@ -349,7 +481,6 @@ async def list_rules(request: Request):
 
 @app.post("/admin/rules/reload", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def reload_rules(request: Request):
-    """Hot-reload the rules file from disk without restarting the service."""
     engine: RuleEngine = request.app.state.rules
     count = engine.reload()
     return {"status": "reloaded", "rules_loaded": count}
@@ -359,18 +490,17 @@ async def reload_rules(request: Request):
 
 @app.get("/admin/dedup/stats", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def dedup_stats(request: Request):
-    """Return dedup cache size and configuration."""
     dedup: DedupStore = request.app.state.dedup
     return {
         "enabled":        settings.dedup_ttl > 0,
         "ttl_seconds":    settings.dedup_ttl,
+        "backend":        "redis" if dedup._redis is not None else "in-memory",
         "cached_entries": dedup.size(),
     }
 
 
 @app.post("/admin/dedup/clear", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def dedup_clear(request: Request):
-    """Flush the entire dedup cache."""
     request.app.state.dedup.clear()
     return {"status": "cleared"}
 
@@ -379,17 +509,81 @@ async def dedup_clear(request: Request):
 
 @app.get("/admin/schedules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_schedules(request: Request):
-    """Return the currently active cron schedules and their next fire times."""
     sched: EventScheduler = request.app.state.scheduler
-    return {
-        "count": sched.loaded_count,
-        "jobs":  sched.jobs(),
-    }
+    return {"count": sched.loaded_count, "jobs": sched.jobs()}
 
 
 @app.post("/admin/schedules/reload", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def reload_schedules(request: Request):
-    """Hot-reload the schedules file from disk without restarting the service."""
     sched: EventScheduler = request.app.state.scheduler
     count = sched.reload()
     return {"status": "reloaded", "jobs_loaded": count}
+
+
+# ── Admin — Queue & DLQ (requires Redis) ──────────────────────────────────────
+
+def _require_store(request: Request) -> EventStore:
+    store: EventStore | None = request.app.state.event_store
+    if store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Event persistence not available — set REDIS_URL to enable",
+        )
+    return store
+
+
+@app.get("/admin/queue/stats", tags=["admin"], dependencies=[Depends(require_admin_token)])
+async def queue_stats(request: Request):
+    """Return the current depth of the pending, retry and dead-letter queues."""
+    store = _require_store(request)
+    return await store.queue_stats()
+
+
+@app.get("/admin/dlq", tags=["admin"], dependencies=[Depends(require_admin_token)])
+async def dlq_list(request: Request, offset: int = 0, limit: int = 50):
+    """
+    List events in the dead-letter queue.
+
+    Events land here after ``MAX_ATTEMPTS`` (5) failed dispatch attempts.
+    Use ``POST /admin/dlq/{event_id}/requeue`` to re-submit an individual event,
+    or ``DELETE /admin/dlq`` to clear all.
+    """
+    store = _require_store(request)
+    events = await store.dlq_list(offset=offset, limit=limit)
+    total  = await store.dlq_count()
+    return {"total": total, "offset": offset, "limit": limit, "events": events}
+
+
+@app.post(
+    "/admin/dlq/{event_id}/requeue",
+    tags=["admin"],
+    dependencies=[Depends(require_admin_token)],
+)
+async def dlq_requeue(event_id: str, request: Request):
+    """
+    Move a dead event back to the pending queue with a fresh retry budget.
+    Returns 404 if the event_id is not found.
+    """
+    store = _require_store(request)
+    ok    = await store.dlq_requeue(event_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    return {"status": "requeued", "event_id": event_id}
+
+
+@app.delete("/admin/dlq", tags=["admin"], dependencies=[Depends(require_admin_token)])
+async def dlq_clear(request: Request):
+    """Clear all events from the dead-letter queue (irreversible)."""
+    store = _require_store(request)
+    count = await store.dlq_clear()
+    return {"status": "cleared", "removed": count}
+
+
+@app.get("/admin/events/{event_id}", tags=["admin"], dependencies=[Depends(require_admin_token)])
+async def get_event(event_id: str, request: Request):
+    """Return the full state of a persisted event by ID."""
+    store = _require_store(request)
+    event = await store.get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    return event

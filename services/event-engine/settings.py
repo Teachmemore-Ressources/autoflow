@@ -31,5 +31,9 @@ class Settings(BaseSettings):
     # ── Logging ───────────────────────────────────────────────────────────────
     log_level: str = "info"
 
+    # ── Redis (event persistence + retry queue + dedup) ───────────────────────
+    # redis://[:password@]host[:port]/db  — empty = disable persistence (fire-and-forget)
+    redis_url: str = ""
+
 
 settings = Settings()

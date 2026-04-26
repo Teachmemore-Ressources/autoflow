@@ -8,6 +8,7 @@ prometheus-fastapi-instrumentator==6.1.0
 prometheus-client==0.21.1
 slowapi==0.1.9
 apscheduler==3.10.4
+redis[asyncio]==5.2.1
 # ── OpenTelemetry distributed tracing ──
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
