@@ -1645,6 +1645,128 @@ async def runner_register():
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+# ── Grafana dashboard export ──────────────────────────────────────────────────
+
+GRAFANA_DASHBOARDS_DIR = ROOT / "monitoring" / "grafana" / "dashboards"
+
+
+def _grafana_api_url() -> str:
+    domain = _load_env().get("DOMAIN", "localhost")
+    return f"https://grafana.{domain}/api"
+
+
+@app.get("/api/grafana/export-status")
+def grafana_export_status():
+    """Return the mtime of the newest dashboard file and whether Grafana is running."""
+    import time
+    running = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_grafana"],
+        capture_output=True, text=True,
+    ).stdout.strip() == "true"
+
+    files = list(GRAFANA_DASHBOARDS_DIR.glob("*.json")) if GRAFANA_DASHBOARDS_DIR.exists() else []
+    last_export: str | None = None
+    if files:
+        newest = max(files, key=lambda p: p.stat().st_mtime)
+        last_export = newest.stat().st_mtime.__class__  # just need the value
+        import datetime
+        ts = datetime.datetime.fromtimestamp(newest.stat().st_mtime)
+        last_export = ts.strftime("%Y-%m-%d %H:%M")
+
+    return {
+        "running":     running,
+        "file_count":  len(files),
+        "last_export": last_export,
+    }
+
+
+@app.get("/api/grafana/export")
+async def grafana_export():
+    """SSE: export all Grafana dashboards from the live instance to JSON files."""
+
+    async def stream():
+        import httpx as _httpx, json as _j, re
+
+        config   = _load_env()
+        user     = config.get("GRAFANA_ADMIN_USER", "admin")
+        password = config.get("GRAFANA_ADMIN_PASSWORD", "")
+
+        if not password:
+            yield _sse("[ERROR] GRAFANA_ADMIN_PASSWORD not set — fill in the Monitoring section.")
+            yield _sse("[DONE]")
+            return
+
+        # Verify container is running
+        chk = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_grafana"],
+            capture_output=True, text=True,
+        )
+        if chk.stdout.strip() != "true":
+            yield _sse("[ERROR] Container 'autoflow_grafana' is not running — deploy the stack first.")
+            yield _sse("[DONE]")
+            return
+
+        grafana_url = _grafana_api_url().rstrip("/api")
+        yield _sse(f"Connecting to Grafana ({grafana_url})…")
+
+        GRAFANA_DASHBOARDS_DIR.mkdir(parents=True, exist_ok=True)
+
+        async with _httpx.AsyncClient(verify=False, auth=(user, password), timeout=20) as c:
+
+            # ── List all dashboards ───────────────────────────────────────────
+            try:
+                r = await c.get(f"{grafana_url}/api/search", params={"type": "dash-db", "limit": 500})
+            except Exception as exc:
+                yield _sse(f"[ERROR] Cannot reach Grafana: {exc}")
+                yield _sse(f"Make sure the stack is running and {grafana_url} resolves.")
+                yield _sse("[DONE]")
+                return
+
+            if r.status_code == 401:
+                yield _sse("[ERROR] Authentication failed — check GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD.")
+                yield _sse("[DONE]")
+                return
+            if r.status_code != 200:
+                yield _sse(f"[ERROR] Grafana API returned HTTP {r.status_code}: {r.text[:200]}")
+                yield _sse("[DONE]")
+                return
+
+            items = [i for i in r.json() if i.get("uid")]
+            yield _sse(f"Found {len(items)} dashboard(s) — exporting…")
+
+            saved, skipped = 0, 0
+            for item in items:
+                uid   = item["uid"]
+                title = item.get("title", uid)
+
+                dr = await c.get(f"{grafana_url}/api/dashboards/uid/{uid}")
+                if dr.status_code != 200:
+                    yield _sse(f"[WARN] Could not fetch '{title}' (HTTP {dr.status_code}) — skipping.")
+                    skipped += 1
+                    continue
+
+                dashboard = dr.json().get("dashboard", {})
+                dashboard.pop("id", None)   # strip DB-internal ID; UID is preserved
+
+                slug = re.sub(r"[^\w\-]", "_", title.lower()).strip("_")
+                slug = re.sub(r"_+", "_", slug)[:60]
+                out  = GRAFANA_DASHBOARDS_DIR / f"{slug}.json"
+
+                out.write_text(_j.dumps(dashboard, indent=2, ensure_ascii=False) + "\n")
+                yield _sse(f"  [{saved + 1}/{len(items)}] {title}  →  {out.name}")
+                saved += 1
+
+        yield _sse("")
+        yield _sse(f"[SUCCESS] {saved} dashboard(s) saved to monitoring/grafana/dashboards/")
+        if skipped:
+            yield _sse(f"[WARN] {skipped} dashboard(s) could not be fetched.")
+        yield _sse("Commit these files to preserve dashboard changes across fresh deploys.")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 # ── System preflight ─────────────────────────────────────────────────────────
 
 @app.get("/api/system/preflight")

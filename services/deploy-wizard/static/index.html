@@ -519,6 +519,9 @@ async function checkPreflightStatus() {
     awx.exists ? `${awx.tag} found in Docker` : 'Image not found — build required'
   );
 
+  // Post-deploy: Grafana export
+  checkGrafanaExportStatus();
+
   // Post-deploy: Gitea admin
   const gitea = await fetch('/api/init-gitea-status').then(r => r.json()).catch(() => ({}));
   if (!gitea.running) {
@@ -581,6 +584,54 @@ function runPreflight(id) {
     pfLog(id, '[ERROR] Stream lost', 'err');
     evts.close();
     checkPreflightStatus();
+  };
+}
+
+async function checkGrafanaExportStatus() {
+  try {
+    const d = await fetch('/api/grafana/export-status').then(r => r.json());
+    const dot = document.getElementById('grafana-export-dot');
+    const txt = document.getElementById('grafana-export-status-text');
+    if (!dot) return;
+    if (!d.running) {
+      dot.className = 'pf-dot err';
+      txt.textContent = 'Stack not running — deploy first';
+    } else if (d.last_export) {
+      dot.className = 'pf-dot ok';
+      txt.textContent = `${d.file_count} file(s) — last export ${d.last_export}`;
+    } else {
+      dot.className = 'pf-dot err';
+      txt.textContent = 'No exported files found — click "Export dashboards"';
+    }
+  } catch {
+    const dot = document.getElementById('grafana-export-dot');
+    if (dot) dot.className = 'pf-dot err';
+  }
+}
+
+function runGrafanaExport() {
+  const dot = document.getElementById('grafana-export-dot');
+  const txt = document.getElementById('grafana-export-status-text');
+  dot.className = 'pf-dot running'; txt.textContent = 'Exporting…';
+  document.getElementById('pf-log-grafana-export').innerHTML = '';
+
+  const evts = new EventSource('/api/grafana/export');
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[DONE]') { evts.close(); checkGrafanaExportStatus(); return; }
+    const log = document.getElementById('pf-log-grafana-export');
+    log.classList.add('open');
+    const line = document.createElement('div');
+    if (msg.startsWith('[SUCCESS]')) { line.className = 'ok'; dot.className = 'pf-dot ok'; txt.textContent = 'Exported'; }
+    else if (msg.startsWith('[ERROR]')) { line.className = 'err'; dot.className = 'pf-dot err'; txt.textContent = 'Failed'; }
+    else if (msg.startsWith('[WARN]')) line.className = 'warn';
+    line.textContent = msg;
+    log.appendChild(line); log.scrollTop = log.scrollHeight;
+  };
+  evts.onerror = () => {
+    evts.close();
+    document.getElementById('grafana-export-dot').className = 'pf-dot err';
+    document.getElementById('grafana-export-status-text').textContent = 'Connection lost';
   };
 }
 
@@ -845,6 +896,36 @@ function buildSections() {
               </button>
             </div>
             <div class="pf-log" id="pf-log-awxtoken"></div>
+          </div>
+        </div>
+
+        <!-- Grafana Dashboard Export -->
+        <div class="pf-item">
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <div class="pf-body">
+            <div class="pf-title">Grafana — Export Dashboards to Files</div>
+            <div class="pf-desc">
+              Exports all dashboards from the live Grafana instance to <code>monitoring/grafana/dashboards/*.json</code>.<br>
+              Run this after customising any dashboard so changes survive the next <code>docker compose up</code>.<br>
+              <em>Requires the stack to be running.</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="grafana-export-dot"></span>
+              <span id="grafana-export-status-text">Checking…</span>
+            </div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runGrafanaExport()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export dashboards
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('grafana-export')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Logs
+              </button>
+            </div>
+            <div class="pf-log" id="pf-log-grafana-export"></div>
           </div>
         </div>
 
