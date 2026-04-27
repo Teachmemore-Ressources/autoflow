@@ -253,8 +253,13 @@ KEY_TO_SERVICES: dict[str, list[str]] = {
     "JWT_EXPIRE_MINUTES":         ["api"],
     "GRAFANA_ADMIN_PASSWORD":     ["grafana"],
     "PROMETHEUS_RETENTION":       ["prometheus"],
+    "LOKI_RETENTION":             ["loki"],
     "MONITORING_ADMIN_USER":      ["traefik"],
     "MONITORING_ADMIN_PASSWORD":  ["traefik"],
+    "MINIO_ROOT_USER":            ["minio"],
+    "MINIO_ROOT_PASSWORD":        ["minio"],
+    "LOKI_S3_ACCESS_KEY":         ["loki"],
+    "LOKI_S3_SECRET_KEY":         ["loki"],
     "DEDUP_TTL":                  ["event_engine"],
     "GITHUB_WEBHOOK_SECRET":      ["event_engine"],
     "EVENT_ENGINE_ADMIN_TOKEN":   ["event_engine"],
@@ -283,6 +288,8 @@ FIRST_START_ONLY: frozenset[str] = frozenset({
     "POSTGRES_DB", "POSTGRES_USER",
     "GITEA_DB_NAME", "GITEA_DB_USER",
     "GRAFANA_ADMIN_USER", "PKI_JWT_SECRET",
+    # minio_init est restart:no — le bucket/user Loki est créé une seule fois
+    "LOKI_S3_ACCESS_KEY", "LOKI_S3_SECRET_KEY",
 })
 
 # Keys that require container recreation (not just restart)

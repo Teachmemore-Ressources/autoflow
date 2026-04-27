@@ -2,6 +2,7 @@
 # Loki – Configuration Autoflow
 # Mode : single binary (monolithic) — adapté pour un déploiement
 #         single-node. Passer en mode "distributed" pour du HA.
+# Backend : MinIO (S3-compatible) — production-ready, résilient.
 # ─────────────────────────────────────────────────────────────
 
 auth_enabled: false
@@ -12,13 +13,19 @@ server:
   log_level: warn
 
 # ── Common (paths, storage, ring) ────────────────────────────
+# Le bloc common propage la config S3 à tous les composants
+# (ingester, querier, compactor, ruler).
 common:
   instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory:  /loki/rules
+    s3:
+      endpoint:          minio:9000
+      insecure:          true          # réseau interne — pas de TLS requis
+      bucketnames:       loki-chunks
+      access_key_id:     ${LOKI_S3_ACCESS_KEY}
+      secret_access_key: ${LOKI_S3_SECRET_KEY}
+      s3forcepathstyle:  true          # obligatoire pour MinIO (pas de virtual-hosted style)
   replication_factor: 1
   ring:
     kvstore:
@@ -26,30 +33,38 @@ common:
 
 # ── Schema de stockage ────────────────────────────────────────
 # v13 + tsdb — format recommandé depuis Loki 2.8
+# object_store: s3 → chunks + index TSDB stockés dans MinIO
 schema_config:
   configs:
     - from: 2024-01-01
       store:        tsdb
-      object_store: filesystem
+      object_store: s3
       schema:       v13
       index:
         prefix: index_
         period: 24h
 
+# ── Storage config — cache local TSDB ────────────────────────
+# Les shards TSDB vont dans MinIO via common.storage.s3.
+# Le cache local accélère les requêtes répétitives.
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location:         /loki/tsdb-cache
+    cache_ttl:              24h
+
 # ── Rétention des logs ────────────────────────────────────────
-# Durée de rétention globale. Peut être surchargée par stream selector
-# via les overrides par tenant (limits_config).
-# Valeur par défaut : 30 jours.
+# LOKI_RETENTION est injecté depuis l'environnement Docker.
+# Valeur par défaut : 720h (30 jours).
 compactor:
   working_directory: /loki/compactor
   compaction_interval: 10m
   retention_enabled:   true
   retention_delete_delay: 2h
-  delete_request_store: filesystem
+  delete_request_store: s3     # stocke les requêtes de suppression dans MinIO
 
 limits_config:
-  # Rétention globale des logs (modifiable sans redémarrage via API)
-  retention_period: 720h   # 30 jours — ajuster selon les besoins
+  retention_period: ${LOKI_RETENTION:-720h}
 
   # Ingestion rate limits (par tenant, auth_enabled=false → tenant unique)
   ingestion_rate_mb:      16
@@ -69,8 +84,7 @@ query_range:
         max_size_mb: 150
 
 # ── Ruler (alertes sur logs) ──────────────────────────────────
-# Permet de définir des alertes LogQL dans monitoring/loki/rules/
-# et de les envoyer à Alertmanager.
+# Les règles LogQL sont stockées localement (montage :ro depuis l'hôte).
 ruler:
   alertmanager_url: http://alertmanager:9093
   enable_api:       true

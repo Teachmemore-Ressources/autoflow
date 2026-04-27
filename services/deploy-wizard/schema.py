@@ -11,6 +11,7 @@ SECTIONS = [
     {"id": "awx",            "label": "AWX",              "desc": "Automation platform configuration"},
     {"id": "api",            "label": "Autoflow API",     "desc": "REST API, JWT and rate limiting"},
     {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting"},
+    {"id": "minio",          "label": "MinIO",            "desc": "S3-compatible object storage — backend de stockage Loki (logs)"},
     {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing"},
     {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry"},
     {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority"},
@@ -186,6 +187,34 @@ FIELDS = [
         "key": "MONITORING_ADMIN_PASSWORD", "label": "BasicAuth Password", "section": "monitoring",
         "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
         "description": "Password for Prometheus/Alertmanager BasicAuth — auto-hashed to traefik/dynamic/monitoring_users",
+    },
+    {
+        "key": "LOKI_RETENTION", "label": "Loki Log Retention", "section": "monitoring",
+        "type": "text", "default": "720h",
+        "placeholder": "720h",
+        "description": "Durée de rétention des logs dans Loki (ex: 720h = 30j, 2160h = 90j, 8760h = 1an). Le compactor supprime les chunks MinIO au-delà de cette période.",
+    },
+
+    # ── MinIO ──────────────────────────────────────────────────────
+    {
+        "key": "MINIO_ROOT_USER", "label": "Root Username", "section": "minio",
+        "type": "text", "default": "minioadmin", "required": True,
+        "description": "Compte root MinIO — accès console et administration. Modifiable après démarrage (MinIO relit l'env au redémarrage).",
+    },
+    {
+        "key": "MINIO_ROOT_PASSWORD", "label": "Root Password", "section": "minio",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Mot de passe root MinIO — minimum 8 caractères. Modifiable : redémarrer minio après changement.",
+    },
+    {
+        "key": "LOKI_S3_ACCESS_KEY", "label": "Loki S3 Access Key", "section": "minio",
+        "type": "text", "default": "loki",
+        "description": "Identifiant du compte MinIO dédié à Loki (créé par minio_init au premier démarrage). Changer après setup nécessite une intervention manuelle via mc.",
+    },
+    {
+        "key": "LOKI_S3_SECRET_KEY", "label": "Loki S3 Secret Key", "section": "minio",
+        "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
+        "description": "Mot de passe du compte Loki dans MinIO. Changer après setup : mettre à jour via mc admin user, puis redémarrer loki.",
     },
 
     # ── Event Engine ───────────────────────────────────────────────
