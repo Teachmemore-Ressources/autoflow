@@ -139,6 +139,39 @@ img[src*="brand-logo"] {
   color: var(--pf-global--Color--100, #151515) !important;
 }
 
+/* ── Deploy Wizard — lien bas de sidebar ── */
+li[data-af-wizard] {
+  border-top: 1px solid #252525;
+  margin-top: 10px;
+  padding-top: 4px;
+}
+
+.af-wizard-link {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.af-wiz-icon {
+  flex-shrink: 0;
+  color: #ee0000 !important;
+  transition: color .15s;
+}
+
+.af-wizard-link:hover .af-wiz-icon {
+  color: #ff3333 !important;
+}
+
+.af-ext-icon {
+  margin-left: auto;
+  opacity: 0.3;
+  transition: opacity .15s;
+}
+
+.af-wizard-link:hover .af-ext-icon {
+  opacity: 0.65;
+}
+
 /* ── Masquer la bannière "tech preview" du nouveau UI AWX ── */
 /* AWX utilise pf-c-banner (pas pf-c-alert) avec variant info */
 .pf-c-banner.pf-m-info:has(a[href*="ui_next"]),
