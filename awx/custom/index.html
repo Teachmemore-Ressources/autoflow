@@ -458,35 +458,5 @@ var previewObs=new MutationObserver(function(){
 });
 previewObs.observe(document.documentElement,{childList:true,subtree:true});
 
-/* ── Inject "Deploy Wizard" dans la sidebar AWX ─────────────
-   Cible le premier <ul> dans le <nav> de la sidebar.
-   Re-injecté automatiquement si React re-rend le nav.
-   data-af-wizard évite les doublons entre re-renders. */
-function injectWizardNav(){
-  var sidebar=document.querySelector('.pf-c-page__sidebar,.pf-v5-c-page__sidebar');
-  if(!sidebar)return;
-  var navList=sidebar.querySelector('nav > ul');
-  if(!navList||navList.querySelector('[data-af-wizard]'))return;
-  var wizardUrl=window.location.protocol+'//'+window.location.hostname+':9000';
-  var li=document.createElement('li');
-  li.setAttribute('data-af-wizard','1');
-  li.className='pf-c-nav__item pf-v5-c-nav__item';
-  li.innerHTML=
-    '<a class="pf-c-nav__link pf-v5-c-nav__link af-wizard-link" href="'+wizardUrl+'" target="_blank" rel="noopener noreferrer">'
-    +'<svg class="af-wiz-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">'
-    +'<rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.4"/>'
-    +'<path d="M3.5 4.5l3 2.5-3 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
-    +'<path d="M8 9h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
-    +'</svg>'
-    +'<span>Deploy Wizard</span>'
-    +'<svg class="af-ext-icon" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">'
-    +'<path d="M5.5 1.5h3v3M8.5 1.5L4 6M2.5 3H1.5a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h5a.5.5 0 0 0 .5-.5V7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
-    +'</svg>'
-    +'</a>';
-  navList.appendChild(li);
-}
-var wizardNavObs=new MutationObserver(injectWizardNav);
-wizardNavObs.observe(document.documentElement,{childList:true,subtree:true});
-
 })();</script>
 <link rel="stylesheet" href="/static/custom/custom.css"><script defer="defer" src="./static/js/main.be3da92f.js"></script><link href="./static/css/main.bcaaa591.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><style nonce="{{ csp_nonce }}">.app{height:100%}</style><div id="app" class="app"></div></body></html>

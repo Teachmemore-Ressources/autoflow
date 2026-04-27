@@ -6,9 +6,12 @@ SOPS encryption, cert generation and docker compose deployment.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import warnings
@@ -19,8 +22,9 @@ from dotenv import dotenv_values
 
 # Suppress TLS verification warnings for internal calls to self-signed CA
 warnings.filterwarnings("ignore", message=".*Unverified HTTPS.*")
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
 from schema import FIELDS, SECTIONS
@@ -38,9 +42,60 @@ AWX_DOCKERFILE    = ROOT / "awx/Dockerfile.patched"
 SOPS_AGE_KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
 
 STATIC_DIR = Path(__file__).parent / "static"
+AUDIT_LOG  = ROOT / "wizard-audit.log"
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+_WIZARD_TOKEN = os.environ.get("WIZARD_TOKEN", "").strip()
+if not _WIZARD_TOKEN:
+    print(
+        "\n  ERROR: WIZARD_TOKEN environment variable is not set.\n"
+        "  Generate a token and export it before starting the wizard:\n\n"
+        "    export WIZARD_TOKEN=$(python3 -c \"import secrets; print(secrets.token_urlsafe(32))\")\n"
+        "    make wizard\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+_http_basic = HTTPBasic(realm="Autoflow Deploy Wizard")
+
+
+def _require_auth(creds: HTTPBasicCredentials = Depends(_http_basic)) -> str:
+    """HTTP Basic Auth — username ignored, password must match WIZARD_TOKEN."""
+    ok = secrets.compare_digest(creds.password.encode(), _WIZARD_TOKEN.encode())
+    if not ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": 'Basic realm="Autoflow Deploy Wizard"'},
+        )
+    return creds.username
+
+
+# ── Audit log ─────────────────────────────────────────────────────────────────
+
+def _audit(request: Request, action: str, **extra) -> None:
+    """Append a JSON line to wizard-audit.log — values are never logged."""
+    entry = {
+        "ts":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ip":     request.client.host if request.client else "unknown",
+        "action": action,
+        **extra,
+    }
+    with AUDIT_LOG.open("a") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
 
 # ── App ───────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Autoflow Deploy Wizard", docs_url=None, redoc_url=None)
+# dependencies=[Depends(_require_auth)] applique l'auth Basic à TOUTES les routes.
+# Les fichiers statiques (app.mount) ne passent pas par ce mécanisme — OK car
+# /static/ ne contient que HTML/CSS/logo, aucune donnée sensible.
+app = FastAPI(
+    title="Autoflow Deploy Wizard",
+    docs_url=None,
+    redoc_url=None,
+    dependencies=[Depends(_require_auth)],
+)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
@@ -78,7 +133,7 @@ def get_config():
 
 
 @app.post("/api/config")
-def save_config(data: dict):
+def save_config(request: Request, data: dict):
     # Load current .env to compute diff BEFORE merging
     old: dict[str, str] = {}
     if ENV_FILE.exists():
@@ -159,6 +214,8 @@ def save_config(data: dict):
             ),
         })
 
+    _audit(request, "config.save", keys=changed)
+
     return {
         "status":            "saved",
         "changed":           changed,
@@ -219,7 +276,7 @@ def generate_secret(generate_type: str):
 # ── SOPS ──────────────────────────────────────────────────────────────────────
 
 @app.post("/api/encrypt")
-def encrypt_env():
+def encrypt_env(request: Request):
     if not ENV_FILE.exists():
         raise HTTPException(400, ".env not found — save config first")
     env = {**os.environ, "SOPS_AGE_KEY_FILE": str(SOPS_AGE_KEY_FILE)}
@@ -230,6 +287,7 @@ def encrypt_env():
     if result.returncode != 0:
         raise HTTPException(500, f"SOPS error: {result.stderr.strip()}")
     ENV_ENC_FILE.write_text(result.stdout)
+    _audit(request, "secrets.encrypt")
     return {"status": "encrypted", "path": str(ENV_ENC_FILE)}
 
 
@@ -300,8 +358,10 @@ NEEDS_RECREATE: frozenset[str] = frozenset({
 # ── Docker Compose deployment ─────────────────────────────────────────────────
 
 @app.get("/api/deploy")
-async def deploy(encrypt: bool = False):
+async def deploy(request: Request, encrypt: bool = False):
     """Stream docker compose up -d output via Server-Sent Events."""
+
+    _audit(request, "stack.deploy", encrypt=encrypt)
 
     async def event_stream():
         if encrypt:
@@ -346,9 +406,10 @@ def _sse(msg: str) -> str:
 # ── Targeted service restart ───────────────────────────────────────────────────
 
 @app.get("/api/restart")
-async def restart_services(services: str = ""):
+async def restart_services(request: Request, services: str = ""):
     """SSE: docker compose restart <services>."""
     service_list = [s.strip() for s in services.split(",") if s.strip()]
+    _audit(request, "services.restart", services=service_list)
 
     async def stream():
         if not service_list:
@@ -431,8 +492,9 @@ WIZARD_PKI_OVERRIDE = ROOT / "docker-compose.wizard-pki.yml"
 # ── TLS certificate — PKI-based flow ──────────────────────────────────────────
 
 @app.get("/api/generate-cert")
-async def generate_cert():
+async def generate_cert(request: Request):
     """SSE: start PKI → create Root CA → issue wildcard → write to traefik/certs/."""
+    _audit(request, "pki.generate_cert")
 
     async def stream():
         import httpx as _httpx
@@ -838,8 +900,9 @@ def download_ca():
 # ── AWX custom image build ─────────────────────────────────────────────────────
 
 @app.get("/api/build-awx")
-async def build_awx():
+async def build_awx(request: Request):
     """Build the custom AWX patched image (SSE stream)."""
+    _audit(request, "awx.build_image")
     awx_version = _load_env().get("AWX_VERSION", "24.6.1")
     tag = f"autoflow/awx-patched:{awx_version}"
 
@@ -1552,8 +1615,9 @@ async def gitea_init_network():
 # ── Post-deploy setup ─────────────────────────────────────────────────────────
 
 @app.get("/api/init-gitea")
-async def init_gitea():
+async def init_gitea(request: Request):
     """SSE: create the Gitea admin user via 'gitea admin user create'."""
+    _audit(request, "gitea.init_admin")
 
     async def stream():
         config   = _load_env()
@@ -1621,8 +1685,9 @@ def init_gitea_status():
 
 
 @app.get("/api/init-awx-token")
-async def init_awx_token():
+async def init_awx_token(request: Request):
     """SSE: create an AWX API token and save it to .env + restart event_engine."""
+    _audit(request, "awx.init_token")
 
     async def stream():
         config       = _load_env()

@@ -179,20 +179,32 @@ ps:             ## Alias for status
 
 WIZARD_VENV := .wizard-venv
 
-wizard:         ## Launch the deployment wizard on http://localhost:9000
+wizard:         ## Launch the deployment wizard on http://localhost:9000  (WIZARD_TOKEN required)
 	@[ -d $(WIZARD_VENV) ] || python3 -m venv $(WIZARD_VENV)
 	@$(WIZARD_VENV)/bin/pip install -q -r services/deploy-wizard/requirements.txt
+	@[ -n "$(WIZARD_TOKEN)" ] || { \
+		echo ""; \
+		echo "  ERROR: WIZARD_TOKEN is not set."; \
+		echo "  Generate and export a token before running the wizard:"; \
+		echo ""; \
+		echo "    export WIZARD_TOKEN=\$$(python3 -c \"import secrets; print(secrets.token_urlsafe(32))\")"; \
+		echo ""; \
+		exit 1; \
+	}
 	@echo ""
 	@echo "  ╔══════════════════════════════════════════╗"
 	@echo "  ║   Autoflow Deploy Wizard                 ║"
-	@echo "  ║   http://localhost:9000                  ║"
+	@echo "  ║   URL      : http://localhost:9000       ║"
+	@echo "  ║   Username : wizard                      ║"
+	@echo "  ║   Password : $$WIZARD_TOKEN              ║"
+	@echo "  ║   Audit    : wizard-audit.log            ║"
 	@echo "  ║   Press Ctrl+C to stop                   ║"
 	@echo "  ╚══════════════════════════════════════════╝"
 	@echo ""
-	@AUTOFLOW_ROOT=$(PWD) $(WIZARD_VENV)/bin/uvicorn main:app \
-		--host 0.0.0.0 --port 9000 \
+	@AUTOFLOW_ROOT=$(PWD) WIZARD_TOKEN=$(WIZARD_TOKEN) $(WIZARD_VENV)/bin/uvicorn main:app \
+		--host 127.0.0.1 --port 9000 \
 		--app-dir services/deploy-wizard \
-		--log-level info
+		--log-level warning
 
 # ── Secrets (SOPS + Age) ─────────────────────────────────────
 
