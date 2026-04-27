@@ -33,7 +33,8 @@ GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
         ee-deps docker-trust-ca gitea-init-network gitea-init-runner \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update \
-        test test-unit test-integration test-e2e test-stack-up test-stack-down
+        test test-unit test-integration test-e2e test-stack-up test-stack-down \
+        cli-install cli-check
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -310,3 +311,25 @@ secrets-check:   ## Verify the Age key is present and .env.enc is decryptable
 	@echo "  Verifying .env.enc decryption..."
 	@sops --decrypt --input-type dotenv --output-type dotenv .env.enc > /dev/null
 	@echo "  OK — secrets are accessible."
+
+# ── CLI autoflow ─────────────────────────────────────────────────────────────
+
+CLI_VENV = .cli-venv
+
+$(CLI_VENV):
+	@python3 -m venv $(CLI_VENV)
+	@$(CLI_VENV)/bin/pip install -q --upgrade pip
+	@$(CLI_VENV)/bin/pip install -q -r scripts/requirements-cli.txt
+
+cli-install: $(CLI_VENV)  ## Installe le CLI autoflow dans .cli-venv
+	@chmod +x scripts/autoflow
+	@echo ""
+	@echo "  CLI installé. Utilisez :"
+	@echo "    ./scripts/autoflow --help"
+	@echo ""
+	@echo "  Pour une utilisation globale :"
+	@echo "    sudo ln -sf \$$PWD/scripts/autoflow /usr/local/bin/autoflow"
+	@echo "    # puis : autoflow --help"
+
+cli-check: $(CLI_VENV)  ## Vérifie la syntaxe du CLI et affiche l'aide
+	@$(CLI_VENV)/bin/python scripts/autoflow --help

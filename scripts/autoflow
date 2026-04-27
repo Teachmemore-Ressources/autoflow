@@ -1,0 +1,1076 @@
+#!/usr/bin/env python3
+"""
+autoflow — CLI opérationnel pour la stack Autoflow
+=====================================================
+
+Déclenche des jobs AWX, inspecte la stack, gère les utilisateurs Gitea,
+recharge le runner et envoie des événements webhook — sans passer par l'UI.
+
+Utilisation rapide
+------------------
+  autoflow stack status                    # santé de tous les services
+  autoflow job launch 1 --wait             # lancer template 1, attendre la fin
+  autoflow event send deploy --source ci   # envoyer un événement
+  autoflow gitea user-create alice --email alice@example.com
+  autoflow ee list                         # builds EE récents
+  autoflow ee rollback base 20260426-120000
+
+Configuration
+-------------
+  Variables lues depuis .env (à la racine du dépôt) ou l'environnement :
+
+    DOMAIN             Domaine principal  (ex. autoflow.company.com)
+    API_URL            URL API service    (défaut : https://api.DOMAIN)
+    API_USERNAME       Login API          (défaut : admin)
+    API_SECRET_KEY     Mot de passe API
+    AWX_URL            URL AWX directe    (ex. https://awx.DOMAIN)
+    AWX_TOKEN          Token AWX Bearer   (si accès direct)
+    AWX_ADMIN_USER     Utilisateur AWX    (défaut : admin)
+    AWX_ADMIN_PASSWORD Mot de passe AWX
+    GITEA_URL          URL Gitea          (défaut : https://git.DOMAIN)
+    GITEA_TOKEN        Token API Gitea
+    EVENT_ENGINE_URL   URL Event Engine   (défaut : https://events.DOMAIN)
+    EE_BUILDER_URL     URL EE Builder     (défaut : https://ee.DOMAIN)
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Any, Optional
+
+import httpx
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich import box
+from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+# ── Bootstrap : cherche .env depuis le répertoire courant ou le parent ────────
+
+def _load_dotenv():
+    """Charge .env sans dépendre de python-dotenv si absent."""
+    # Cherche .env depuis le répertoire courant en remontant jusqu'à 5 niveaux
+    path = Path.cwd()
+    for _ in range(6):
+        env_file = path / ".env"
+        if env_file.exists():
+            try:
+                from dotenv import load_dotenv  # type: ignore[import]
+                load_dotenv(env_file, override=False)
+            except ImportError:
+                # Fallback manuel si python-dotenv absent
+                for line in env_file.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        os.environ.setdefault(k, v)
+            return
+        parent = path.parent
+        if parent == path:
+            break
+        path = parent
+
+
+_load_dotenv()
+
+# ── App Typer ─────────────────────────────────────────────────────────────────
+
+app   = typer.Typer(
+    name="autoflow",
+    help="CLI opérationnel pour la stack Autoflow.",
+    add_completion=True,
+    rich_markup_mode="rich",
+    no_args_is_help=True,
+)
+console = Console()
+err     = Console(stderr=True)
+
+# ── Sous-commandes ────────────────────────────────────────────────────────────
+
+stack_app  = typer.Typer(help="État de la stack et des services.", no_args_is_help=True)
+job_app    = typer.Typer(help="Jobs AWX (lancer, suivre, lister).", no_args_is_help=True)
+event_app  = typer.Typer(help="Événements vers l'Event Engine.", no_args_is_help=True)
+gitea_app  = typer.Typer(help="Administration Gitea (utilisateurs, runner).", no_args_is_help=True)
+ee_app     = typer.Typer(help="Execution Environments (builds, rollback).", no_args_is_help=True)
+
+app.add_typer(stack_app,  name="stack")
+app.add_typer(job_app,    name="job")
+app.add_typer(event_app,  name="event")
+app.add_typer(gitea_app,  name="gitea")
+app.add_typer(ee_app,     name="ee")
+
+
+# ── Helpers de configuration ──────────────────────────────────────────────────
+
+def _env(key: str, default: str = "") -> str:
+    return os.environ.get(key, default).strip()
+
+
+def _domain() -> str:
+    return _env("DOMAIN", "localhost")
+
+
+def _api_url() -> str:
+    d = _domain()
+    return _env("API_URL", f"https://api.{d}" if d != "localhost" else "http://localhost:8000")
+
+
+def _event_url() -> str:
+    d = _domain()
+    return _env("EVENT_ENGINE_URL",
+                f"https://events.{d}" if d != "localhost" else "http://localhost:8001")
+
+
+def _ee_url() -> str:
+    d = _domain()
+    return _env("EE_BUILDER_URL",
+                f"https://ee.{d}" if d != "localhost" else "http://localhost:8003")
+
+
+def _gitea_url() -> str:
+    d = _domain()
+    return _env("GITEA_URL",
+                f"https://git.{d}" if d != "localhost" else "http://localhost:3001")
+
+
+def _awx_url() -> str:
+    d = _domain()
+    return _env("AWX_URL",
+                f"https://awx.{d}" if d != "localhost" else "http://localhost:80")
+
+
+# ── Client HTTP ───────────────────────────────────────────────────────────────
+
+def _http(base_url: str, headers: dict | None = None, timeout: float = 15.0) -> httpx.Client:
+    """Crée un client httpx synchrone (CLI = pas besoin d'async)."""
+    return httpx.Client(
+        base_url=base_url,
+        headers=headers or {},
+        timeout=timeout,
+        verify=False,   # self-signed certs en lab — mettre True en prod avec CA
+        follow_redirects=True,
+    )
+
+
+def _api_token() -> str:
+    """Obtient un JWT Bearer depuis l'API service."""
+    username = _env("API_USERNAME", "admin")
+    password = _env("API_SECRET_KEY") or _env("API_PASSWORD")
+    if not password:
+        err.print("[bold red]✗[/] Variable API_SECRET_KEY manquante dans .env")
+        raise typer.Exit(1)
+
+    with _http(_api_url()) as c:
+        try:
+            r = c.post("/auth/token",
+                       json={"username": username, "password": password})
+            r.raise_for_status()
+            return r.json()["access_token"]
+        except httpx.HTTPStatusError as e:
+            err.print(f"[bold red]✗[/] Authentification API échouée : HTTP {e.response.status_code}")
+            raise typer.Exit(1)
+        except Exception as e:
+            err.print(f"[bold red]✗[/] Impossible de contacter l'API ({_api_url()}) : {e}")
+            raise typer.Exit(1)
+
+
+def _api_headers() -> dict:
+    return {"Authorization": f"Bearer {_api_token()}"}
+
+
+def _gitea_headers() -> dict:
+    token = _env("GITEA_TOKEN")
+    if not token:
+        err.print("[bold red]✗[/] Variable GITEA_TOKEN manquante dans .env")
+        raise typer.Exit(1)
+    return {"Authorization": f"token {token}", "Content-Type": "application/json"}
+
+
+def _awx_headers() -> dict:
+    token = _env("AWX_TOKEN")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    user = _env("AWX_ADMIN_USER", "admin")
+    pw   = _env("AWX_ADMIN_PASSWORD")
+    if pw:
+        import base64
+        creds = base64.b64encode(f"{user}:{pw}".encode()).decode()
+        return {"Authorization": f"Basic {creds}"}
+    err.print("[bold red]✗[/] AWX_TOKEN ou AWX_ADMIN_USER/PASSWORD manquants dans .env")
+    raise typer.Exit(1)
+
+
+# ── Affichage ─────────────────────────────────────────────────────────────────
+
+def _status_icon(ok: bool) -> str:
+    return "[green]✔[/]" if ok else "[red]✗[/]"
+
+
+def _job_color(status: str) -> str:
+    return {
+        "successful": "green",
+        "failed":     "red",
+        "error":      "red",
+        "canceled":   "yellow",
+        "running":    "cyan",
+        "pending":    "blue",
+        "waiting":    "blue",
+    }.get(status, "white")
+
+
+def _abort(msg: str) -> None:
+    err.print(f"[bold red]✗[/] {msg}")
+    raise typer.Exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# stack
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SERVICES_HEALTH = [
+    ("API",          _api_url,     "/health"),
+    ("Event Engine", _event_url,   "/health"),
+    ("EE Builder",   _ee_url,      "/healthz"),
+    ("AWX",          _awx_url,     "/api/v2/ping/"),
+]
+
+
+@stack_app.command("status")
+def stack_status(
+    timeout: float = typer.Option(5.0, help="Timeout HTTP par service (secondes).")
+):
+    """Vérifie la santé de tous les services de la stack."""
+    console.print()
+    table = Table(title="État de la stack Autoflow",
+                  box=box.ROUNDED, show_header=True,
+                  header_style="bold cyan")
+    table.add_column("Service",  style="bold white", min_width=14)
+    table.add_column("URL",      style="dim", min_width=32)
+    table.add_column("Statut",   justify="center", min_width=8)
+    table.add_column("Détail",   style="dim", min_width=24)
+
+    all_ok = True
+    for name, url_fn, path in _SERVICES_HEALTH:
+        url = url_fn()
+        try:
+            with _http(url, timeout=timeout) as c:
+                r = c.get(path)
+                ok = r.status_code < 400
+                if not ok:
+                    all_ok = False
+                try:
+                    body = r.json()
+                    detail = (body.get("status") or body.get("ha_enabled") or
+                              body.get("version") or str(r.status_code))
+                except Exception:
+                    detail = str(r.status_code)
+        except Exception as e:
+            ok = False
+            all_ok = False
+            detail = str(e)[:48]
+
+        table.add_row(name, url + path, _status_icon(ok), str(detail))
+
+    console.print(table)
+
+    # Containers Docker (si docker disponible)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "compose", "ps", "--format", "table {{.Name}}\t{{.Status}}\t{{.Ports}}"],
+            capture_output=True, text=True, timeout=10,
+            cwd=_find_compose_dir(),
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            console.print()
+            console.print(Panel(result.stdout.strip(),
+                                title="[bold]Containers Docker[/]",
+                                border_style="dim"))
+    except Exception:
+        pass  # docker non disponible ou hors du repo
+
+    console.print()
+    if not all_ok:
+        raise typer.Exit(1)
+
+
+@stack_app.command("ps")
+def stack_ps():
+    """Affiche les containers Docker (équivalent de docker compose ps)."""
+    import subprocess
+    result = subprocess.run(
+        ["docker", "compose", "ps"],
+        cwd=_find_compose_dir(),
+    )
+    raise typer.Exit(result.returncode)
+
+
+@stack_app.command("logs")
+def stack_logs(
+    service: Optional[str] = typer.Argument(None, help="Nom du service (vide = tous)."),
+    tail:    int = typer.Option(50, help="Nombre de lignes à afficher."),
+    follow:  bool = typer.Option(False, "-f", help="Suivre les logs en temps réel."),
+):
+    """Affiche les logs d'un service (ou de toute la stack)."""
+    import subprocess
+    cmd = ["docker", "compose", "logs", f"--tail={tail}"]
+    if follow:
+        cmd.append("-f")
+    if service:
+        cmd.append(service)
+    result = subprocess.run(cmd, cwd=_find_compose_dir())
+    raise typer.Exit(result.returncode)
+
+
+def _find_compose_dir() -> str:
+    """Remonte jusqu'à trouver un docker-compose.yml."""
+    path = Path.cwd()
+    for _ in range(6):
+        if (path / "docker-compose.yml").exists():
+            return str(path)
+        parent = path.parent
+        if parent == path:
+            break
+        path = parent
+    return str(Path.cwd())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# job
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@job_app.command("launch")
+def job_launch(
+    template_id: int = typer.Argument(..., help="ID du job template AWX."),
+    extra_vars: Optional[str] = typer.Option(
+        None, "--extra-vars", "-e",
+        help='Extra vars JSON, ex : \'{"env": "prod"}\' ou @fichier.json',
+    ),
+    wait: bool = typer.Option(False, "--wait", "-w",
+                               help="Attendre la fin du job (polling)."),
+    callback_url: Optional[str] = typer.Option(
+        None, "--callback", help="URL de notification à la fin du job."
+    ),
+    poll_interval: int = typer.Option(5, "--poll", help="Intervalle de polling (s)."),
+    timeout: int = typer.Option(600, "--timeout", help="Timeout total d'attente (s)."),
+):
+    """
+    Lance un job template AWX et affiche le résultat.
+
+    [bold]Exemples[/]
+
+      autoflow job launch 1
+      autoflow job launch 3 --extra-vars '{"env":"prod","app":"api"}' --wait
+      autoflow job launch 5 --extra-vars @vars.json --wait --timeout 300
+    """
+    # Résolution extra_vars
+    ev: dict[str, Any] = {}
+    if extra_vars:
+        if extra_vars.startswith("@"):
+            p = Path(extra_vars[1:])
+            if not p.exists():
+                _abort(f"Fichier extra-vars introuvable : {p}")
+            ev = json.loads(p.read_text())
+        else:
+            try:
+                ev = json.loads(extra_vars)
+            except json.JSONDecodeError as exc:
+                _abort(f"extra-vars JSON invalide : {exc}")
+
+    body: dict[str, Any] = {}
+    if ev:
+        body["extra_vars"] = ev
+    if callback_url:
+        body["callback_url"] = callback_url
+
+    console.print(f"\n[bold cyan]→[/] Lancement du template [bold]{template_id}[/]…")
+
+    with _http(_api_url(), headers=_api_headers()) as c:
+        try:
+            r = c.post(f"/awx/job-templates/{template_id}/launch", json=body)
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code} : {e.response.text[:200]}")
+        except Exception as e:
+            _abort(str(e))
+
+    job = r.json()
+    job_id = job.get("id")
+    color  = _job_color(job.get("status", ""))
+
+    _print_job_row(job)
+
+    if wait and job_id:
+        _wait_for_job(job_id, poll_interval=poll_interval, timeout=timeout)
+    elif job_id:
+        console.print(f"\n  Suivre : [bold]autoflow job watch {job_id}[/]")
+
+    console.print()
+
+
+@job_app.command("status")
+def job_status(
+    job_id: int = typer.Argument(..., help="ID du job AWX."),
+):
+    """Affiche l'état détaillé d'un job AWX."""
+    with _http(_api_url(), headers=_api_headers()) as c:
+        try:
+            r = c.get(f"/awx/jobs/{job_id}/")
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            _abort(str(e))
+
+    _print_job_row(r.json(), verbose=True)
+    console.print()
+
+
+@job_app.command("list")
+def job_list(
+    limit: int = typer.Option(20, "--limit", "-n", help="Nombre de jobs à afficher."),
+    status_filter: Optional[str] = typer.Option(
+        None, "--status", "-s",
+        help="Filtrer par statut (successful/failed/running/…).",
+    ),
+):
+    """Liste les derniers jobs AWX."""
+    params = {"page_size": limit}
+    if status_filter:
+        params["status"] = status_filter
+
+    with _http(_api_url(), headers=_api_headers()) as c:
+        try:
+            r = c.get("/awx/jobs/history", params=params)
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            _abort(str(e))
+
+    data  = r.json()
+    jobs  = data if isinstance(data, list) else data.get("results", [])
+
+    if not jobs:
+        console.print("[dim]Aucun job trouvé.[/]")
+        return
+
+    table = Table(box=box.SIMPLE_HEAD, show_header=True,
+                  header_style="bold cyan", title="Jobs AWX récents")
+    table.add_column("ID",       justify="right", style="dim", width=6)
+    table.add_column("Template", min_width=20)
+    table.add_column("Statut",   justify="center", width=12)
+    table.add_column("Démarré",  min_width=19, style="dim")
+    table.add_column("Durée",    justify="right", style="dim", width=8)
+
+    for j in jobs[:limit]:
+        tid    = j.get("job_template", j.get("id", "?"))
+        tname  = j.get("name", j.get("job_template_name", str(tid)))
+        status = j.get("status", "?")
+        color  = _job_color(status)
+        table.add_row(
+            str(j.get("id", "?")),
+            tname,
+            f"[{color}]{status}[/]",
+            (j.get("started") or "")[:19],
+            _fmt_dur(j.get("elapsed") or j.get("elapsed_seconds")),
+        )
+
+    console.print()
+    console.print(table)
+    console.print()
+
+
+@job_app.command("watch")
+def job_watch(
+    job_id: int = typer.Argument(..., help="ID du job AWX à surveiller."),
+    poll_interval: int = typer.Option(5, "--poll", help="Intervalle de polling (s)."),
+    timeout: int = typer.Option(600, "--timeout", help="Timeout total (s)."),
+):
+    """Surveille un job AWX jusqu'à sa complétion."""
+    console.print()
+    _wait_for_job(job_id, poll_interval=poll_interval, timeout=timeout)
+    console.print()
+
+
+def _wait_for_job(job_id: int, poll_interval: int = 5, timeout: int = 600) -> None:
+    _TERMINAL = {"successful", "failed", "error", "canceled"}
+    elapsed   = 0
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[cyan]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task(f"Job #{job_id} en cours…", total=None)
+
+        with _http(_api_url(), headers=_api_headers(), timeout=timeout + 10) as c:
+            while elapsed < timeout:
+                try:
+                    r = c.get(f"/awx/jobs/{job_id}/")
+                    if r.status_code == 200:
+                        job    = r.json()
+                        status = job.get("status", "unknown")
+                        progress.update(task, description=f"Job #{job_id} — {status}")
+                        if status in _TERMINAL:
+                            progress.stop()
+                            _print_job_row(job, verbose=True)
+                            if status != "successful":
+                                raise typer.Exit(1)
+                            return
+                except Exception:
+                    pass
+
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+
+    _abort(f"Timeout ({timeout}s) atteint pour le job #{job_id}")
+
+
+def _print_job_row(job: dict, verbose: bool = False) -> None:
+    status  = job.get("status", "?")
+    color   = _job_color(status)
+    job_id  = job.get("id", "?")
+    sf      = job.get("summary_fields", {})
+    tname   = sf.get("job_template", {}).get("name") or job.get("name", "?")
+    elapsed = _fmt_dur(job.get("elapsed"))
+
+    icon = {"successful": "✔", "failed": "✗", "error": "✗",
+            "canceled": "⊘", "running": "↻"}.get(status, "•")
+
+    console.print(
+        f"  [{color}]{icon}[/] Job [bold]#{job_id}[/]  "
+        f"template=[bold]{tname}[/]  "
+        f"statut=[{color}]{status}[/{color}]  "
+        f"durée={elapsed}"
+    )
+    if verbose:
+        for key, label in [
+            ("started",  "Démarré"),
+            ("finished", "Terminé"),
+        ]:
+            val = job.get(key)
+            if val:
+                console.print(f"    [dim]{label:10}[/] {val[:19]}")
+
+
+def _fmt_dur(s: Any) -> str:
+    if s is None:
+        return "—"
+    try:
+        s = float(s)
+    except (TypeError, ValueError):
+        return "—"
+    if s < 60:
+        return f"{s:.0f}s"
+    m, sec = divmod(int(s), 60)
+    if m < 60:
+        return f"{m}m{sec:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# event
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@event_app.command("send")
+def event_send(
+    action: str = typer.Argument(..., help='Action de l\'événement, ex : "deploy".'),
+    source: str = typer.Option("cli", "--source", "-s",
+                                help="Source de l'événement."),
+    data: Optional[str] = typer.Option(
+        None, "--data", "-d",
+        help='Données JSON, ex : \'{"env":"prod"}\' ou @fichier.json',
+    ),
+    admin_token: Optional[str] = typer.Option(
+        None, "--token", envvar="ADMIN_TOKEN",
+        help="Token admin de l'Event Engine (si HMAC requis).",
+    ),
+):
+    """
+    Envoie un événement générique à l'Event Engine.
+
+    [bold]Exemples[/]
+
+      autoflow event send deploy --source ci --data '{"env":"prod"}'
+      autoflow event send nightly-backup --source scheduler
+      autoflow event send @payload.json          # action lue depuis JSON
+    """
+    payload_data: dict[str, Any] = {}
+    if data:
+        if data.startswith("@"):
+            p = Path(data[1:])
+            if not p.exists():
+                _abort(f"Fichier data introuvable : {p}")
+            payload_data = json.loads(p.read_text())
+        else:
+            try:
+                payload_data = json.loads(data)
+            except json.JSONDecodeError as exc:
+                _abort(f"data JSON invalide : {exc}")
+
+    body = {"action": action, "source": source, "data": payload_data}
+    headers: dict[str, str] = {}
+    if admin_token:
+        headers["Authorization"] = f"Bearer {admin_token}"
+
+    console.print(f"\n[bold cyan]→[/] Envoi de l'événement "
+                  f"[bold]{source}/{action}[/] vers {_event_url()}…")
+
+    with _http(_event_url(), headers=headers) as c:
+        try:
+            r = c.post("/event", json=body)
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code} : {e.response.text[:200]}")
+        except Exception as e:
+            _abort(str(e))
+
+    result = r.json()
+    status = result.get("status", "?")
+    color  = "green" if status in ("accepted", "queued") else (
+             "yellow" if status == "deduplicated" else "red")
+
+    console.print(f"  [bold {color}]{status}[/]", end="")
+    if "job_id" in result:
+        console.print(f"  — job [bold]#{result['job_id']}[/]", end="")
+    if "event_id" in result:
+        console.print(f"  — event_id={result['event_id']}", end="")
+    console.print()
+    console.print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gitea
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@gitea_app.command("user-create")
+def gitea_user_create(
+    username: str = typer.Argument(..., help="Nom d'utilisateur Gitea."),
+    email: str = typer.Option(..., "--email", "-e", help="Adresse e-mail."),
+    password: Optional[str] = typer.Option(
+        None, "--password", "-p",
+        help="Mot de passe (généré automatiquement si absent).",
+    ),
+    admin: bool = typer.Option(False, "--admin", help="Créer un compte administrateur."),
+    must_change: bool = typer.Option(
+        False, "--must-change-password",
+        help="Forcer le changement de mot de passe à la première connexion.",
+    ),
+):
+    """
+    Crée un utilisateur dans Gitea.
+
+    [bold]Exemples[/]
+
+      autoflow gitea user-create alice --email alice@company.com
+      autoflow gitea user-create ops --email ops@company.com --admin --password S3cr3t
+    """
+    import secrets
+    import string
+
+    if not password:
+        alphabet = string.ascii_letters + string.digits + "!@#$%"
+        password = "".join(secrets.choice(alphabet) for _ in range(16))
+        console.print(f"  [dim]Mot de passe généré :[/] [bold]{password}[/]")
+
+    body = {
+        "email":               email,
+        "login_name":          username,
+        "must_change_password": must_change,
+        "password":            password,
+        "send_notify":         False,
+        "source_id":           0,
+        "username":            username,
+    }
+
+    console.print(f"\n[bold cyan]→[/] Création de l'utilisateur [bold]{username}[/]…")
+
+    with _http(_gitea_url(), headers=_gitea_headers()) as c:
+        try:
+            r = c.post("/api/v1/admin/users", json=body)
+            if r.status_code == 422:
+                _abort(f"Utilisateur déjà existant ou données invalides : {r.text[:200]}")
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code} : {e.response.text[:200]}")
+        except Exception as e:
+            _abort(str(e))
+
+    user = r.json()
+
+    # Promouvoir en admin si demandé
+    if admin:
+        with _http(_gitea_url(), headers=_gitea_headers()) as c:
+            try:
+                r2 = c.patch(f"/api/v1/admin/users/{username}",
+                             json={"admin": True,
+                                   "email": email,
+                                   "source_id": 0,
+                                   "login_name": username})
+                r2.raise_for_status()
+            except Exception:
+                console.print("  [yellow]⚠[/] Promotion admin échouée (vérifier les droits GITEA_TOKEN)")
+
+    console.print(
+        f"  [green]✔[/] Utilisateur [bold]{username}[/] créé "
+        f"(id={user.get('id', '?')}, admin={user.get('is_admin', admin)})"
+    )
+    console.print(f"  [dim]URL :[/] {_gitea_url()}/{username}")
+    console.print()
+
+
+@gitea_app.command("user-list")
+def gitea_user_list(
+    limit: int = typer.Option(20, "--limit", "-n"),
+):
+    """Liste les utilisateurs Gitea."""
+    with _http(_gitea_url(), headers=_gitea_headers()) as c:
+        try:
+            r = c.get("/api/v1/admin/users", params={"limit": limit, "page": 1})
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            _abort(str(e))
+
+    users = r.json()
+    if not users:
+        console.print("[dim]Aucun utilisateur.[/]")
+        return
+
+    table = Table(box=box.SIMPLE_HEAD, header_style="bold cyan",
+                  title="Utilisateurs Gitea")
+    table.add_column("ID",       justify="right", width=6, style="dim")
+    table.add_column("Username", min_width=16)
+    table.add_column("E-mail",   min_width=24, style="dim")
+    table.add_column("Admin",    justify="center", width=7)
+    table.add_column("Actif",    justify="center", width=7)
+
+    for u in users:
+        table.add_row(
+            str(u.get("id", "?")),
+            u.get("login", "?"),
+            u.get("email", ""),
+            "[green]✔[/]" if u.get("is_admin") else "",
+            "[green]✔[/]" if u.get("active") else "[red]✗[/]",
+        )
+
+    console.print()
+    console.print(table)
+    console.print()
+
+
+@gitea_app.command("token-create")
+def gitea_token_create(
+    username: str = typer.Argument(..., help="Propriétaire du token."),
+    name: str = typer.Option(
+        "autoflow-cli", "--name", "-n",
+        help="Nom du token.",
+    ),
+):
+    """Crée un token API Gitea pour un utilisateur."""
+    admin_user = _env("GITEA_ADMIN_USER", "admin")
+    admin_pass = _env("GITEA_ADMIN_PASSWORD") or _env("GITEA_TOKEN")
+
+    if not admin_pass:
+        _abort("GITEA_ADMIN_PASSWORD ou GITEA_TOKEN requis pour créer un token.")
+
+    auth = (admin_user, admin_pass)
+    with httpx.Client(base_url=_gitea_url(), auth=auth,
+                      verify=False, follow_redirects=True) as c:
+        try:
+            r = c.post(f"/api/v1/users/{username}/tokens",
+                       json={"name": name})
+            if r.status_code == 409:
+                _abort(f"Token '{name}' déjà existant pour {username}.")
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code} : {e.response.text[:200]}")
+        except Exception as e:
+            _abort(str(e))
+
+    token = r.json()
+    console.print(f"\n  [green]✔[/] Token créé pour [bold]{username}[/]")
+    console.print(f"  [bold yellow]{token.get('sha1', token.get('token', '?'))}[/]")
+    console.print("  [dim](copiez ce token maintenant — il ne sera plus affiché)[/]")
+    console.print()
+
+
+@gitea_app.command("runner-refresh")
+def gitea_runner_refresh(
+    force: bool = typer.Option(False, "--force", help="Redémarrer le container act_runner."),
+):
+    """
+    Force le re-enregistrement du runner Gitea Actions.
+
+    Par défaut, exécute le script d'initialisation dans le container.
+    Avec --force, redémarre le container act_runner.
+    """
+    import subprocess
+
+    console.print("\n[bold cyan]→[/] Refresh du runner Gitea Actions…")
+
+    if force:
+        result = subprocess.run(
+            ["docker", "compose", "restart", "act_runner"],
+            cwd=_find_compose_dir(),
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            console.print("  [green]✔[/] Container act_runner redémarré.")
+        else:
+            _abort(f"Échec restart : {result.stderr[:200]}")
+    else:
+        # Récupérer le token de registration depuis Gitea et l'injecter
+        gitea_url = _gitea_url()
+        try:
+            with _http(gitea_url, headers=_gitea_headers()) as c:
+                r = c.get("/api/v1/admin/runners/registration-token")
+                r.raise_for_status()
+                token = r.json().get("token")
+                if not token:
+                    raise ValueError("token vide")
+        except Exception as e:
+            err.print(f"  [yellow]⚠[/] Impossible de récupérer le token de runner via API : {e}")
+            err.print("  Utilise [bold]autoflow gitea runner-refresh --force[/] pour redémarrer le container.")
+            raise typer.Exit(1)
+
+        # Injecter le token dans le container
+        result = subprocess.run(
+            ["docker", "compose", "exec", "act_runner",
+             "act_runner", "register",
+             "--no-interactive",
+             "--instance", f"{gitea_url}",
+             "--token", token,
+             "--name", "autoflow-runner",
+             "--labels", "ubuntu-latest:docker://gitea/runner-images:ubuntu-latest"],
+            cwd=_find_compose_dir(),
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            console.print("  [green]✔[/] Runner re-enregistré avec succès.")
+        else:
+            err.print(f"  [yellow]⚠[/] Résultat : {result.stderr[:300]}")
+            err.print("  Essaie [bold]autoflow gitea runner-refresh --force[/]")
+            raise typer.Exit(1)
+
+    console.print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ee (Execution Environments)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@ee_app.command("list")
+def ee_list(
+    name: Optional[str] = typer.Argument(None, help="Nom de l'EE (vide = tous)."),
+    limit: int = typer.Option(20, "--limit", "-n", help="Nombre de builds à afficher."),
+):
+    """Liste les derniers builds d'Execution Environments."""
+    with _http(_ee_url()) as c:
+        try:
+            r = c.get("/builds")
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            _abort(str(e))
+
+    builds = r.json()
+    if name:
+        builds = [b for b in builds if b.get("ee") == name]
+
+    if not builds:
+        console.print(f"[dim]Aucun build trouvé{' pour ' + name if name else ''}.[/]")
+        return
+
+    table = Table(box=box.SIMPLE_HEAD, header_style="bold cyan",
+                  title="Builds EE récents")
+    table.add_column("EE",      min_width=12)
+    table.add_column("Version", min_width=10, style="dim")
+    table.add_column("Tag daté",       min_width=16, style="dim")
+    table.add_column("Statut",  justify="center", width=12)
+    table.add_column("Date",    min_width=19, style="dim")
+    table.add_column("Trigger", min_width=16, style="dim")
+
+    for b in builds[:limit]:
+        status  = b.get("status", "?")
+        color   = "green" if status == "success" else ("red" if status == "error" else "yellow")
+        started = (b.get("started_at") or b.get("date") or "")[:19]
+        table.add_row(
+            b.get("ee", "?"),
+            b.get("version", "?"),
+            b.get("dated_tag", b.get("image_dated", "")[-16:] if b.get("image_dated") else ""),
+            f"[{color}]{status}[/]",
+            started,
+            str(b.get("trigger", ""))[:16],
+        )
+
+    console.print()
+    console.print(table)
+    console.print()
+
+
+@ee_app.command("versions")
+def ee_versions(
+    name: str = typer.Argument(..., help="Nom de l'EE (ex : base, security, network)."),
+):
+    """Liste les versions disponibles (tags datés) d'un EE dans le registry."""
+    with _http(_ee_url()) as c:
+        try:
+            r = c.get(f"/versions/{name}")
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            _abort(str(e))
+
+    data = r.json()
+    tags = data if isinstance(data, list) else data.get("tags", [])
+
+    if not tags:
+        console.print(f"[dim]Aucune version trouvée pour l'EE [bold]{name}[/].[/]")
+        return
+
+    console.print(f"\nVersions disponibles pour [bold]{name}[/] :")
+    for tag in sorted(tags, reverse=True):
+        icon = "[dim]latest →[/] " if tag in ("latest", "stable") else "  "
+        console.print(f"  {icon}[bold]{tag}[/]")
+    console.print()
+
+
+@ee_app.command("rollback")
+def ee_rollback(
+    name: str    = typer.Argument(..., help="Nom de l'EE."),
+    version: str = typer.Argument(..., help="Tag daté cible (ex : 20260426-120000)."),
+):
+    """
+    Restaure un EE à une version précédente (re-tag + push vers le registry).
+
+    [bold]Exemples[/]
+
+      autoflow ee versions base           # voir les versions disponibles
+      autoflow ee rollback base 20260426-120000
+    """
+    console.print(f"\n[bold cyan]→[/] Rollback [bold]{name}[/] → [bold]{version}[/]…\n")
+
+    with _http(_ee_url(), timeout=300.0) as c:
+        try:
+            with c.stream("POST", f"/rollback/{name}/{version}") as r:
+                if r.status_code >= 400:
+                    _abort(f"HTTP {r.status_code}")
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data:"):
+                        msg = line[5:].strip()
+                    else:
+                        msg = line.strip()
+                    if not msg or msg in ("ping", ":"):
+                        continue
+                    # Coloriser selon le contenu
+                    color = ("green" if any(k in msg.lower() for k in ("✓", "success", "pushed", "tagged"))
+                             else "red" if any(k in msg.lower() for k in ("error", "✗", "fail"))
+                             else "white")
+                    console.print(f"  [{color}]{msg}[/{color}]")
+        except Exception as e:
+            _abort(str(e))
+
+    console.print()
+
+
+@ee_app.command("build")
+def ee_build(
+    name: str = typer.Argument(..., help="Nom de l'EE à rebuilder (ex : security)."),
+    version: str = typer.Option("latest", "--version", "-v",
+                                  help="Tag de version."),
+    wait: bool = typer.Option(False, "--wait", "-w",
+                               help="Attendre la fin du build (streaming SSE)."),
+):
+    """
+    Déclenche un build EE via l'EE Builder.
+
+    Note : en production, les builds sont déclenchés automatiquement par
+    les webhooks Gitea. Cette commande force un rebuild manuel.
+
+    [bold]Exemples[/]
+
+      autoflow ee build security
+      autoflow ee build base --version 2.0.0 --wait
+    """
+    # Le builder n'expose pas d'endpoint de build direct — on utilise
+    # l'API Event Engine pour déclencher via un faux webhook
+    console.print(f"\n[bold cyan]→[/] Déclenchement du build EE [bold]{name}[/] v{version}…")
+
+    # Construire un payload Gitea-like minimal
+    body = {
+        "action": "ee-build",
+        "source": "cli",
+        "data": {
+            "ee":      name,
+            "version": version,
+            "trigger": "manual-cli",
+        },
+    }
+    headers: dict[str, str] = {}
+    admin_token = _env("ADMIN_TOKEN") or _env("EVENT_ADMIN_TOKEN")
+    if admin_token:
+        headers["Authorization"] = f"Bearer {admin_token}"
+
+    with _http(_event_url(), headers=headers) as c:
+        try:
+            r = c.post("/event", json=body)
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            _abort(f"HTTP {e.response.status_code} : {e.response.text[:200]}")
+        except Exception as e:
+            _abort(str(e))
+
+    result = r.json()
+    status = result.get("status", "?")
+    color  = "green" if status in ("accepted", "queued") else "yellow"
+    console.print(f"  [bold {color}]{status}[/]")
+
+    if wait:
+        console.print("  [dim]Suivi des logs EE Builder (Ctrl+C pour interrompre)…[/]\n")
+        import subprocess
+        subprocess.run(
+            ["docker", "compose", "logs", "-f", "--tail=30", "ee_builder"],
+            cwd=_find_compose_dir(),
+        )
+    else:
+        console.print(f"  Logs : [bold]autoflow stack logs ee_builder -f[/]")
+
+    console.print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Point d'entrée
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-V",
+                                  help="Affiche la version du CLI."),
+):
+    if version:
+        console.print("[bold]autoflow CLI[/] v1.0.0")
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
+
+if __name__ == "__main__":
+    app()
