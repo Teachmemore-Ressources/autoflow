@@ -180,8 +180,21 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .pf-log .ok{color:#4ade80;font-weight:700}
 .pf-log .warn{color:#fbbf24}
 
-.post-deploy-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:16px 0 8px;display:flex;align-items:center;gap:8px}
+.post-deploy-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:20px 0 8px;display:flex;align-items:center;gap:8px}
 .post-deploy-label::before,.post-deploy-label::after{content:'';flex:1;height:1px;background:var(--border)}
+/* ── Workflow banner ── */
+.wf-banner{display:flex;align-items:center;gap:4px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;flex-wrap:wrap}
+.wf-step{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);opacity:.5;transition:.15s}
+.wf-step.done,.wf-step.active{opacity:1}
+.wf-step.active{border-color:var(--accent);background:var(--acc-glow)}
+.wf-step.done{border-color:var(--success);background:rgba(16,185,129,.08)}
+.wf-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--border);color:var(--muted)}
+.wf-step.active .wf-num{background:var(--accent);color:#fff}
+.wf-step.done .wf-num{background:var(--success);color:#fff}
+.wf-label{font-size:12px;font-weight:600;color:var(--muted)}
+.wf-step.active .wf-label{color:var(--accent)}
+.wf-step.done .wf-label{color:var(--success)}
+.wf-arrow{color:var(--border2);font-size:18px;font-weight:300;flex-shrink:0}
 
 /* ── Section: CA import hint ── */
 .ca-hint-box{margin-top:10px;padding:9px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius-sm);font-size:12px;color:var(--warning);display:flex;align-items:flex-start;gap:7px}
@@ -559,16 +572,6 @@ async function checkPreflightStatus() {
   // Post-deploy: Grafana export
   checkGrafanaExportStatus();
 
-  // Post-deploy: Gitea admin
-  const gitea = await fetch('/api/init-gitea-status').then(r => r.json()).catch(() => ({}));
-  if (!gitea.running) {
-    setStatus('gitea', false, 'Stack not running — deploy first');
-  } else {
-    setStatus('gitea', gitea.exists,
-      gitea.exists ? `Admin '${gitea.username}' exists` : `User '${gitea.username}' not found — click "Create Gitea admin"`
-    );
-  }
-
   // Post-deploy: AWX token
   const hasToken = !!(CONFIG.AWX_TOKEN || '').trim();
   setStatus('awxtoken', hasToken,
@@ -756,9 +759,38 @@ function buildSections() {
   const preflightHtml = `
     <div class="section" id="sec-preflight">
       <div class="sec-header">
-        <div class="sec-title">Pre-flight checks</div>
-        <div class="sec-desc">Run these steps before deploying. Each one is required for the stack to start correctly.</div>
+        <div class="sec-title">Pre-flight &amp; Post-deploy</div>
+        <div class="sec-desc">Suivez les étapes dans l'ordre ci-dessous. Les vérifications pré-déploiement sont obligatoires avant de lancer le stack. Les actions post-déploiement s'exécutent une fois le stack démarré.</div>
       </div>
+
+      <!-- ── Workflow steps banner ── -->
+      <div class="wf-banner">
+        <div class="wf-step done" id="wf-system">
+          <div class="wf-num">1</div>
+          <div class="wf-label">Système</div>
+        </div>
+        <div class="wf-arrow">›</div>
+        <div class="wf-step" id="wf-config">
+          <div class="wf-num">2</div>
+          <div class="wf-label">Configuration</div>
+        </div>
+        <div class="wf-arrow">›</div>
+        <div class="wf-step" id="wf-preflight">
+          <div class="wf-num">3</div>
+          <div class="wf-label">Pré-vol</div>
+        </div>
+        <div class="wf-arrow">›</div>
+        <div class="wf-step" id="wf-deploy">
+          <div class="wf-num">4</div>
+          <div class="wf-label">Déploiement</div>
+        </div>
+        <div class="wf-arrow">›</div>
+        <div class="wf-step" id="wf-postdeploy">
+          <div class="wf-num">5</div>
+          <div class="wf-label">Post-deploy</div>
+        </div>
+      </div>
+
       <div class="preflight-stack">
 
         <!-- System Requirements -->
@@ -887,36 +919,8 @@ function buildSections() {
         </div>
 
         <!-- Post-deploy separator -->
-        <div class="post-deploy-label">Post-deploy — run after first <code>docker compose up</code></div>
-
-        <!-- Gitea Admin -->
-        <div class="pf-item">
-          <div class="pf-icon-wrap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-          </div>
-          <div class="pf-body">
-            <div class="pf-title">Gitea Admin Account</div>
-            <div class="pf-desc">
-              Creates the admin user in Gitea. Gitea does not read <code>GITEA_ADMIN_*</code> env vars —
-              the account must be created via CLI after the first start.<br>
-              <em>Requires the stack to be running.</em>
-            </div>
-            <div class="pf-status">
-              <span class="pf-dot" id="gitea-dot"></span>
-              <span id="gitea-status-text">Checking…</span>
-            </div>
-            <div class="pf-actions">
-              <button class="btn btn-primary btn-sm" onclick="runPostDeploy('gitea')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                Create Gitea admin
-              </button>
-              <button class="btn btn-ghost btn-sm" onclick="togglePfLog('gitea')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Logs
-              </button>
-            </div>
-            <div class="pf-log" id="pf-log-gitea"></div>
-          </div>
+        <div class="post-deploy-label">
+          Étape 5 — Post-deploy &nbsp;·&nbsp; À exécuter après <code>Save &amp; Deploy</code>
         </div>
 
         <!-- AWX Token -->

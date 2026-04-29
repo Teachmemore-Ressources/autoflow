@@ -338,28 +338,8 @@ KEY_TO_SERVICES: dict[str, list[str]] = {
     "GITEA_METRICS_TOKEN":        ["gitea", "prometheus"],
     "GITEA_WEBHOOK_SECRET":       ["gitea"],
     "GITEA_REGISTRY_TOKEN":       ["gitea"],
-    "GITEA_LOG_LEVEL":               ["gitea"],
-    "GITEA_LDAP_ENABLED":            ["gitea"],
-    "GITEA_LDAP_NAME":               ["gitea"],
-    "GITEA_LDAP_HOST":               ["gitea"],
-    "GITEA_LDAP_PORT":               ["gitea"],
-    "GITEA_LDAP_SECURITY":           ["gitea"],
-    "GITEA_LDAP_BIND_DN":            ["gitea"],
-    "GITEA_LDAP_BIND_PASSWORD":      ["gitea"],
-    "GITEA_LDAP_USER_SEARCH_BASE":   ["gitea"],
-    "GITEA_LDAP_USER_FILTER":        ["gitea"],
-    "GITEA_LDAP_SYNC_USERS":         ["gitea"],
-    "GITEA_LDAP_USER_DN":            ["gitea"],
-    "GITEA_LDAP_FIRSTNAME_ATTR":     ["gitea"],
-    "GITEA_LDAP_SURNAME_ATTR":       ["gitea"],
-    "GITEA_LDAP_EMAIL_ATTR":         ["gitea"],
-    "GITEA_LDAP_USERNAME_ATTR":      ["gitea"],
-    "GITEA_LDAP_ADMIN_FILTER":       ["gitea"],
-    "GITEA_LDAP_GROUP_SEARCH_BASE":  ["gitea"],
-    "GITEA_LDAP_GROUP_MEMBER_ATTR":  ["gitea"],
-    "GITEA_LDAP_USER_GROUP_ATTR":    ["gitea"],
-    "GITEA_LDAP_GROUP_FILTER":       ["gitea"],
-    "PKI_ADMIN_PASSWORD":            ["pki"],
+    "GITEA_LOG_LEVEL":            ["gitea"],
+    "PKI_ADMIN_PASSWORD":         ["pki"],
     "PKI_JWT_SECRET":             ["pki"],
     "LOG_LEVEL":                  ["api", "event_engine"],
     "AWX_METRICS_INTERVAL":       ["event_engine"],
@@ -417,10 +397,59 @@ async def deploy(request: Request, encrypt: bool = False):
         async for line in process.stdout:
             yield _sse(line.decode().rstrip())
         await process.wait()
-        if process.returncode == 0:
-            yield _sse("[SUCCESS] Stack deployed successfully!")
-        else:
+        if process.returncode != 0:
             yield _sse(f"[ERROR] docker compose exited with code {process.returncode}")
+            yield _sse("[DONE]")
+            return
+
+        yield _sse("[SUCCESS] Stack deployed successfully!")
+        yield _sse("─" * 55)
+
+        # ── Post-deploy: auto-create Gitea admin ─────────────────
+        yield _sse("Post-deploy : initialisation du compte admin Gitea…")
+        cfg      = _load_env()
+        git_user = cfg.get("GITEA_ADMIN_USER", "admin")
+        git_pass = cfg.get("GITEA_ADMIN_PASSWORD", "")
+        git_mail = cfg.get("GITEA_ADMIN_EMAIL", f"{git_user}@localhost")
+
+        if not git_pass:
+            yield _sse("[WARN] GITEA_ADMIN_PASSWORD non défini — admin Gitea non créé automatiquement.")
+            yield _sse("[WARN] Renseignez le mot de passe dans la section Gitea et redéployez.")
+        else:
+            # Wait for Gitea to be healthy (up to 90 s)
+            yield _sse(f"  En attente que Gitea soit healthy (max 90 s)…")
+            gitea_ready = False
+            for _ in range(18):
+                await asyncio.sleep(5)
+                hc = subprocess.run(
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", "autoflow_gitea"],
+                    capture_output=True, text=True,
+                )
+                status = hc.stdout.strip()
+                if status == "healthy":
+                    gitea_ready = True
+                    break
+                yield _sse(f"  Gitea : {status}…")
+
+            if not gitea_ready:
+                yield _sse("[WARN] Gitea n'est pas encore healthy — tentative quand même…")
+
+            init_proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "autoflow_gitea",
+                "gitea", "admin", "user", "create",
+                "--username", git_user, "--password", git_pass,
+                "--email", git_mail, "--admin", "--must-change-password=false",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            )
+            async for line in init_proc.stdout:
+                yield _sse("  " + line.decode().rstrip())
+            await init_proc.wait()
+            if init_proc.returncode == 0:
+                yield _sse(f"[SUCCESS] Admin Gitea '{git_user}' créé ✔")
+            else:
+                yield _sse(f"[INFO] Admin Gitea '{git_user}' existe déjà (re-déploiement) — OK ✔")
+
+        yield _sse("─" * 55)
         yield _sse("[DONE]")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream",
