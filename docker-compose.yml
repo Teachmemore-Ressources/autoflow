@@ -955,7 +955,7 @@ services:
   # Crée le bucket loki-chunks et l'utilisateur Loki dédié (readwrite).
   # S'exécute une seule fois au démarrage, après que MinIO soit healthy.
   minio_init:
-    image: minio/mc:RELEASE.2024-10-13T14-25-03Z
+    image: minio/mc:latest
     container_name: autoflow_minio_init
     restart: "no"
     depends_on:
