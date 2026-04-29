@@ -139,6 +139,9 @@ select option{background:var(--surface2)}
 
 /* ── Misc ── */
 .divider{height:1px;background:var(--border);margin:24px 0}
+.sys-cred-action{margin-top:20px;padding:16px;background:rgba(59,123,255,.06);border:1px solid rgba(59,123,255,.2);border-radius:var(--radius);display:flex;flex-direction:column;gap:10px}
+.sys-cred-hint{font-size:11px;color:var(--muted);display:flex;align-items:flex-start;gap:6px;line-height:1.5}
+.sys-cred-hint svg{flex-shrink:0;margin-top:1px;opacity:.7}
 .field-heading{width:100%;border-top:1px solid var(--border);margin:20px 0 4px;padding-top:16px}
 .field-heading-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
 .field-heading-desc{font-size:11px;color:var(--muted);line-height:1.5}
@@ -399,11 +402,33 @@ async function boot() {
   CONFIG = config;
   buildNav();
   buildSections();
-  activateSection('preflight');
+  activateSection('system');
   pollStatus();
   checkSysPreflight();
   checkPermissionsStatus();
   checkPreflightStatus();
+}
+
+// ── System credentials ─────────────────────────────────────────────────────
+async function saveSystemCredentials() {
+  const user = CONFIG['DEPLOY_USER'] ?? '';
+  const pwd  = CONFIG['SUDO_PASSWORD'] ?? '';
+  if (!user.trim()) { toast('Utilisateur système requis', 'err'); return; }
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ DEPLOY_USER: user, SUDO_PASSWORD: pwd }),
+  });
+  if (res.ok) {
+    toast('Identifiants système enregistrés ✔', 'ok');
+    document.querySelector('.sys-cred-action .btn').textContent = '';
+    document.querySelector('.sys-cred-action .btn').innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Identifiants enregistrés`;
+    document.querySelector('.sys-cred-action .btn').classList.replace('btn-primary','btn-success');
+  } else {
+    toast('Erreur lors de la sauvegarde', 'err');
+  }
 }
 
 // ── System preflight ───────────────────────────────────────────────────────
@@ -688,7 +713,18 @@ const NAV_ICONS = {
 
 function buildNav() {
   const nav = document.getElementById('nav');
-  nav.innerHTML += SCHEMA.sections.map(s => `
+  // Insert "Système" before "Pre-flight" (needed before any privileged operation)
+  const sysSec = SCHEMA.sections.find(s => s.id === 'system');
+  if (sysSec) {
+    document.getElementById('nav-preflight').insertAdjacentHTML('beforebegin', `
+      <a id="nav-system" onclick="activateSection('system');closeSidebar()">
+        ${NAV_ICONS['system']}
+        ${sysSec.label}
+        <span class="badge">!</span>
+      </a>`);
+  }
+  // Remaining schema sections (system already inserted above)
+  nav.innerHTML += SCHEMA.sections.filter(s => s.id !== 'system').map(s => `
     <a id="nav-${s.id}" onclick="activateSection('${s.id}');closeSidebar()">
       ${NAV_ICONS[s.id] || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'}
       ${s.label}
@@ -949,6 +985,26 @@ function buildSections() {
   // ── Schema sections ────────────────────────────────────────
   const sectionsHtml = SCHEMA.sections.map(s => {
     const fields = SCHEMA.fields.filter(f => f.section === s.id);
+    if (s.id === 'system') {
+      return `
+      <div class="section" id="sec-system">
+        <div class="sec-header">
+          <div class="sec-title">${s.label}</div>
+          <div class="sec-desc">${s.desc}</div>
+        </div>
+        <div class="fields">${fields.map(f => renderField(f)).join('')}</div>
+        <div class="sys-cred-action">
+          <button class="btn btn-primary" onclick="saveSystemCredentials()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Valider les identifiants système
+          </button>
+          <div class="sys-cred-hint">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Enregistre l'utilisateur et le mot de passe sudo — requis avant toute opération Pre-flight (CA Docker, /etc/hosts, restart daemon…).
+          </div>
+        </div>
+      </div>`;
+    }
     if (s.id === 'backup') {
       return `
       <div class="section" id="sec-backup">
