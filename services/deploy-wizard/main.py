@@ -1550,6 +1550,7 @@ async def docker_trust_ca():
             # Try to generate a token via the Gitea API using admin credentials
             gitea_api = _gitea_api_url()
             new_token = ""
+            api_returned_404 = False
             try:
                 async with _httpx.AsyncClient(verify=False) as c:
                     # Delete existing token with same name (ignore errors)
@@ -1566,10 +1567,48 @@ async def docker_trust_ca():
                     )
                     if resp.status_code == 201:
                         new_token = resp.json().get("sha1", "")
+                    elif resp.status_code == 404:
+                        api_returned_404 = True
+                        yield _sse("[WARN] API Gitea 404 — l'admin Gitea n'existe pas encore, initialisation en cours...")
                     else:
                         yield _sse(f"[WARN] API Gitea {resp.status_code}: {resp.text[:200]}")
             except Exception as exc:
                 yield _sse(f"[WARN] Connexion API Gitea échouée: {exc}")
+
+            # If admin doesn't exist yet, create it then generate token via CLI
+            if api_returned_404:
+                email = config.get("GITEA_ADMIN_EMAIL", f"{user}@localhost")
+                yield _sse(f"Création du compte admin Gitea '{user}'...")
+                init_proc = await asyncio.create_subprocess_exec(
+                    "docker", "exec", "autoflow_gitea",
+                    "gitea", "admin", "user", "create",
+                    "--username", user, "--password", password,
+                    "--email", email, "--admin", "--must-change-password=false",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                )
+                async for line in init_proc.stdout:
+                    yield _sse(line.decode().rstrip())
+                await init_proc.wait()
+
+                if init_proc.returncode == 0:
+                    yield _sse(f"Admin '{user}' créé — génération du token via CLI...")
+                else:
+                    yield _sse(f"[WARN] Création admin échouée (existe peut-être déjà) — tentative token CLI...")
+
+                # Generate token directly via Gitea CLI (no HTTP dependency)
+                tok_proc = await asyncio.create_subprocess_exec(
+                    "docker", "exec", "autoflow_gitea",
+                    "gitea", "admin", "user", "generate-access-token",
+                    "--username", user, "--token-name", "autoflow-registry",
+                    "--scopes", "read:package,write:package", "--raw",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                tok_stdout, tok_stderr = await tok_proc.communicate()
+                if tok_proc.returncode == 0:
+                    new_token = tok_stdout.decode().strip()
+                    yield _sse("Token généré via CLI Gitea ✔")
+                else:
+                    yield _sse(f"[WARN] CLI token échoué: {tok_stderr.decode().strip()[:200]}")
 
             if new_token:
                 yield _sse("Token généré — écriture dans .env (GITEA_REGISTRY_TOKEN)...")
