@@ -449,6 +449,55 @@ async def deploy(request: Request, encrypt: bool = False):
             else:
                 yield _sse(f"[INFO] Admin Gitea '{git_user}' existe déjà (re-déploiement) — OK ✔")
 
+        # ── Post-deploy: provision AWX instance groups ───────────
+        yield _sse("Post-deploy : provisionnement des instance groups AWX…")
+
+        # Wait for AWX web to be healthy (up to 120 s)
+        yield _sse("  En attente que AWX soit healthy (max 120 s)…")
+        awx_ready = False
+        for _ in range(24):
+            await asyncio.sleep(5)
+            hc = subprocess.run(
+                ["docker", "inspect", "--format", "{{.State.Health.Status}}", "autoflow_awx_web"],
+                capture_output=True, text=True,
+            )
+            if hc.stdout.strip() == "healthy":
+                awx_ready = True
+                break
+            yield _sse(f"  AWX : {hc.stdout.strip()}…")
+
+        if not awx_ready:
+            yield _sse("[WARN] AWX n'est pas encore healthy — tentative quand même…")
+
+        hostname = subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip()
+
+        awx_cmds = [
+            (["awx-manage", "provision_instance", f"--hostname={hostname}", "--node_type=control"],
+             "provision_instance"),
+            (["awx-manage", "register_queue", "--queuename=controlplane", "--instance_percent=100"],
+             "register_queue controlplane"),
+            (["awx-manage", "register_queue", "--queuename=default", "--instance_percent=100"],
+             "register_queue default"),
+            (["awx-manage", "register_default_execution_environments"],
+             "register_default_execution_environments"),
+        ]
+
+        for cmd, label in awx_cmds:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "autoflow_awx_task", *cmd,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            )
+            out = []
+            async for line in proc.stdout:
+                out.append(line.decode().rstrip())
+            await proc.wait()
+            if proc.returncode == 0:
+                detail = " — " + out[-1] if out else ""
+                yield _sse(f"  {label}{detail} ✔")
+            else:
+                yield _sse(f"[WARN] {label} a échoué : {' | '.join(out)}")
+
+        yield _sse("[SUCCESS] AWX instance groups provisionnés ✔")
         yield _sse("─" * 55)
         yield _sse("[DONE]")
 
