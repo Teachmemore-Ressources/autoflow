@@ -29,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 
 from schema import FIELDS, SECTIONS
 
+# UI-only heading fields — never written to .env
+_HEADING_KEYS: frozenset[str] = frozenset(f["key"] for f in FIELDS if f.get("type") == "heading")
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT              = Path(os.environ.get("AUTOFLOW_ROOT", Path(__file__).parent.parent.parent))
 ENV_FILE          = ROOT / ".env"
@@ -116,8 +119,10 @@ def get_schema():
 def _load_env() -> dict[str, str]:
     """Load current .env values, falling back to .env.example defaults."""
     config: dict[str, str] = {}
-    # Seed with schema defaults
+    # Seed with schema defaults (skip UI-only heading fields)
     for f in FIELDS:
+        if f.get("type") == "heading":
+            continue
         config[f["key"]] = f.get("default", "")
     # Override from .env if it exists
     if ENV_FILE.exists():
@@ -134,6 +139,9 @@ def get_config():
 
 @app.post("/api/config")
 def save_config(request: Request, data: dict):
+    # Drop UI-only heading fields — they must never reach .env
+    data = {k: v for k, v in data.items() if k not in _HEADING_KEYS}
+
     # Load current .env to compute diff BEFORE merging
     old: dict[str, str] = {}
     if ENV_FILE.exists():
@@ -330,8 +338,28 @@ KEY_TO_SERVICES: dict[str, list[str]] = {
     "GITEA_METRICS_TOKEN":        ["gitea", "prometheus"],
     "GITEA_WEBHOOK_SECRET":       ["gitea"],
     "GITEA_REGISTRY_TOKEN":       ["gitea"],
-    "GITEA_LOG_LEVEL":            ["gitea"],
-    "PKI_ADMIN_PASSWORD":         ["pki"],
+    "GITEA_LOG_LEVEL":               ["gitea"],
+    "GITEA_LDAP_ENABLED":            ["gitea"],
+    "GITEA_LDAP_NAME":               ["gitea"],
+    "GITEA_LDAP_HOST":               ["gitea"],
+    "GITEA_LDAP_PORT":               ["gitea"],
+    "GITEA_LDAP_SECURITY":           ["gitea"],
+    "GITEA_LDAP_BIND_DN":            ["gitea"],
+    "GITEA_LDAP_BIND_PASSWORD":      ["gitea"],
+    "GITEA_LDAP_USER_SEARCH_BASE":   ["gitea"],
+    "GITEA_LDAP_USER_FILTER":        ["gitea"],
+    "GITEA_LDAP_SYNC_USERS":         ["gitea"],
+    "GITEA_LDAP_USER_DN":            ["gitea"],
+    "GITEA_LDAP_FIRSTNAME_ATTR":     ["gitea"],
+    "GITEA_LDAP_SURNAME_ATTR":       ["gitea"],
+    "GITEA_LDAP_EMAIL_ATTR":         ["gitea"],
+    "GITEA_LDAP_USERNAME_ATTR":      ["gitea"],
+    "GITEA_LDAP_ADMIN_FILTER":       ["gitea"],
+    "GITEA_LDAP_GROUP_SEARCH_BASE":  ["gitea"],
+    "GITEA_LDAP_GROUP_MEMBER_ATTR":  ["gitea"],
+    "GITEA_LDAP_USER_GROUP_ATTR":    ["gitea"],
+    "GITEA_LDAP_GROUP_FILTER":       ["gitea"],
+    "PKI_ADMIN_PASSWORD":            ["pki"],
     "PKI_JWT_SECRET":             ["pki"],
     "LOG_LEVEL":                  ["api", "event_engine"],
     "AWX_METRICS_INTERVAL":       ["event_engine"],
