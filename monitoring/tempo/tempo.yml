@@ -66,13 +66,11 @@ metrics_generator:
         send_exemplars: true
   processor:
     service_graphs:
-      enabled: true
       dimensions:
         - http.method
         - http.status_code
         - service.name
     span_metrics:
-      enabled: true
       dimensions:
         - http.method
         - http.status_code

@@ -25,12 +25,7 @@ positions:
 # ── Client Loki ───────────────────────────────────────────────
 clients:
   - url: http://loki:3100/loki/api/v1/push
-    # Timeout d'envoi des batches
     timeout: 10s
-    # Taille max d'un batch avant envoi forcé
-    batch_size: 1048576   # 1 MiB
-    # Délai max entre deux envois (même si batch non plein)
-    batch_wait: 1s
 
 # ── Sources de logs ───────────────────────────────────────────
 scrape_configs:

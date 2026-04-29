@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir \
     prometheus-client
 
 WORKDIR /app
-COPY main.py .
+COPY main.py tracing.py .
 
 EXPOSE 8003
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
