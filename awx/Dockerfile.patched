@@ -20,6 +20,15 @@ FROM ghcr.io/ansible/awx:${AWX_VERSION}
 
 USER root
 
+# ── Docker CLI — required for EE container execution ─────────────────────────
+# ansible-runner invokes the container runtime binary to pull and run EE images.
+# CONTAINER_RUNTIME=docker in settings.py → docker CLI must be present.
+# Install only the CLI (not the daemon — we use the host socket).
+RUN dnf install -y dnf-plugins-core && \
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && \
+    dnf install -y docker-ce-cli && \
+    dnf clean all && rm -rf /var/cache/dnf
+
 # ── OS-level security patches ─────────────────────────────────────────────────
 # AWX is based on CentOS Stream 9 — use dnf to upgrade system packages.
 # --security flag limits upgrades to packages with published CVE advisories only,

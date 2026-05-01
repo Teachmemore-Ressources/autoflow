@@ -185,6 +185,10 @@ services:
         condition: service_healthy
     environment:
       <<: *awx-env
+      # Needed by init.sh to register EE images and Container Registry credential
+      GITEA_ROOT_URL:       ${GITEA_ROOT_URL:-http://localhost:3001}
+      GITEA_REGISTRY_TOKEN: ${GITEA_REGISTRY_TOKEN:-}
+      EE_DEFAULT_VERSION:   ${EE_DEFAULT_VERSION:-latest}
     volumes:
       - ./awx/settings.py:/etc/tower/settings.py:ro
       - ./awx/init.sh:/etc/awx-init/init.sh:ro
@@ -256,6 +260,8 @@ services:
   # ── Receptor (AWX mesh execution node) ───────
   # Receptor is AWX's job-dispatch transport layer.
   # It must share the receptor_run volume so awx_task can reach the socket.
+  # Docker socket is required: ansible-runner (invoked by receptor work-command)
+  # needs it to pull and launch EE containers on behalf of AWX jobs.
   receptor:
     image: quay.io/ansible/receptor:v1.6.4
     container_name: autoflow_receptor
@@ -267,6 +273,9 @@ services:
       - ./receptor/receptor.conf:/etc/receptor/receptor.conf:ro
       - receptor_run:/var/run/receptor
       - awx_projects:/var/lib/awx/projects
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "${DOCKER_GID:-998}"
     networks:
       - autoflow
     healthcheck:
@@ -310,6 +319,10 @@ services:
       - receptor_run:/var/run/receptor
       - awx_projects:/var/lib/awx/projects
       - awx_receptor:/var/lib/awx/receptor
+      # Docker socket: required for ansible-runner to launch EE containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-998}"
     networks:
       - autoflow
     healthcheck:

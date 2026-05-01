@@ -85,22 +85,24 @@ try:
     cred = Credential.objects.filter(name='Gitea Container Registry').first()
     host = os.environ.get('GITEA_ROOT_URL', 'http://localhost:3001').replace('http://', '').replace('https://', '').rstrip('/')
     user = os.environ.get('AWX_ADMIN_USER', 'admin')
+    # Match the tag ee_builder pushes (EE_DEFAULT_VERSION, defaults to 'latest')
+    ee_tag = os.environ.get('EE_DEFAULT_VERSION', 'latest')
 
     ees = [
         {
             'name': 'EE Base',
             'description': 'Collections communes — community.general, ansible.posix, community.crypto',
-            'image': f'{host}/{user}/ee-base:1.0.0',
+            'image': f'{host}/{user}/ee-base:{ee_tag}',
         },
         {
             'name': 'EE Security',
             'description': 'Sécurité et conformité — boto3, openssl, community.crypto',
-            'image': f'{host}/{user}/ee-security:1.0.0',
+            'image': f'{host}/{user}/ee-security:{ee_tag}',
         },
         {
             'name': 'EE Network',
             'description': 'Automatisation réseau multi-vendeurs — NAPALM, Netmiko, Nornir, cisco.ios, junipernetworks.junos, arista.eos, f5networks.f5_modules',
-            'image': f'{host}/{user}/ee-network:1.0.0',
+            'image': f'{host}/{user}/ee-network:{ee_tag}',
         },
     ]
 
@@ -115,8 +117,13 @@ try:
                 'organization': org,
             }
         )
-        action = 'created' if created else 'already exists'
-        print(f'EE \"{ee.name}\" {action} (id={ee.id}, image={ee.image}).')
+        if not created and ee.image != ee_def['image']:
+            ee.image = ee_def['image']
+            ee.save()
+            print(f'EE \"{ee.name}\" image updated → {ee.image} (id={ee.id}).')
+        else:
+            action = 'created' if created else 'already exists'
+            print(f'EE \"{ee.name}\" {action} (id={ee.id}, image={ee.image}).')
 except Exception as e:
     print(f'WARNING: could not register Execution Environments: {e}')
 "

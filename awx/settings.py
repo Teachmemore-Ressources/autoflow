@@ -97,3 +97,20 @@ TOWER_URL_BASE = 'http://awxweb'
 # Après logout, renvoyer vers / (notre page custom) au lieu de /api/
 LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL = '/'
+
+# ── Execution Environments — container runtime ────────────────────────────────
+# In Docker Compose, jobs are executed via Docker (socket bind-mounted into
+# awx_task). Podman is not available in this environment.
+# Without this setting AWX 24+ defaults to podman and fails immediately.
+CONTAINER_RUNTIME = 'docker'
+
+# Working directory for per-job isolated environments.
+AWX_ISOLATION_BASE_PATH = os.environ.get('AWX_ISOLATION_BASE_PATH', '/tmp')
+
+# Extra host paths exposed inside every EE container.
+# /etc/resolv.conf  → DNS resolution inside EE
+# /var/lib/awx/projects → project files (playbooks)
+AWX_ISOLATION_SHOW_PATHS = [
+    '/etc/resolv.conf:/etc/resolv.conf:ro',
+    '/var/lib/awx/projects:/var/lib/awx/projects:ro',
+]
