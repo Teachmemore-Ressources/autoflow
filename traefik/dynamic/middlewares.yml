@@ -40,3 +40,12 @@ http:
       rateLimit:
         average: 100
         burst: 200
+
+    # Gitea reverse-proxy headers — tells Gitea its real public URL.
+    # Required so Gitea's container registry builds the correct Bearer realm URL.
+    # Without this, the WWW-Authenticate realm points to GITEA_ROOT_URL (internal)
+    # instead of the public HTTPS URL, and Docker cannot authenticate for pushes.
+    gitea-proxy-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"

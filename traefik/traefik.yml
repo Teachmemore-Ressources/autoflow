@@ -19,6 +19,12 @@ entryPoints:
           permanent: true
   websecure:
     address: ":443"
+    # Extended timeouts for Docker registry blob uploads (can be hundreds of MB)
+    transport:
+      respondingTimeouts:
+        readTimeout:  "600s"
+        writeTimeout: "600s"
+        idleTimeout:  "180s"
   gitea-ssh:
     address: ":2222"
 

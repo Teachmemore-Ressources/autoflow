@@ -805,6 +805,9 @@ services:
       - "traefik.http.routers.gitea.rule=Host(`git.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gitea.entrypoints=web,websecure"
       - "traefik.http.routers.gitea.tls=true"
+      # gitea-proxy-headers injects X-Forwarded-Proto: https so Gitea builds
+      # the correct Bearer realm URL for its container registry.
+      - "traefik.http.routers.gitea.middlewares=gitea-proxy-headers@file"
       - "traefik.http.services.gitea.loadbalancer.server.port=3001"
       # SSH TCP passthrough (port 2222 → gitea:2222)
       - "traefik.tcp.routers.gitea-ssh.rule=HostSNI(`*`)"
