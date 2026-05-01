@@ -13,9 +13,10 @@ SECTIONS = [
     {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting"},
     {"id": "minio",          "label": "MinIO",            "desc": "S3-compatible object storage — backend de stockage Loki (logs)"},
     {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing"},
-    {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry"},
-    {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority"},
-    {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
+    {"id": "gitea",             "label": "Gitea",                  "desc": "Self-hosted Git service and registry"},
+    {"id": "pki",               "label": "PKI",                    "desc": "Internal certificate authority"},
+    {"id": "execution_envs",    "label": "Environnements d'exéc.", "desc": "Ansible Execution Environments — build, registry et runtime"},
+    {"id": "advanced",          "label": "Advanced",               "desc": "Intervals, log levels and system tuning"},
     {"id": "backup",         "label": "Disaster Recovery","desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore."},
     {"id": "compliance",     "label": "Compliance & Audit","desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0."},
 ]
@@ -448,10 +449,39 @@ FIELDS = [
         "description": "AWX job metrics polling interval (0 = disabled)",
     },
     {
-        "key": "DOCKER_GID", "label": "Docker Socket GID", "section": "advanced",
+        "key": "DOCKER_GID", "label": "Docker Socket GID", "section": "execution_envs",
         "type": "number", "default": "999",
         "description": "GID of /var/run/docker.sock on the host. Verify: stat -c '%g' /var/run/docker.sock",
     },
+    # ── Execution Environments ────────────────────────────────────
+    {
+        "key": "_ee_heading_config", "label": "Configuration", "section": "execution_envs",
+        "type": "heading",
+    },
+    {
+        "key": "EE_DEFAULT_VERSION", "label": "Tag par défaut", "section": "execution_envs",
+        "type": "text", "default": "latest",
+        "description": "Tag Docker appliqué aux images EE buildées (ex: latest, 1.0.0). Doit correspondre au tag configuré dans AWX.",
+    },
+    {
+        "key": "_ee_heading_build", "label": "Build local (make ee-build-push)", "section": "execution_envs",
+        "type": "heading",
+    },
+    {
+        "key": "BUILD_PYCMD", "label": "Python build command", "section": "execution_envs",
+        "type": "text", "default": "/usr/bin/python3.12",
+        "description": "Chemin Python utilisé par ansible-builder pour le build des EE.",
+    },
+    {
+        "key": "_ee_heading_registry", "label": "Registry — Gitea Container Registry", "section": "execution_envs",
+        "type": "heading",
+    },
+    {
+        "key": "_ee_registry_info", "label": "", "section": "execution_envs",
+        "type": "info",
+        "description": "Les tokens registry (GITEA_REGISTRY_TOKEN, GITEA_WEBHOOK_SECRET) sont configurés dans la section Gitea. Le CA Gitea doit être trusté sur l'hôte avant de builder : make docker-trust-ca",
+    },
+    # ── Advanced ──────────────────────────────────────────────────
     {
         "key": "SCAN_INTERVAL", "label": "Security Scan Interval (s)", "section": "advanced",
         "type": "number", "default": "21600",

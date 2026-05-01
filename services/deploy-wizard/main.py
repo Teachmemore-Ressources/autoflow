@@ -29,8 +29,10 @@ from fastapi.staticfiles import StaticFiles
 
 from schema import FIELDS, SECTIONS
 
-# UI-only heading fields — never written to .env
-_HEADING_KEYS: frozenset[str] = frozenset(f["key"] for f in FIELDS if f.get("type") == "heading")
+# UI-only fields (heading + info banners) — never written to .env
+_HEADING_KEYS: frozenset[str] = frozenset(
+    f["key"] for f in FIELDS if f.get("type") in ("heading", "info")
+)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT              = Path(os.environ.get("AUTOFLOW_ROOT", Path(__file__).parent.parent.parent))
@@ -344,6 +346,9 @@ KEY_TO_SERVICES: dict[str, list[str]] = {
     "LOG_LEVEL":                  ["api", "event_engine"],
     "AWX_METRICS_INTERVAL":       ["event_engine"],
     "SCAN_INTERVAL":              ["api"],
+    "EE_DEFAULT_VERSION":         ["ee_builder", "awx_migrate"],
+    "BUILD_PYCMD":                ["ee_builder"],
+    "DOCKER_GID":                 ["ee_builder", "act_runner", "security_scanner"],
 }
 
 # Keys consumed only on first container start — changing them has no effect after init

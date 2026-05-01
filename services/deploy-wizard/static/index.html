@@ -143,6 +143,8 @@ select option{background:var(--surface2)}
 .sys-cred-hint{font-size:11px;color:var(--muted);display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .sys-cred-hint svg{flex-shrink:0;margin-top:1px;opacity:.7}
 .field-heading{width:100%;border-top:1px solid var(--border);margin:20px 0 4px;padding-top:16px}
+.field-info-banner{display:flex;gap:8px;align-items:flex-start;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:6px;padding:10px 12px;margin:8px 0 12px;font-size:12px;color:var(--fg);line-height:1.5;width:100%}
+.field-info-icon{color:var(--accent);font-style:normal;flex-shrink:0;margin-top:1px}
 .field-heading-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
 .field-heading-desc{font-size:11px;color:var(--muted);line-height:1.5}
 .hint{font-size:11px;color:var(--warning);display:flex;align-items:center;gap:4px;margin-top:4px}
@@ -1067,6 +1069,12 @@ function renderField(f) {
     return `<div class="field-heading">
       <div class="field-heading-title">${f.label}</div>
       ${f.description ? `<div class="field-heading-desc">${f.description}</div>` : ''}
+    </div>`;
+  }
+  if (f.type === 'info') {
+    return `<div class="field-info-banner">
+      <span class="field-info-icon">ℹ</span>
+      <span>${f.description || ''}</span>
     </div>`;
   }
   const val = CONFIG[f.key] ?? f.default ?? '';
