@@ -92,6 +92,11 @@ jobs:
           }' execution-environments/
           echo "✅ YAML des EE valide"
 
+  # ── Helper : détection runtime container ─────────────────────
+  # ansible-builder auto-détecte podman > docker. On force l'alignement
+  # entre le runtime de build et le runtime de push.
+  # Variable CRUNTIME exportée dans GITEA_ENV pour les jobs de build.
+
   # ── Build EE Base ─────────────────────────────────────────────
   build-base:
     name: "Build ee-base"
@@ -111,6 +116,14 @@ jobs:
           fi
           ansible-builder --version
 
+      - name: "Détecter le runtime container"
+        run: |
+          if command -v podman &>/dev/null; then
+            echo "CRUNTIME=podman" >> $GITEA_ENV
+          else
+            echo "CRUNTIME=docker" >> $GITEA_ENV
+          fi
+
       - name: "Build ee-base"
         run: |
           TAG="${REGISTRY}/${GITEA_USER}/ee-base:${GITEA_REF_NAME:-latest}"
@@ -118,6 +131,7 @@ jobs:
             --file execution-environments/base/execution-environment.yml \
             --tag "$TAG" \
             --context /tmp/ee-build-base \
+            --container-runtime "${CRUNTIME}" \
             --verbosity 1
           echo "EE_TAG=$TAG" >> $GITEA_ENV
 
@@ -125,9 +139,9 @@ jobs:
         if: gitea.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
-            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
-          docker push "${EE_TAG}"
-          echo "✅ ee-base poussé vers ${REGISTRY}"
+            ${CRUNTIME} login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          ${CRUNTIME} push "${EE_TAG}"
+          echo "✅ ee-base poussé vers ${REGISTRY} (runtime: ${CRUNTIME})"
 
   # ── Build EE Security ─────────────────────────────────────────
   build-security:
@@ -147,6 +161,14 @@ jobs:
               || pipx install ansible-builder
           fi
 
+      - name: "Détecter le runtime container"
+        run: |
+          if command -v podman &>/dev/null; then
+            echo "CRUNTIME=podman" >> $GITEA_ENV
+          else
+            echo "CRUNTIME=docker" >> $GITEA_ENV
+          fi
+
       - name: "Build ee-security"
         run: |
           TAG="${REGISTRY}/${GITEA_USER}/ee-security:${GITEA_REF_NAME:-latest}"
@@ -154,6 +176,7 @@ jobs:
             --file execution-environments/security/execution-environment.yml \
             --tag "$TAG" \
             --context /tmp/ee-build-security \
+            --container-runtime "${CRUNTIME}" \
             --verbosity 1
           echo "EE_TAG=$TAG" >> $GITEA_ENV
 
@@ -161,9 +184,9 @@ jobs:
         if: gitea.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
-            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
-          docker push "${EE_TAG}"
-          echo "✅ ee-security poussé vers ${REGISTRY}"
+            ${CRUNTIME} login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          ${CRUNTIME} push "${EE_TAG}"
+          echo "✅ ee-security poussé vers ${REGISTRY} (runtime: ${CRUNTIME})"
 
   # ── Build EE Network ──────────────────────────────────────────
   build-network:
@@ -183,6 +206,14 @@ jobs:
               || pipx install ansible-builder
           fi
 
+      - name: "Détecter le runtime container"
+        run: |
+          if command -v podman &>/dev/null; then
+            echo "CRUNTIME=podman" >> $GITEA_ENV
+          else
+            echo "CRUNTIME=docker" >> $GITEA_ENV
+          fi
+
       - name: "Build ee-network"
         run: |
           TAG="${REGISTRY}/${GITEA_USER}/ee-network:${GITEA_REF_NAME:-latest}"
@@ -190,6 +221,7 @@ jobs:
             --file execution-environments/network/execution-environment.yml \
             --tag "$TAG" \
             --context /tmp/ee-build-network \
+            --container-runtime "${CRUNTIME}" \
             --verbosity 1
           echo "EE_TAG=$TAG" >> $GITEA_ENV
 
@@ -197,9 +229,9 @@ jobs:
         if: gitea.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITEA_REGISTRY_TOKEN }}" | \
-            docker login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
-          docker push "${EE_TAG}"
-          echo "✅ ee-network poussé vers ${REGISTRY}"
+            ${CRUNTIME} login "${REGISTRY}" -u "${GITEA_USER}" --password-stdin
+          ${CRUNTIME} push "${EE_TAG}"
+          echo "✅ ee-network poussé vers ${REGISTRY} (runtime: ${CRUNTIME})"
 
   # ── Résumé CI ─────────────────────────────────────────────────
   summary:

@@ -13,6 +13,12 @@ export SOPS_AGE_KEY_FILE
 ANSIBLE_BUILDER ?= $(shell which ansible-builder 2>/dev/null \
                     || echo ~/.local/bin/ansible-builder)
 
+# ── Container runtime for EE builds ─────────────────────────────────────────
+# ansible-builder auto-detects podman > docker. If both are installed, podman
+# wins and `docker push` fails because the image is in the wrong store.
+# Override: make ee-build CONTAINER_RUNTIME=docker   (or podman)
+CONTAINER_RUNTIME ?= $(shell which podman >/dev/null 2>&1 && echo podman || echo docker)
+
 # ── EE config (override sur CLI : make ee-build EE=security VERSION=1.2.0) ──
 EE         ?= base
 VERSION    ?= latest
@@ -112,19 +118,20 @@ setup:          ## Bootstrap: decrypt .env.enc → .env  (or copy .env.example i
 # ── Execution Environments ───────────────────────────────────
 
 ee-build:       ## Build an EE image  (e.g. make ee-build EE=security VERSION=1.0.0)
-	@echo "Building EE: $(EE) → $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)"
+	@echo "Building EE: $(EE) → $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)  [runtime: $(CONTAINER_RUNTIME)]"
 	@test -x "$(ANSIBLE_BUILDER)" || \
 		(echo "ERROR: ansible-builder introuvable. Installe-le : pip install --user ansible-builder" && exit 1)
 	$(ANSIBLE_BUILDER) build \
 		--file execution-environments/$(EE)/execution-environment.yml \
 		--tag $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION) \
 		--context /tmp/ee-build-$(EE) \
+		--container-runtime $(CONTAINER_RUNTIME) \
 		--build-arg PYCMD=/usr/bin/python3.12 \
 		--verbosity 1
 
 ee-push:        ## Push a built EE image to Gitea registry  (e.g. make ee-push EE=security VERSION=1.0.0)
-	@echo "Pushing EE: $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)"
-	docker push $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)
+	@echo "Pushing EE: $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)  [runtime: $(CONTAINER_RUNTIME)]"
+	$(CONTAINER_RUNTIME) push $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)
 
 ee-build-push:  ## Build + push in one step  (e.g. make ee-build-push EE=base VERSION=1.0.0)
 	$(MAKE) ee-build EE=$(EE) VERSION=$(VERSION) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER)
