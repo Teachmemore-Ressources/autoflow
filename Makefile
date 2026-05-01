@@ -129,8 +129,17 @@ ee-build:       ## Build an EE image  (e.g. make ee-build EE=security VERSION=1.
 		--build-arg PYCMD=/usr/bin/python3.12 \
 		--verbosity 1
 
+ee-login:       ## Login to Gitea container registry (reads GITEA_REGISTRY_TOKEN or GITEA_ADMIN_PASSWORD from .env)
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	TOKEN=$${GITEA_REGISTRY_TOKEN:-$$GITEA_ADMIN_PASSWORD}; \
+	if [ -z "$$TOKEN" ]; then \
+		echo "ERROR: set GITEA_REGISTRY_TOKEN or GITEA_ADMIN_PASSWORD in .env"; exit 1; \
+	fi; \
+	echo "$$TOKEN" | $(CONTAINER_RUNTIME) login $(REGISTRY) -u $(GITEA_USER) --password-stdin
+
 ee-push:        ## Push a built EE image to Gitea registry  (e.g. make ee-push EE=security VERSION=1.0.0)
 	@echo "Pushing EE: $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)  [runtime: $(CONTAINER_RUNTIME)]"
+	@$(MAKE) ee-login EE=$(EE) REGISTRY=$(REGISTRY) GITEA_USER=$(GITEA_USER) CONTAINER_RUNTIME=$(CONTAINER_RUNTIME)
 	$(CONTAINER_RUNTIME) push $(REGISTRY)/$(GITEA_USER)/ee-$(EE):$(VERSION)
 
 ee-build-push:  ## Build + push in one step  (e.g. make ee-build-push EE=base VERSION=1.0.0)
