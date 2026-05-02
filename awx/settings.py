@@ -104,13 +104,30 @@ LOGIN_URL = '/'
 # Without this setting AWX 24+ defaults to podman and fails immediately.
 CONTAINER_RUNTIME = 'docker'
 
+# AWX defaults to --network slirp4netns:enable_ipv6=true (Podman rootless).
+# Docker does not understand slirp4netns — use bridge instead.
+# --add-host: /etc/hosts entries point to 127.0.0.1 which is meaningless inside
+# a container; host-gateway resolves to the Docker bridge IP (172.17.0.1) so
+# HTTPS requests reach Traefik running on the host.
+DEFAULT_CONTAINER_RUN_OPTIONS = [
+    '--network', 'bridge',
+    '--add-host', f"git.{os.environ.get('DOMAIN', 'localhost')}:host-gateway",
+    # Trust the internal PKI CA mounted via AWX_ISOLATION_SHOW_PATHS
+    '--env', 'GIT_SSL_CAINFO=/etc/autoflow/ca.crt',
+    '--env', 'SSL_CERT_FILE=/etc/autoflow/ca.crt',
+]
+
 # Working directory for per-job isolated environments.
 AWX_ISOLATION_BASE_PATH = os.environ.get('AWX_ISOLATION_BASE_PATH', '/tmp')
 
-# Extra host paths exposed inside every EE container.
-# /etc/resolv.conf  → DNS resolution inside EE
-# /var/lib/awx/projects → project files (playbooks)
+# Extra host paths bind-mounted inside every EE container.
+# IMPORTANT: these paths must exist on the HOST (not just inside a container),
+# because the EE container is created by the host Docker daemon via socket.
+# Named volumes (like awx_projects) cannot be listed here — use only host paths.
+# ansible-runner copies project files to the private_data_dir (under /tmp)
+# before launching the EE, so /var/lib/awx/projects is not needed here.
 AWX_ISOLATION_SHOW_PATHS = [
     '/etc/resolv.conf:/etc/resolv.conf:ro',
-    '/var/lib/awx/projects:/var/lib/awx/projects:ro',
+    # Internal PKI CA cert — mounted so git/curl inside EE containers trust it
+    f"{os.environ.get('TRAEFIK_CERTS_DIR', '/home/vagrant/autoflow/traefik/certs')}/ca.{os.environ.get('DOMAIN', 'localhost')}.crt:/etc/autoflow/ca.crt:ro",
 ]

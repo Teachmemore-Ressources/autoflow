@@ -11,7 +11,6 @@ volumes:
   pki_data:
   postgres_data:
   redis_data:
-  awx_projects:
   awx_receptor:
   receptor_run:         # shared socket dir between receptor ↔ awx_task
   prometheus_data:
@@ -192,7 +191,7 @@ services:
     volumes:
       - ./awx/settings.py:/etc/tower/settings.py:ro
       - ./awx/init.sh:/etc/awx-init/init.sh:ro
-      - awx_projects:/var/lib/awx/projects
+      - /var/lib/awx/projects:/var/lib/awx/projects
       - awx_receptor:/var/lib/awx/receptor
     networks:
       - autoflow
@@ -228,7 +227,7 @@ services:
     volumes:
       - ./awx/settings.py:/etc/tower/settings.py:ro
       - ./awx/nginx.default.d.conf:/etc/nginx/default.d/awx.conf:ro
-      - awx_projects:/var/lib/awx/projects
+      - /var/lib/awx/projects:/var/lib/awx/projects
       - awx_receptor:/var/lib/awx/receptor
       - ./awx/custom/index.html:/var/lib/awx/venv/awx/lib/python3.11/site-packages/awx/ui/build/index.html:ro
       - ./awx/custom:/var/lib/awx/public/static/custom:ro
@@ -259,11 +258,17 @@ services:
 
   # ── Receptor (AWX mesh execution node) ───────
   # Receptor is AWX's job-dispatch transport layer.
-  # It must share the receptor_run volume so awx_task can reach the socket.
-  # Docker socket is required: ansible-runner (invoked by receptor work-command)
-  # needs it to pull and launch EE containers on behalf of AWX jobs.
+  # ansible-runner runs HERE (receptor work-command: local) and launches EE
+  # containers via Docker (podman → docker symlink in the custom image).
+  #
+  # DinD path consistency: /tmp is bind-mounted from the host so that paths
+  # created inside this container (e.g. /tmp/awx_xxx/) also exist on the host.
+  # The host Docker daemon (via socket) can then mount them into EE containers.
   receptor:
-    image: quay.io/ansible/receptor:v1.6.4
+    build:
+      context: ./receptor
+      dockerfile: Dockerfile
+    image: autoflow/receptor:local
     container_name: autoflow_receptor
     restart: unless-stopped
     hostname: awx
@@ -272,8 +277,12 @@ services:
     volumes:
       - ./receptor/receptor.conf:/etc/receptor/receptor.conf:ro
       - receptor_run:/var/run/receptor
-      - awx_projects:/var/lib/awx/projects
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/awx/projects:/var/lib/awx/projects
+      # Docker socket: ansible-runner calls `podman run` (→ docker) to launch EEs
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Bind-mount host /tmp so DinD volume paths are consistent between
+      # this container and the host Docker daemon
+      - /tmp:/tmp
     group_add:
       - "${DOCKER_GID:-998}"
     networks:
@@ -311,16 +320,21 @@ services:
     environment:
       <<: *awx-env
       AWX_TASK_HOSTNAME: awx
+      DOMAIN: ${DOMAIN:-localhost}
+      TRAEFIK_CERTS_DIR: /home/vagrant/autoflow/traefik/certs
     volumes:
       - ./awx/settings.py:/etc/tower/settings.py:ro
       - ./awx/launch_awx_task.sh:/usr/bin/launch_awx_task_autoflow.sh:ro
       # AWX reads receptor.conf to locate the control socket path
       - ./receptor/receptor.conf:/etc/receptor/receptor.conf:ro
       - receptor_run:/var/run/receptor
-      - awx_projects:/var/lib/awx/projects
+      - /var/lib/awx/projects:/var/lib/awx/projects
       - awx_receptor:/var/lib/awx/receptor
       # Docker socket: required for ansible-runner to launch EE containers
       - /var/run/docker.sock:/var/run/docker.sock
+      # Shared with receptor: private_data_dir paths must be the same on host
+      # (only_transmit_kwargs=True passes the path, not the files, to receptor)
+      - /tmp:/tmp
     group_add:
       - "${DOCKER_GID:-998}"
     networks:
