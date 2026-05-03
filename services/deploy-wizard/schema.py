@@ -15,7 +15,6 @@ SECTIONS = [
     {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing"},
     {"id": "gitea",             "label": "Gitea",                  "desc": "Self-hosted Git service and registry"},
     {"id": "pki",               "label": "PKI",                    "desc": "Internal certificate authority"},
-    {"id": "execution_envs",    "label": "Environnements d'exéc.", "desc": "Ansible Execution Environments — build, registry et runtime"},
     {"id": "advanced",          "label": "Advanced",               "desc": "Intervals, log levels and system tuning"},
     {"id": "backup",         "label": "Disaster Recovery","desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore."},
     {"id": "compliance",     "label": "Compliance & Audit","desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0."},
