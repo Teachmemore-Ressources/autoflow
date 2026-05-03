@@ -22,6 +22,8 @@ dependencies:
         version: ">=1.5.0"
       - name: community.crypto
         version: ">=2.18.0"
+      - name: community.proxmox
+        version: ">=1.6.0"
 
   python:
     - requests>=2.31.0
