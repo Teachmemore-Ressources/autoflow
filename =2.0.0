@@ -1,0 +1,9 @@
+[WARNING]: Collection community.vmware does not support Ansible version 2.18.16
+[WARNING]: Skipping Galaxy server https://galaxy.ansible.com. Got an unexpected
+error when getting available versions of collection community.general: Unknown
+error when attempting to call Galaxy at 'https://galaxy.ansible.com/api/':
+<urlopen error [Errno -2] Name or service not known>. <urlopen error [Errno -2]
+Name or service not known>
+ERROR! Unknown error when attempting to call Galaxy at 'https://galaxy.ansible.com/api/': <urlopen error [Errno -2] Name or service not known>. <urlopen error [Errno -2] Name or service not known>
+Starting galaxy collection install process
+Process install dependency map

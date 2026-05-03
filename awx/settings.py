@@ -109,14 +109,37 @@ CONTAINER_RUNTIME = 'docker'
 # --add-host: /etc/hosts entries point to 127.0.0.1 which is meaningless inside
 # a container; host-gateway resolves to the Docker bridge IP (172.17.0.1) so
 # HTTPS requests reach Traefik running on the host.
+# EE_DNS_SERVER: upstream resolver reachable from Docker bridge (not 127.0.0.53).
+# Set in .env. Leave empty in air-gapped production (no external DNS needed when
+# all collections are pre-installed in the EE image).
+_ee_dns = os.environ.get('EE_DNS_SERVER', '')
+
 DEFAULT_CONTAINER_RUN_OPTIONS = [
     '--network', 'bridge',
     '--add-host', f"git.{os.environ.get('DOMAIN', 'localhost')}:host-gateway",
     # Trust the internal PKI CA mounted via AWX_ISOLATION_SHOW_PATHS
     '--env', 'GIT_SSL_CAINFO=/etc/autoflow/ca.crt',
     '--env', 'SSL_CERT_FILE=/etc/autoflow/ca.crt',
-]
+] + (['--dns', _ee_dns] if _ee_dns else [])
 
+# ── Galaxy / Collections — production (air-gapped) strategy ──────────────────
+# In production, collections must be pre-installed in the EE image at build time
+# so ansible-galaxy does NOT need to contact galaxy.ansible.com at sync time.
+#
+# Strategy:
+#   1. All needed collections listed in execution-environments/*/execution-environment.yml
+#   2. EE is built with ansible-builder (collections downloaded once at build time)
+#   3. At project sync, ansible-galaxy sees collections already installed → skips download
+#
+# For organisations with no internet at all, also set in .env:
+#   GALAXY_TASK_ENV={"ANSIBLE_GALAXY_SERVER_LIST": ""}
+# This suppresses all remote galaxy calls (requires all collections in EE image).
+_galaxy_task_env_raw = os.environ.get('GALAXY_TASK_ENV_JSON', '')
+if _galaxy_task_env_raw:
+    import json as _json
+    GALAXY_TASK_ENV = _json.loads(_galaxy_task_env_raw)
+
+# ── AWX Isolation ────────────────────────────────────────────────────────────
 # Working directory for per-job isolated environments.
 AWX_ISOLATION_BASE_PATH = os.environ.get('AWX_ISOLATION_BASE_PATH', '/tmp')
 
@@ -127,7 +150,9 @@ AWX_ISOLATION_BASE_PATH = os.environ.get('AWX_ISOLATION_BASE_PATH', '/tmp')
 # ansible-runner copies project files to the private_data_dir (under /tmp)
 # before launching the EE, so /var/lib/awx/projects is not needed here.
 AWX_ISOLATION_SHOW_PATHS = [
-    '/etc/resolv.conf:/etc/resolv.conf:ro',
     # Internal PKI CA cert — mounted so git/curl inside EE containers trust it
+    # NOTE: do NOT mount /etc/resolv.conf here — the host resolv.conf has 127.0.0.53
+    # (systemd-resolved stub) which is unreachable from inside Docker containers.
+    # DNS is handled by DEFAULT_CONTAINER_RUN_OPTIONS --dns 10.0.2.3 instead.
     f"{os.environ.get('TRAEFIK_CERTS_DIR', '/home/vagrant/autoflow/traefik/certs')}/ca.{os.environ.get('DOMAIN', 'localhost')}.crt:/etc/autoflow/ca.crt:ro",
 ]

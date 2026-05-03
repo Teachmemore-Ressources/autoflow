@@ -29,6 +29,10 @@ RUN dnf install -y dnf-plugins-core && \
     dnf install -y docker-ce-cli && \
     dnf clean all && rm -rf /var/cache/dnf
 
+# ansible-runner cleanup calls `podman image prune` unconditionally.
+# Symlink podman → docker so it transparently uses the host Docker daemon.
+RUN ln -sf /usr/bin/docker /usr/local/bin/podman
+
 # ── OS-level security patches ─────────────────────────────────────────────────
 # AWX is based on CentOS Stream 9 — use dnf to upgrade system packages.
 # --security flag limits upgrades to packages with published CVE advisories only,
