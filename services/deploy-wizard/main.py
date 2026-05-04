@@ -1961,26 +1961,48 @@ async def init_awx_token(request: Request):
 
 @app.get("/api/runner/status")
 def runner_status():
-    env = _load_env()
-    gitea_api = _gitea_api_url()
-    user   = env.get("GITEA_ADMIN_USER", "admin")
-    passwd = env.get("GITEA_ADMIN_PASSWORD", "")
+    """Check runner registration status.
+
+    Gitea 1.21+ does not expose GET /api/v1/admin/runners.
+    We derive status from two reliable signals:
+      1. GITEA_RUNNER_TOKEN is set in .env  (token was obtained)
+      2. act_runner container is running and not spamming "token is empty"
+    """
+    env   = _load_env()
+    token = env.get("GITEA_RUNNER_TOKEN", "").strip()
+    has_token = bool(token)
+
+    # Check container state via docker inspect (direct, no compose overhead)
+    container_up   = False
+    token_error    = False
+    registered_log = False
     try:
-        resp = httpx.get(
-            f"{gitea_api}/admin/runners",
-            params={"limit": 20},
-            auth=(user, passwd),
-            verify=False,
-            timeout=5,
+        inspect = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", "autoflow_act_runner"],
+            capture_output=True, text=True, timeout=5,
         )
-        if resp.status_code != 200:
-            return {"registered": False, "error": f"Gitea API HTTP {resp.status_code}"}
-        data = resp.json()
-        runners = data if isinstance(data, list) else data.get("data", [])
-        autoflow = [r for r in runners if r.get("name") == "autoflow-runner"]
-        return {"registered": bool(autoflow), "runner_count": len(autoflow), "runners": autoflow}
-    except Exception as exc:
-        return {"registered": False, "error": str(exc)}
+        container_up = inspect.stdout.strip() == "running"
+
+        # docker logs writes to stderr; capture both streams
+        logs = subprocess.run(
+            ["docker", "logs", "--tail", "30", "autoflow_act_runner"],
+            capture_output=True, text=True, timeout=5,
+        )
+        combined = (logs.stdout + logs.stderr).lower()
+        token_error    = "token is empty" in combined
+        registered_log = "runner registered successfully" in combined
+    except Exception:
+        pass
+
+    registered = has_token and container_up and registered_log and not token_error
+    return {
+        "registered":    registered,
+        "runner_count":  1 if registered else 0,
+        "has_token":     has_token,
+        "container_up":  container_up,
+        "registered_log": registered_log,
+        "token_error":   token_error,
+    }
 
 
 @app.get("/api/runner/register")

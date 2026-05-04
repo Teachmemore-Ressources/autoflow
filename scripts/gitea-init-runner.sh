@@ -23,11 +23,13 @@ if [[ -f "${PROJECT_ROOT}/.env" ]]; then
   set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
 
-GITEA_URL="${GITEA_ROOT_URL:-http://localhost:3001}"
-GITEA_INT_URL="http://localhost:${GITEA_HTTP_PORT:-3001}"
+# Use the external URL (via Traefik) — port 3001 is NOT bound to the host
+GITEA_URL="${GITEA_ROOT_URL:-https://git.teachmemore.lan}"
 GITEA_USER="${GITEA_ADMIN_USER:-admin}"
 GITEA_PASS="${GITEA_ADMIN_PASSWORD:-}"
 ENV_FILE="${PROJECT_ROOT}/.env"
+# -k: skip cert verify (custom CA may not be in system store yet)
+CURL="curl -sk"
 
 log()  { echo -e "  \033[36m[runner-init]\033[0m $*"; }
 ok()   { echo -e "  \033[32m✔\033[0m $*"; }
@@ -39,20 +41,20 @@ err()  { echo -e "  \033[31m✖\033[0m $*" >&2; exit 1; }
 # ── 1. Attendre Gitea ──────────────────────────────────────────
 log "Attente de Gitea..."
 for i in $(seq 1 30); do
-  if curl -sf --max-time 3 "${GITEA_INT_URL}/api/healthz" >/dev/null 2>&1; then
+  if $CURL --max-time 5 "${GITEA_URL}/api/v1/version" >/dev/null 2>&1; then
     ok "Gitea disponible."; break
   fi
   [[ $i -eq 30 ]] && err "Gitea non disponible après 60s."
   sleep 2
 done
 
-# ── 2. Récupérer un token d'enregistrement runner (org-level) ──
-log "Création du token d'enregistrement runner..."
+# ── 2. Récupérer un token d'enregistrement runner ──────────────
+# NOTE: Gitea 1.21+ — endpoint is GET (not POST)
+log "Récupération du token d'enregistrement runner..."
 
-RESP=$(curl -s -X POST \
-  -u "${GITEA_USER}:${GITEA_PASS}" \
+RESP=$($CURL -u "${GITEA_USER}:${GITEA_PASS}" \
   -H "Content-Type: application/json" \
-  "${GITEA_INT_URL}/api/v1/admin/runners/registration-token")
+  "${GITEA_URL}/api/v1/admin/runners/registration-token")
 
 RUNNER_TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)
 
@@ -75,24 +77,21 @@ else
 fi
 ok "GITEA_RUNNER_TOKEN écrit dans .env"
 
-# ── 4. Redémarrer act_runner ────────────────────────────────────
-log "Redémarrage du conteneur act_runner..."
+# ── 4. Recréer act_runner avec le nouveau token ─────────────────
+# IMPORTANT: `restart` ne relit PAS les variables d'environnement.
+# `up -d --force-recreate` recrée le conteneur avec les nouvelles env vars.
+log "Recréation du conteneur act_runner (nouveau token)..."
 
 cd "${PROJECT_ROOT}"
-if docker compose ps act_runner 2>/dev/null | grep -q "Up\|running"; then
-  docker compose --env-file "${ENV_FILE}" restart act_runner 2>&1 | tail -3
-  ok "act_runner redémarré."
-else
-  docker compose --env-file "${ENV_FILE}" up -d act_runner 2>&1 | tail -5
-  ok "act_runner démarré."
-fi
+docker compose --env-file "${ENV_FILE}" up -d --force-recreate act_runner 2>&1 | tail -5
+ok "act_runner recréé avec le nouveau token."
 
 # ── 5. Vérifier l'enregistrement ────────────────────────────────
 sleep 5
 log "Vérification des runners enregistrés..."
 
-RUNNERS=$(curl -s -u "${GITEA_USER}:${GITEA_PASS}" \
-  "${GITEA_INT_URL}/api/v1/admin/runners?limit=10" 2>/dev/null || echo "{}")
+RUNNERS=$($CURL -u "${GITEA_USER}:${GITEA_PASS}" \
+  "${GITEA_URL}/api/v1/admin/runners?limit=10" 2>/dev/null || echo "{}")
 
 COUNT=$(echo "$RUNNERS" | python3 -c "
 import sys,json
