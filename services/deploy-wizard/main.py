@@ -235,6 +235,22 @@ def save_config(request: Request, data: dict):
     }
 
 
+_SHELL_UNSAFE = set(' \t*?[]{}()<>|&;!\\$`\'"')
+
+def _quote_env_value(v: str) -> str:
+    """Quote a .env value when it contains characters that bash would misinterpret.
+
+    Both python-dotenv and bash handle double-quoted values correctly, so this
+    is safe for both programmatic reads (dotenv_values) and `source .env` in scripts.
+    """
+    if not v:
+        return ""
+    if any(c in v for c in _SHELL_UNSAFE):
+        escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return v
+
+
 def _write_env(values: dict[str, str]) -> None:
     """Write .env, preserving structure from template if available."""
     template = ENV_EXAMPLE_FILE if ENV_EXAMPLE_FILE.exists() else None
@@ -249,7 +265,7 @@ def _write_env(values: dict[str, str]) -> None:
             elif "=" in stripped and not stripped.startswith("#"):
                 key = stripped.split("=", 1)[0].strip()
                 if key in values:
-                    lines.append(f"{key}={values[key]}")
+                    lines.append(f"{key}={_quote_env_value(values[key])}")
                     written.add(key)
                 else:
                     lines.append(raw)
@@ -262,7 +278,7 @@ def _write_env(values: dict[str, str]) -> None:
         if lines:
             lines.append("")
         for key in extras:
-            lines.append(f"{key}={values[key]}")
+            lines.append(f"{key}={_quote_env_value(values[key])}")
 
     ENV_FILE.write_text("\n".join(lines) + "\n")
     ENV_FILE.chmod(0o600)

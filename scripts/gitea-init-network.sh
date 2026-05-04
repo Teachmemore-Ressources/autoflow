@@ -121,11 +121,10 @@ Playbooks :
 - F5 BIG-IP : facts, pool management
 - Compliance : config drift, security baseline"
 
-# Push
-PUSH_URL="${GITEA_URL/http:\/\//http:\/\/${GITEA_USER}:${GITEA_PASS}@}"
-PUSH_URL="${PUSH_URL}//${GITEA_USER}/${REPO_NAME}.git"
-# Reconstruire proprement
-PUSH_URL="http://${GITEA_USER}:${GITEA_PASS}@${GITEA_URL#http://}/${GITEA_USER}/${REPO_NAME}.git"
+# Push — strip scheme then re-inject credentials (handles both http:// and https://)
+GITEA_HOST="${GITEA_URL#*://}"
+GITEA_SCHEME="${GITEA_URL%%://*}"
+PUSH_URL="${GITEA_SCHEME}://${GITEA_USER}:${GITEA_PASS}@${GITEA_HOST}/${GITEA_USER}/${REPO_NAME}.git"
 
 log "Push vers ${GITEA_URL}/${GITEA_USER}/${REPO_NAME}..."
 git remote add origin "${PUSH_URL}"
