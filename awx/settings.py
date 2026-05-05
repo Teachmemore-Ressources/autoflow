@@ -109,9 +109,10 @@ CONTAINER_RUNTIME = 'docker'
 # --add-host: /etc/hosts entries point to 127.0.0.1 which is meaningless inside
 # a container; host-gateway resolves to the Docker bridge IP (172.17.0.1) so
 # HTTPS requests reach Traefik running on the host.
-# EE_DNS_SERVER: upstream resolver reachable from Docker bridge (not 127.0.0.53).
-# Set in .env. Leave empty in air-gapped production (no external DNS needed when
-# all collections are pre-installed in the EE image).
+# EE_DNS_SERVER: optional explicit DNS for EE containers. Leave EMPTY.
+# Docker auto-generates resolv.conf from host upstream DNS (includes fallback).
+# Setting --dns to a single server overrides that entirely — if it's unreachable,
+# ALL DNS inside EE containers fails with no fallback.
 _ee_dns = os.environ.get('EE_DNS_SERVER', '')
 
 DEFAULT_CONTAINER_RUN_OPTIONS = [

@@ -2257,6 +2257,93 @@ def system_preflight():
     return {"checks": checks, "all_ok": all(c["ok"] for c in checks)}
 
 
+# ── EE DNS auto-detection ─────────────────────────────────────────────────────
+
+@app.get("/api/preflight/ee-dns")
+def preflight_ee_dns():
+    """Detect a DNS server reachable from the Docker bridge network.
+
+    Reads upstream servers from /run/systemd/resolve/resolv.conf (the real IPs,
+    not 127.0.0.53), then tests each one from inside a short-lived bridge
+    container — exactly the same network context as AWX EE containers.
+    Returns the first working server and compares to EE_DNS_SERVER in .env.
+    """
+    import ipaddress
+
+    # ── Collect candidates ────────────────────────────────────────
+    candidates: list[str] = []
+    for path in ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"]:
+        try:
+            for line in Path(path).read_text().splitlines():
+                parts = line.strip().split()
+                if parts and parts[0] == "nameserver" and len(parts) >= 2:
+                    ip = parts[1]
+                    try:
+                        addr = ipaddress.ip_address(ip)
+                        # Skip loopback (127.x, ::1) and link-local IPv6
+                        if not addr.is_loopback and not (addr.version == 6 and addr.is_link_local):
+                            if ip not in candidates:
+                                candidates.append(ip)
+                    except ValueError:
+                        pass
+        except Exception:
+            pass
+
+    # Always include well-known public DNS as last-resort candidates
+    for fallback in ["1.1.1.1", "8.8.8.8"]:
+        if fallback not in candidates:
+            candidates.append(fallback)
+
+    # ── Test each candidate from bridge (one container, all servers) ──
+    test_script = "\n".join(
+        f'nslookup galaxy.ansible.com {ip} >/dev/null 2>&1 '
+        f'&& echo "OK:{ip}" || echo "FAIL:{ip}"'
+        for ip in candidates
+    )
+    results: list[dict] = []
+    working: str | None = None
+    try:
+        r = subprocess.run(
+            ["docker", "run", "--rm", "--network", "bridge",
+             "alpine", "sh", "-c", test_script],
+            capture_output=True, text=True, timeout=30,
+        )
+        for line in r.stdout.splitlines():
+            if line.startswith("OK:"):
+                ip = line[3:]
+                results.append({"dns": ip, "ok": True})
+                if working is None:
+                    working = ip
+            elif line.startswith("FAIL:"):
+                results.append({"dns": line[5:], "ok": False})
+    except Exception as exc:
+        results = [{"dns": ip, "ok": False, "error": str(exc)} for ip in candidates]
+
+    current = _load_env().get("EE_DNS_SERVER", "").strip()
+    return {
+        "candidates": candidates,
+        "results":    results,
+        "working":    working,
+        "current":    current,
+        # needs_update: current is non-empty and wrong, OR working differs
+        "needs_update": bool(current) and current != working,
+        "recommendation": (
+            "" if not working          # leave empty → Docker auto-manages
+            else working               # set to first confirmed working server
+        ),
+    }
+
+
+@app.post("/api/preflight/apply-dns")
+def preflight_apply_dns(data: dict):
+    """Save EE_DNS_SERVER to .env (empty string = let Docker manage)."""
+    value = str(data.get("value", "")).strip()
+    current = _load_env()
+    current["EE_DNS_SERVER"] = value
+    _write_env(current)
+    return {"ok": True, "value": value}
+
+
 # ── Stack status ──────────────────────────────────────────────────────────────
 
 @app.get("/api/status")

@@ -651,6 +651,7 @@ async function bootApp() {
   activateSection('system');
   pollStatus();
   checkSysPreflight();
+  checkEEDnsStatus();
   checkPermissionsStatus();
   checkPreflightStatus();
   setInterval(pollStatus, 30000);
@@ -716,6 +717,100 @@ function runSysPreflight() {
   const box = document.getElementById('sys-checks');
   if (box) box.style.display = 'none';
   checkSysPreflight();
+}
+
+// ── EE Container DNS ──────────────────────────────────────────────────────
+async function checkEEDnsStatus() {
+  const dot  = document.getElementById('eedns-dot');
+  const txt  = document.getElementById('eedns-status-text');
+  const det  = document.getElementById('eedns-detail');
+  if (!dot) return;
+  let d = {};
+  try { d = await fetch('/api/preflight/ee-dns').then(r => r.json()); }
+  catch { dot.className = 'pf-dot err'; txt.textContent = 'Unable to reach wizard API'; return; }
+
+  const { working, current, results = [], needs_update, recommendation } = d;
+
+  if (!working) {
+    dot.className = 'pf-dot err';
+    txt.textContent = 'No working DNS found from bridge network';
+  } else if (needs_update) {
+    dot.className = 'pf-dot warn';
+    txt.textContent = `EE_DNS_SERVER mismatch — working: ${working}, current: ${current || '(empty)'}`;
+  } else {
+    dot.className = 'pf-dot ok';
+    txt.textContent = current
+      ? `DNS OK — EE_DNS_SERVER=${current}`
+      : `DNS OK — Docker auto-manages (${working} reachable)`;
+  }
+
+  if (det) {
+    det.style.display = '';
+    const rows = results.map(r =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin:2px 8px 2px 0;padding:3px 8px;border-radius:5px;background:${r.ok ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.08)'};border:1px solid ${r.ok ? 'rgba(16,185,129,.25)' : 'rgba(239,68,68,.2)'}">` +
+      `<span style="width:6px;height:6px;border-radius:50%;background:${r.ok ? 'var(--success)' : 'var(--danger)'}"></span>` +
+      `<code style="font-size:11px">${r.dns}</code><span style="font-size:10px;color:var(--muted)">${r.ok ? '✔ bridge' : '✖ timeout'}</span></span>`
+    ).join('');
+    det.innerHTML = `<div style="margin-bottom:8px;flex-wrap:wrap;display:flex">${rows}</div>`;
+
+    if (!current && working) {
+      det.innerHTML += `
+        <div style="background:rgba(59,123,255,.08);border:1px solid rgba(59,123,255,.2);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--muted)">
+          <strong style="color:var(--text)">Recommandation :</strong>
+          Docker gère automatiquement le DNS (<code>${working}</code> est joignable depuis le bridge).
+          <code>EE_DNS_SERVER</code> est vide — c'est la configuration recommandée.<br>
+          <span style="color:var(--muted2);font-size:11px">Si un DNS spécifique est requis (réseau d'entreprise, air-gapped), cliquer "Forcer DNS" ci-dessous.</span>
+        </div>`;
+    } else if (needs_update && working) {
+      det.innerHTML += `
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:7px;padding:10px 14px;font-size:12px">
+          <strong style="color:var(--warning)">EE_DNS_SERVER actuel (<code>${current}</code>) ne répond pas depuis le bridge.</strong><br>
+          <span style="color:var(--muted)">Correction recommandée : vider la valeur (Docker auto-gère) ou utiliser <code>${working}</code>.</span>
+        </div>`;
+    }
+
+    if (working) {
+      det.innerHTML += `
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="applyEEDns('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Vider EE_DNS_SERVER (recommandé)
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="applyEEDns('${working}')">
+            Forcer DNS = ${working}
+          </button>
+        </div>`;
+    }
+  }
+}
+
+async function applyEEDns(value) {
+  const dot = document.getElementById('eedns-dot');
+  const txt = document.getElementById('eedns-status-text');
+  dot.className = 'pf-dot running';
+  txt.textContent = value ? `Application de EE_DNS_SERVER=${value}…` : 'Suppression de EE_DNS_SERVER…';
+  try {
+    await fetch('/api/preflight/apply-dns', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({value}),
+    });
+    toast(value ? `EE_DNS_SERVER=${value} sauvegardé` : 'EE_DNS_SERVER vidé — Docker gère automatiquement', 'ok');
+    await checkEEDnsStatus();
+  } catch {
+    dot.className = 'pf-dot err';
+    txt.textContent = 'Erreur lors de la sauvegarde';
+  }
+}
+
+function runEEDnsCheck() {
+  const dot = document.getElementById('eedns-dot');
+  const txt = document.getElementById('eedns-status-text');
+  const det = document.getElementById('eedns-detail');
+  dot.className = 'pf-dot running';
+  txt.textContent = 'Détection en cours (test depuis bridge)…';
+  if (det) det.style.display = 'none';
+  checkEEDnsStatus();
 }
 
 // ── Permissions ────────────────────────────────────────────────────────────
@@ -1029,6 +1124,31 @@ function buildSections() {
               <button class="btn btn-primary btn-sm" onclick="runSysPreflight()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 Check system
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- EE Container DNS -->
+        <div class="pf-item">
+          <div class="pf-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+          </div>
+          <div class="pf-body">
+            <div class="pf-title">EE Container DNS</div>
+            <div class="pf-desc">
+              Detects a DNS server reachable from the Docker bridge network — the same context AWX uses to launch Execution Environment containers.<br>
+              <em>Required for <code>ansible-galaxy</code> and any internet access inside jobs. Auto-detects from host upstream DNS. Works across all environments (VirtualBox, VMware, bare-metal, cloud).</em>
+            </div>
+            <div class="pf-status">
+              <span class="pf-dot" id="eedns-dot"></span>
+              <span id="eedns-status-text">Not checked</span>
+            </div>
+            <div id="eedns-detail" style="margin-top:8px;font-size:12px;display:none"></div>
+            <div class="pf-actions">
+              <button class="btn btn-primary btn-sm" onclick="runEEDnsCheck()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Detect DNS
               </button>
             </div>
           </div>
