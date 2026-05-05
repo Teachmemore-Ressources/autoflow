@@ -161,6 +161,72 @@ Chaque section dispose d'un bouton **"Sauvegarder"**. La configuration est écri
 
 ---
 
+## Déployer la stack
+
+Une fois toutes les sections remplies et sauvegardées, le bouton **"Save & Deploy"** orchestre le déploiement complet.
+
+### Ce qui se passe en coulisses
+
+```
+Save & Deploy
+    │
+    ├─ 1. Écriture du .env final
+    │
+    ├─ 2. Création des volumes critiques (si absents)
+    │       autoflow_pki_data
+    │       autoflow_postgres_data
+    │       autoflow_redis_data
+    │       autoflow_gitea_data
+    │       autoflow_gitea_postgres_data
+    │
+    └─ 3. docker compose up -d --build
+```
+
+Les volumes critiques sont déclarés `external: true` dans `docker-compose.yml` — Docker Compose ne peut pas les créer automatiquement. Le wizard les crée avec `docker volume create` **avant** de lancer `docker compose up`. Cette opération est **idempotente** : si les volumes existent déjà (redéploiement), rien ne se passe.
+
+!!! info "Génération PKI avant Save & Deploy"
+    L'étape **"Setup PKI & Generate cert"** crée également `autoflow_pki_data` en amont, ce qui explique pourquoi ce volume doit exister avant que le service PKI puisse démarrer.
+
+### Flux complet sur un fresh install
+
+```
+1. make wizard              → lancer le wizard
+2. Remplir toutes sections  → configurer le .env
+3. Générer secrets          → mots de passe, tokens, clés
+4. Setup PKI                → génère le CA + wildcard cert
+                               crée autoflow_pki_data
+5. Save & Deploy            → crée les 4 autres volumes
+                               docker compose up -d --build
+```
+
+---
+
+## Déploiement sans le wizard
+
+Pour les redéploiements ou les environnements où le wizard n'est pas disponible :
+
+```bash
+# Crée les volumes critiques + démarre la stack
+make start
+
+# Équivalent manuel (à éviter sur un fresh install)
+docker volume create autoflow_pki_data
+docker volume create autoflow_postgres_data
+docker volume create autoflow_redis_data
+docker volume create autoflow_gitea_data
+docker volume create autoflow_gitea_postgres_data
+docker compose up -d
+```
+
+!!! warning "`docker compose up -d` direct sur fresh install"
+    Sans `make start` ou le wizard, `docker compose up -d` échoue sur une machine vierge avec :
+    ```
+    Error response from daemon: volume autoflow_postgres_data declared as external, but could not be found
+    ```
+    Utiliser toujours `make start` pour le premier démarrage.
+
+---
+
 ## Chiffrer les secrets
 
 Après avoir configuré et sauvegardé toutes les sections, chiffrez le fichier `.env` :
