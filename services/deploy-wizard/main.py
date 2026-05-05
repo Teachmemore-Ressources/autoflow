@@ -666,7 +666,13 @@ async def generate_cert(request: Request):
             yield _sse("[DONE]")
             return
 
-        # ── 2. Start PKI with temporary port exposure ─────────────────────
+        # ── 2. Ensure pki_data volume exists (external: true — must pre-exist) ──
+        subprocess.run(
+            ["docker", "volume", "create", "autoflow_pki_data"],
+            capture_output=True, text=True,
+        )
+
+        # ── 3. Start PKI with temporary port exposure ──────────────────────
         yield _sse("Starting PKI service on localhost:8004…")
         start = subprocess.run(
             [
@@ -682,7 +688,7 @@ async def generate_cert(request: Request):
             yield _sse("[DONE]")
             return
 
-        # ── 3. Wait for PKI to be healthy ─────────────────────────────────
+        # ── 4. Wait for PKI to be healthy ─────────────────────────────────
         yield _sse("Waiting for PKI to be ready (up to 60 s)…")
         ready = False
         async with _httpx.AsyncClient() as c:
@@ -701,7 +707,7 @@ async def generate_cert(request: Request):
             yield _sse("[DONE]")
             return
 
-        # ── 4. PKI operations ─────────────────────────────────────────────
+        # ── 5. PKI operations ─────────────────────────────────────────────
         yield _sse("PKI is ready. Authenticating…")
 
         async with _httpx.AsyncClient() as c:
@@ -791,7 +797,7 @@ async def generate_cert(request: Request):
                 return
             key_pem = proc.stdout.decode()
 
-        # ── 5. Write files to traefik/certs/ ──────────────────────────────
+        # ── 6. Write files to traefik/certs/ ──────────────────────────────
         CERTS_DIR.mkdir(parents=True, exist_ok=True)
         crt_file = CERTS_DIR / f"wildcard.{domain}.crt"
         key_file = CERTS_DIR / f"wildcard.{domain}.key"
