@@ -24,3 +24,7 @@ traefik/dynamic/monitoring_users
 monitoring/prometheus/secrets/*
 !monitoring/prometheus/secrets/.gitkeep
 backups/
+
+# MkDocs — generated site (rebuilt by CI/CD)
+site/
+.cache/
