@@ -98,7 +98,25 @@ cp /tmp/dr-restore/backup/config/.env ./autoflow/.env
 
 ---
 
-## Étape 4 — Restaurer les données
+## Étape 4 — Créer les volumes critiques
+
+Les volumes critiques sont `external: true` — ils doivent exister avant `docker compose up`.
+Sur un nouveau serveur ils n'existent pas encore :
+
+```bash
+docker volume create autoflow_postgres_data
+docker volume create autoflow_gitea_postgres_data
+docker volume create autoflow_gitea_data
+docker volume create autoflow_redis_data
+docker volume create autoflow_pki_data
+```
+
+!!! tip
+    Le Deploy Wizard fait cela automatiquement. En DR manuel, il faut le faire explicitement.
+
+---
+
+## Étape 5 — Restaurer les données
 
 ### Base de données AWX
 
@@ -146,8 +164,7 @@ restic -r $BACKUP_REPOSITORY restore latest \
   --include "/backup/gitea" \
   --target /tmp/dr-restore
 
-# Copier les données Gitea vers le volume Docker
-docker volume create autoflow_gitea_data
+# Copier les données Gitea vers le volume Docker (créé à l'étape 4)
 docker run --rm \
   -v autoflow_gitea_data:/target \
   -v /tmp/dr-restore/backup/gitea:/source \
@@ -176,7 +193,7 @@ docker run --rm \
 
 ---
 
-## Étape 5 — Démarrer la plateforme
+## Étape 6 — Démarrer la plateforme
 
 ```bash
 cd autoflow
@@ -192,7 +209,7 @@ Attendre ~2-3 minutes. AWX peut prendre jusqu'à 5 minutes pour initialiser sa D
 
 ---
 
-## Étape 6 — Vérifications post-restauration
+## Étape 7 — Vérifications post-restauration
 
 ### Tests fonctionnels
 
@@ -238,7 +255,7 @@ curl -sk https://git.<DOMAIN>/api/v1/repos/search | python3 -c \
 
 ---
 
-## Étape 7 — Reconfiguration post-restauration
+## Étape 8 — Reconfiguration post-restauration
 
 ### Régénérer les tokens si nécessaire
 

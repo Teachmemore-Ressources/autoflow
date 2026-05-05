@@ -252,3 +252,4 @@ volumes:
 
 !!! tip "Volumes nommés"
     Utiliser des volumes Docker nommés (préfixés `autoflow_`) plutôt que des bind mounts — ils sont inclus automatiquement dans les sauvegardes Restic.
+    Si le volume contient des **données critiques** (base de données, certificats, dépôts Git), le déclarer `external: true` avec un nom explicite et le créer manuellement (ou via le wizard) pour le protéger d'un `docker compose down -v` accidentel.

@@ -75,7 +75,7 @@ docker system df
 # Nettoyer les images non utilisées
 docker image prune -f
 
-# Nettoyage complet (ATTENTION : ne supprime pas les volumes nommés)
+# Nettoyage complet (ne supprime pas les volumes — ni nommés ni externes)
 docker system prune -f
 ```
 
