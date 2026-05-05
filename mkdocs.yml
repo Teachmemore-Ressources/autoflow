@@ -1,7 +1,7 @@
 site_name: Autoflow Documentation
 site_description: Plateforme d'automatisation entreprise — AWX, Gitea, monitoring, PKI, DR
 site_author: Autoflow Team
-site_url: https://docs.autoflow.local
+site_url: https://teachmemore-ressources.github.io/autoflow/
 docs_dir: docs
 repo_name: autoflow
 repo_url: https://git.teachmemore.lan/admin-gitea/autoflow
