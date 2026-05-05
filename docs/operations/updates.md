@@ -19,8 +19,8 @@ make awx-build AWX_VERSION=24.7.0
 docker compose up -d --force-recreate awx_migrate awx_web awx_task receptor
 ```
 
-!!! warning "Ne jamais `down -v`"
-    `docker compose down -v` supprime les volumes — toutes les données AWX sont perdues. Toujours utiliser `docker compose down` ou `up -d --force-recreate`.
+!!! info "`down -v` — volumes critiques protégés"
+    Les volumes critiques (PostgreSQL, Redis, Gitea, PKI) sont `external: true` — `docker compose down -v` ne peut pas les supprimer. Les volumes non-critiques (Prometheus, Loki, Grafana...) seront recréés vides au prochain `up`. Utiliser `docker compose down` ou `up -d --force-recreate` reste la meilleure pratique.
 
 ---
 

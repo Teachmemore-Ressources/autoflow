@@ -408,6 +408,24 @@ async def deploy(request: Request, encrypt: bool = False):
             ENV_ENC_FILE.write_text(r.stdout)
             yield _sse(".env.enc written.")
 
+        # Ensure critical volumes exist before compose up.
+        # External volumes are not touched by `docker compose down -v`.
+        critical_volumes = [
+            "autoflow_pki_data",
+            "autoflow_postgres_data",
+            "autoflow_redis_data",
+            "autoflow_gitea_data",
+            "autoflow_gitea_postgres_data",
+        ]
+        yield _sse("Ensuring critical volumes exist…")
+        for vol in critical_volumes:
+            r = subprocess.run(
+                ["docker", "volume", "create", vol],
+                capture_output=True, text=True,
+            )
+            status = "already exists" if r.returncode == 0 and r.stdout.strip() == vol else r.stdout.strip()
+            yield _sse(f"  volume {vol}: {status}")
+
         yield _sse("Starting: docker compose up -d --build")
         process = await asyncio.create_subprocess_exec(
             "docker", "compose", "--env-file", str(ENV_FILE), "up", "-d", "--build",

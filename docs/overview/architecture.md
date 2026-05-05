@@ -183,8 +183,10 @@ Gitea dispose de sa **propre instance PostgreSQL** isolée de celle d'AWX.
 | `redis` | Redis 7 | `redis_data` | AWX : cache de session, queue Celery, channels |
 | `minio` | MinIO | `minio_data` | Loki : stockage des chunks de logs |
 
-!!! warning "Volumes Docker nommés"
-    Les données critiques (PostgreSQL, Redis) sont dans des **volumes Docker nommés**, pas dans des bind-mounts. Cela signifie que `docker compose down -v` **supprime toutes les données**. Utilisez `docker compose down` (sans `-v`) pour préserver les données.
+!!! success "Volumes critiques protégés"
+    Les volumes critiques (PostgreSQL AWX, PostgreSQL Gitea, Redis, Gitea, PKI) sont déclarés **`external: true`** dans `docker-compose.yml`. Docker Compose ne les gère pas — `docker compose down -v` ne peut **pas** les supprimer. Ils sont créés automatiquement par le Deploy Wizard avant le premier déploiement.
+
+    Les volumes non-critiques (Prometheus, Grafana, Loki, Tempo, MinIO, Trivy DB) restent gérés par Compose et peuvent être recréés sans perte de données métier.
 
 ---
 

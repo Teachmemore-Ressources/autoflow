@@ -8,9 +8,25 @@ networks:
     name: autoflow_net
 
 volumes:
+  # ── Critical volumes — marked external so `docker compose down -v` cannot delete them.
+  # Created automatically by the deploy wizard before first `docker compose up`.
   pki_data:
+    external: true
+    name: autoflow_pki_data
   postgres_data:
+    external: true
+    name: autoflow_postgres_data
   redis_data:
+    external: true
+    name: autoflow_redis_data
+  gitea_data:
+    external: true
+    name: autoflow_gitea_data
+  gitea_postgres_data:
+    external: true
+    name: autoflow_gitea_postgres_data
+
+  # ── Non-critical volumes — managed by Compose, recreatable without data loss.
   awx_receptor:
   receptor_run:         # shared socket dir between receptor ↔ awx_task
   prometheus_data:
@@ -18,8 +34,6 @@ volumes:
   minio_data:           # MinIO object storage (Loki chunks + index via S3)
   loki_data:            # Loki local working dirs (WAL, TSDB cache, compactor)
   trivy_db:             # Trivy vulnerability DB cache (persisted across restarts)
-  gitea_data:           # Gitea repositories + config
-  gitea_postgres_data:  # Dedicated PostgreSQL instance for Gitea
   act_runner_data:      # Gitea Actions runner state + cache
   tempo_data:           # Tempo trace storage (WAL + blocks)
 
@@ -583,7 +597,7 @@ services:
     container_name: autoflow_postgres_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-awx}?sslmode=disable&connect_timeout=10"
     depends_on:
       postgres:
         condition: service_healthy
