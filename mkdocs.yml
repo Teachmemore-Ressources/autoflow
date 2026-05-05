@@ -1,0 +1,187 @@
+site_name: Autoflow Documentation
+site_description: Plateforme d'automatisation entreprise — AWX, Gitea, monitoring, PKI, DR
+site_author: Autoflow Team
+site_url: https://docs.autoflow.local
+docs_dir: docs
+repo_name: autoflow
+repo_url: https://git.teachmemore.lan/admin-gitea/autoflow
+
+theme:
+  name: material
+  language: fr
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Passer en mode clair
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Passer en mode sombre
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/git-alt
+    admonition:
+      note: octicons/tag-16
+      tip: octicons/squirrel-16
+      warning: octicons/alert-16
+      danger: octicons/zap-16
+
+plugins:
+  - search:
+      lang: fr
+  - mermaid2
+  - glightbox
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
+      fallback_to_build_date: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      title: Sur cette page
+
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ansible/awx
+      name: AWX sur GitHub
+  generator: false
+
+extra_css:
+  - assets/extra.css
+
+nav:
+  - Accueil: index.md
+
+  - Vue d'ensemble:
+    - overview/index.md
+    - Qu'est-ce qu'Autoflow ?: overview/what-is-autoflow.md
+    - Architecture: overview/architecture.md
+    - Composants: overview/components.md
+    - Prérequis système: overview/requirements.md
+
+  - Démarrage rapide:
+    - getting-started/index.md
+    - Prérequis: getting-started/prerequisites.md
+    - Quick Start: getting-started/quick-start.md
+    - Deploy Wizard: getting-started/deploy-wizard.md
+    - Post-installation: getting-started/post-install.md
+
+  - Configuration:
+    - configuration/index.md
+    - Variables d'environnement: configuration/environment-variables.md
+    - Réseau & Traefik: configuration/network-topology.md
+    - TLS & PKI: configuration/tls-pki.md
+    - AWX: configuration/awx.md
+    - Gitea: configuration/gitea.md
+    - Execution Environments: configuration/execution-environments.md
+    - Event Engine: configuration/event-engine.md
+    - Monitoring: configuration/monitoring.md
+    - Backup & DR: configuration/backup.md
+    - Security Scanner: configuration/security-scanner.md
+    - Air-gapped: configuration/air-gapped.md
+
+  - Opérations (Day-2):
+    - operations/index.md
+    - Vérifications quotidiennes: operations/daily-checks.md
+    - Dashboards Grafana: operations/monitoring-dashboards.md
+    - Gestion des logs: operations/log-management.md
+    - Tracing distribué: operations/distributed-tracing.md
+    - Backup & Restore: operations/backup-restore.md
+    - Mises à jour: operations/updates.md
+    - Tuning & Scaling: operations/scaling.md
+
+  - Sécurité:
+    - security/index.md
+    - Modèle de menaces: security/overview.md
+    - Gestion des secrets: security/secrets-management.md
+    - Sécurité réseau: security/network-security.md
+    - Contrôle d'accès: security/access-control.md
+    - Audit & Logs: security/audit-logs.md
+    - Durcissement TLS: security/tls-hardening.md
+    - Conformité: security/compliance.md
+
+  - Runbook:
+    - runbook/index.md
+    - Réponse aux incidents: runbook/incident-response.md
+    - Reprise de service: runbook/service-recovery.md
+    - Disaster Recovery: runbook/disaster-recovery.md
+    - Troubleshooting:
+      - runbook/troubleshooting/index.md
+      - AWX: runbook/troubleshooting/awx.md
+      - Gitea: runbook/troubleshooting/gitea.md
+      - Monitoring: runbook/troubleshooting/monitoring.md
+      - Certificats: runbook/troubleshooting/certificates.md
+      - Réseau: runbook/troubleshooting/network.md
+
+  - Référence API:
+    - api-reference/index.md
+    - Authentification: api-reference/authentication.md
+    - Autoflow API: api-reference/autoflow-api.md
+    - Event Engine API: api-reference/event-engine-api.md
+    - Deploy Wizard API: api-reference/deploy-wizard-api.md
+
+  - Développement:
+    - development/index.md
+    - Dev local: development/local-dev.md
+    - Builder un EE: development/building-ee.md
+    - Écrire des playbooks: development/writing-playbooks.md
+    - Ajouter un service: development/adding-services.md
+    - ADR:
+      - development/adr/index.md
+      - "001 — AWX comme socle": development/adr/001-awx-as-core.md
+      - "002 — Gitea vs GitLab": development/adr/002-gitea-over-gitlab.md
+      - "003 — Traefik reverse proxy": development/adr/003-traefik.md
+      - "004 — Restic backup": development/adr/004-restic.md
+      - "005 — PKI interne": development/adr/005-internal-pki.md
+
+  - Changelog: changelog/index.md

@@ -113,6 +113,13 @@ FIELDS = [
         "description": "Django secret key — generate once, never change after first start",
     },
     {
+        "key": "AWX_ALLOWED_HOSTS", "label": "Allowed Hosts", "section": "awx",
+        "type": "text", "wide": True, "default": "*",
+        "placeholder": "awx.example.com,localhost,awxweb",
+        "derived": True,
+        "description": "Django ALLOWED_HOSTS — comma-separated list of hostnames AWX will respond to. Auto-derived from Domain. Use '*' to allow all (dev only). In production set the exact public hostname to prevent HTTP Host-header attacks.",
+    },
+    {
         "key": "AWX_TOKEN", "label": "API Token", "section": "awx",
         "type": "password",
         "description": "AWX API token (create in AWX UI after first start: User → Tokens → Add). Leave empty for initial setup.",

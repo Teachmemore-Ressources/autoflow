@@ -34,7 +34,10 @@ LISTENER_DATABASES = {
 
 # ── Security ──────────────────────────────────────────────────────────────────
 SECRET_KEY = os.environ['AWX_SECRET_KEY']
-ALLOWED_HOSTS = ['*']
+# Comma-separated list injected via .env (e.g. "awx.example.com,localhost,awxweb").
+# Defaults to '*' so a fresh stack works before the wizard sets a proper value.
+# In production the wizard auto-derives this from the configured Domain.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('AWX_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
 # Traefik termine TLS et injecte X-Forwarded-Proto: https.
 # nginx passe ce header via uwsgi_param HTTP_X_FORWARDED_PROTO.

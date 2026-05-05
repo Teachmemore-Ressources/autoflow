@@ -2259,18 +2259,9 @@ def system_preflight():
 
 # ── EE DNS auto-detection ─────────────────────────────────────────────────────
 
-@app.get("/api/preflight/ee-dns")
-def preflight_ee_dns():
-    """Detect a DNS server reachable from the Docker bridge network.
-
-    Reads upstream servers from /run/systemd/resolve/resolv.conf (the real IPs,
-    not 127.0.0.53), then tests each one from inside a short-lived bridge
-    container — exactly the same network context as AWX EE containers.
-    Returns the first working server and compares to EE_DNS_SERVER in .env.
-    """
+def _dns_candidates() -> list[str]:
+    """Read non-loopback nameservers from resolv.conf files, append public fallbacks."""
     import ipaddress
-
-    # ── Collect candidates ────────────────────────────────────────
     candidates: list[str] = []
     for path in ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"]:
         try:
@@ -2280,7 +2271,6 @@ def preflight_ee_dns():
                     ip = parts[1]
                     try:
                         addr = ipaddress.ip_address(ip)
-                        # Skip loopback (127.x, ::1) and link-local IPv6
                         if not addr.is_loopback and not (addr.version == 6 and addr.is_link_local):
                             if ip not in candidates:
                                 candidates.append(ip)
@@ -2288,50 +2278,161 @@ def preflight_ee_dns():
                         pass
         except Exception:
             pass
+    for fb in ["1.1.1.1", "8.8.8.8"]:
+        if fb not in candidates:
+            candidates.append(fb)
+    return candidates
 
-    # Always include well-known public DNS as last-resort candidates
-    for fallback in ["1.1.1.1", "8.8.8.8"]:
-        if fallback not in candidates:
-            candidates.append(fallback)
 
-    # ── Test each candidate from bridge (one container, all servers) ──
-    test_script = "\n".join(
-        f'nslookup galaxy.ansible.com {ip} >/dev/null 2>&1 '
-        f'&& echo "OK:{ip}" || echo "FAIL:{ip}"'
-        for ip in candidates
-    )
-    results: list[dict] = []
-    working: str | None = None
-    try:
-        r = subprocess.run(
-            ["docker", "run", "--rm", "--network", "bridge",
-             "alpine", "sh", "-c", test_script],
-            capture_output=True, text=True, timeout=30,
-        )
-        for line in r.stdout.splitlines():
-            if line.startswith("OK:"):
-                ip = line[3:]
-                results.append({"dns": ip, "ok": True})
-                if working is None:
-                    working = ip
-            elif line.startswith("FAIL:"):
-                results.append({"dns": line[5:], "ok": False})
-    except Exception as exc:
-        results = [{"dns": ip, "ok": False, "error": str(exc)} for ip in candidates]
+@app.get("/api/preflight/ee-dns")
+def preflight_ee_dns():
+    """Fast config-only status check — no Docker, instant response.
 
+    Returns the current EE_DNS_SERVER value and the host DNS candidates.
+    Use /api/preflight/ee-dns/stream for the actual bridge-network test.
+    """
     current = _load_env().get("EE_DNS_SERVER", "").strip()
+    candidates = _dns_candidates()
+    if not current:
+        return {
+            "mode": "auto",
+            "status": "ok",
+            "current": "",
+            "candidates": candidates,
+        }
     return {
+        "mode": "manual",
+        "status": "manual",
+        "current": current,
         "candidates": candidates,
-        "results":    results,
-        "working":    working,
-        "current":    current,
-        # needs_update: current is non-empty and wrong, OR working differs
-        "needs_update": bool(current) and current != working,
-        "recommendation": (
-            "" if not working          # leave empty → Docker auto-manages
-            else working               # set to first confirmed working server
-        ),
     }
+
+
+@app.get("/api/preflight/ee-dns/stream")
+def preflight_ee_dns_stream():
+    """SSE streaming endpoint — runs a bridge-network DNS test with live log output.
+
+    Each event is a plain-text log line.  The last event starts with RESULT:
+    and contains the JSON summary the UI needs to update the status card.
+    """
+    def generate():
+        def sse(line: str) -> str:
+            return f"data: {line}\n\n"
+
+        candidates = _dns_candidates()
+
+        yield sse("🔍 Lecture des serveurs DNS upstream du système hôte...")
+        for path in ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"]:
+            try:
+                for raw in Path(path).read_text().splitlines():
+                    parts = raw.strip().split()
+                    if parts and parts[0] == "nameserver" and len(parts) >= 2:
+                        ip = parts[1]
+                        if ip in candidates:
+                            yield sse(f"   → {ip}  (lu depuis {path})")
+            except Exception:
+                pass
+        yield sse(f"   → 1.1.1.1  (fallback public)")
+        yield sse(f"   → 8.8.8.8  (fallback public)")
+        yield sse("")
+
+        # Ensure alpine image is available locally
+        check_img = subprocess.run(
+            ["docker", "image", "inspect", "alpine", "--format", "ok"],
+            capture_output=True, text=True,
+        )
+        if check_img.stdout.strip() != "ok":
+            yield sse("⬇️  Image alpine absente du cache — téléchargement en cours...")
+            pull = subprocess.run(
+                ["docker", "pull", "alpine"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if pull.returncode != 0:
+                yield sse(f"❌ docker pull alpine échoué : {pull.stderr.strip()}")
+                yield f"data: RESULT:{json.dumps({'candidates': candidates, 'results': [], 'working': None, 'current': _load_env().get('EE_DNS_SERVER', '').strip()})}\n\n"
+                return
+            yield sse("   ✅ alpine téléchargée")
+        else:
+            yield sse("🐳 Image alpine présente en cache local")
+
+        yield sse("")
+        yield sse(f"🌐 Test depuis le réseau bridge Docker (même contexte que les EE AWX)...")
+        yield sse(f"   Domaine testé : galaxy.ansible.com")
+        yield sse(f"   Timeout par serveur : 3 s")
+        yield sse("")
+
+        # Build a script that tests each candidate — busybox nslookup syntax
+        test_lines = []
+        for ip in candidates:
+            # busybox nslookup does not support -timeout; wrap with timeout(1)
+            test_lines.append(
+                f'if timeout 3 nslookup galaxy.ansible.com {ip} >/dev/null 2>&1; '
+                f'then echo "OK:{ip}"; else echo "FAIL:{ip}"; fi'
+            )
+        test_script = "\n".join(test_lines)
+
+        results: list[dict] = []
+        working: str | None = None
+
+        try:
+            r = subprocess.run(
+                ["docker", "run", "--rm", "--network", "bridge", "alpine",
+                 "sh", "-c", test_script],
+                capture_output=True, text=True, timeout=len(candidates) * 5 + 15,
+            )
+            for line in r.stdout.splitlines():
+                if line.startswith("OK:"):
+                    ip = line[3:]
+                    results.append({"dns": ip, "ok": True})
+                    if working is None:
+                        working = ip
+                    yield sse(f"   ✅ {ip:<18}  répond depuis bridge (galaxy.ansible.com OK)")
+                elif line.startswith("FAIL:"):
+                    ip = line[5:]
+                    results.append({"dns": ip, "ok": False})
+                    yield sse(f"   ❌ {ip:<18}  timeout ou NXDOMAIN depuis bridge")
+            if r.stderr.strip():
+                yield sse(f"   [stderr] {r.stderr.strip()[:200]}")
+        except subprocess.TimeoutExpired:
+            yield sse("⏱ Timeout global dépassé")
+            results = [{"dns": ip, "ok": False, "error": "timeout"} for ip in candidates]
+        except Exception as exc:
+            yield sse(f"❌ Erreur inattendue : {exc}")
+            results = [{"dns": ip, "ok": False, "error": str(exc)} for ip in candidates]
+
+        current = _load_env().get("EE_DNS_SERVER", "").strip()
+        yield sse("")
+        if working:
+            if not current:
+                yield sse(f"✅ DNS opérationnel : {working}")
+                yield sse("   EE_DNS_SERVER est vide — Docker gère automatiquement (configuration recommandée)")
+            elif current == working:
+                yield sse(f"✅ EE_DNS_SERVER={current} — répond depuis le bridge")
+            else:
+                yield sse(f"⚠  EE_DNS_SERVER={current} ne répond pas depuis le bridge")
+                yield sse(f"   Serveur fonctionnel disponible : {working}")
+        else:
+            yield sse("❌ Aucun serveur DNS ne répond depuis le bridge Docker")
+            yield sse("   Vérifier la connectivité réseau ou laisser EE_DNS_SERVER vide (Docker auto-gère)")
+
+        final = {
+            "candidates": candidates,
+            "results": results,
+            "working": working,
+            "current": current,
+            "needs_update": bool(current) and current != working,
+        }
+        yield f"data: RESULT:{json.dumps(final)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/api/preflight/apply-dns")
