@@ -48,11 +48,22 @@ help:           ## Show this help message
 
 # ── Lifecycle ────────────────────────────────────────────────
 
+CRITICAL_VOLUMES := \
+	autoflow_pki_data \
+	autoflow_postgres_data \
+	autoflow_redis_data \
+	autoflow_gitea_data \
+	autoflow_gitea_postgres_data
+
 start:          ## Start all services (auto-decrypts .env.enc if .env is missing)
 	@if [ ! -f .env ] && [ -f .env.enc ]; then \
 		echo "  [sops] .env not found — decrypting .env.enc..."; \
 		$(MAKE) secrets-decrypt; \
 	fi
+	@echo "  Ensuring critical volumes exist…"
+	@for vol in $(CRITICAL_VOLUMES); do \
+		docker volume create $$vol > /dev/null 2>&1 && printf "    ✓ $$vol\n"; \
+	done
 	$(COMPOSE) up -d $(SERVICES)
 
 stop:           ## Stop all services
