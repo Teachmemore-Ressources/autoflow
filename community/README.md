@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/your-org/autoflow-community/main/docs/logo.png" alt="Autoflow" width="80" />
+<img src="https://raw.githubusercontent.com/getautoflow/autoflow/main/docs/logo.png" alt="Autoflow" width="80" />
 
 # Autoflow Community
 
@@ -9,10 +9,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![AWX](https://img.shields.io/badge/AWX-24.6.1-red.svg)](https://github.com/ansible/awx)
 [![Docker](https://img.shields.io/badge/Docker-24%2B-blue.svg)](https://docs.docker.com/engine/install/)
-[![GitHub Stars](https://img.shields.io/github/stars/your-org/autoflow-community?style=flat)](https://github.com/your-org/autoflow-community/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/your-org/autoflow-community)](https://github.com/your-org/autoflow-community/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/getautoflow/autoflow?style=flat)](https://github.com/getautoflow/autoflow/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/getautoflow/autoflow)](https://github.com/getautoflow/autoflow/issues)
 
-[Site officiel](https://autoflow.io) · [Documentation](https://autoflow.io/docs) · [Version Enterprise](https://autoflow.io/pricing) · [Signaler un bug](https://github.com/your-org/autoflow-community/issues)
+[Site officiel](https://getautoflow.dev) · [Documentation](https://getautoflow.dev/docs) · [Version Enterprise](https://getautoflow.dev/pricing) · [Signaler un bug](https://github.com/getautoflow/autoflow/issues)
 
 </div>
 
@@ -45,8 +45,8 @@ $ docker compose up -d
 | Execution Environments inclus | ✅ | ❌ | ✅ |
 | Sans comptage de nœuds | ✅ | ✅ | ❌ (licence par nœud) |
 | Gratuit pour toujours | ✅ | ✅ | ❌ (~14 000 €/an) |
-| PKI, Gitea, Grafana intégrés | ❌ ([Enterprise](https://autoflow.io/pricing)) | ❌ | Partiel |
-| Support commercial | ❌ ([Enterprise](https://autoflow.io/pricing)) | ❌ | ✅ |
+| PKI, Gitea, Grafana intégrés | ❌ ([Enterprise](https://getautoflow.dev/pricing)) | ❌ | Partiel |
+| Support commercial | ❌ ([Enterprise](https://getautoflow.dev/pricing)) | ❌ | ✅ |
 
 ---
 
@@ -70,7 +70,7 @@ $ docker compose up -d
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/your-org/autoflow-community.git
+git clone https://github.com/getautoflow/autoflow.git
 cd autoflow-community
 ```
 
@@ -304,14 +304,14 @@ Les migrations de base de données s'appliquent automatiquement au redémarrage 
 
 ## Support & Communauté
 
-- **Bug ou question ?** → [GitHub Issues](https://github.com/your-org/autoflow-community/issues)
-- **Discussions** → [GitHub Discussions](https://github.com/your-org/autoflow-community/discussions)
-- **Site officiel** → [autoflow.io](https://autoflow.io)
+- **Bug ou question ?** → [GitHub Issues](https://github.com/getautoflow/autoflow/issues)
+- **Discussions** → [GitHub Discussions](https://github.com/getautoflow/autoflow/discussions)
+- **Site officiel** → [getautoflow.dev](https://getautoflow.dev)
 - **Documentation AWX** → [ansible.readthedocs.io](https://ansible.readthedocs.io/projects/awx/)
 
 ### Besoin de plus ?
 
-La **[version Enterprise d'Autoflow](https://autoflow.io/pricing)** ajoute :
+La **[version Enterprise d'Autoflow](https://getautoflow.dev/pricing)** ajoute :
 
 | Fonctionnalité | Community | Enterprise |
 |---|:---:|:---:|
@@ -331,7 +331,7 @@ Les contributions sont les bienvenues ! Consultez [CONTRIBUTING.md](CONTRIBUTING
 
 ```bash
 # Fork + clone
-git clone https://github.com/your-org/autoflow-community.git
+git clone https://github.com/getautoflow/autoflow.git
 
 # Créer une branche
 git checkout -b feat/ma-contribution
@@ -349,6 +349,6 @@ Autoflow Community est distribué sous licence **MIT**. Voir [LICENSE](LICENSE) 
 
 <div align="center">
 
-Fait avec ❤️ par l'équipe [Autoflow](https://autoflow.io) · [autoflow.io](https://autoflow.io)
+Fait avec ❤️ par l'équipe [Autoflow](https://getautoflow.dev) · [getautoflow.dev](https://getautoflow.dev)
 
 </div>
