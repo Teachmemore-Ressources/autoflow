@@ -22,42 +22,42 @@ Déployez AWX, Gitea, monitoring complet, PKI interne et Disaster Recovery sur n
 <div class="grid-cards" markdown>
 
 <div class="card" markdown>
-### ⚙️ AWX — Automation Engine
+### AWX — Automation Engine
 Ansible Tower open-source. Lancez des playbooks, planifiez des jobs, gérez des inventaires. Interface web complète avec RBAC et audit trail.
 </div>
 
 <div class="card" markdown>
-### 🦊 Gitea — GitOps & Registry
+###  Gitea — GitOps & Registry
 Git self-hosted + Gitea Actions CI/CD + Container Registry. Vos playbooks, EE et pipelines dans un seul endroit, sur votre infrastructure.
 </div>
 
 <div class="card" markdown>
-### 📊 Monitoring complet
+###  Monitoring complet
 Prometheus + Grafana + Loki + Tempo + Alertmanager. Métriques, logs, traces distribuées et alertes pour toute la stack, prêt à l'emploi.
 </div>
 
 <div class="card" markdown>
-### 🔐 PKI interne
+###  PKI interne
 Autorité de certification interne. Tous les services HTTPS sans certificats auto-signés suspects. Rotation et révocation centralisées.
 </div>
 
 <div class="card" markdown>
-### 🔔 Event Engine
+###  Event Engine
 Réception de webhooks (GitHub, Alertmanager, Gitea, génériques) → routage vers les job templates AWX. Règles YAML, déduplication, notifications Slack.
 </div>
 
 <div class="card" markdown>
-### 💾 Disaster Recovery
+###  Disaster Recovery
 Backups chiffrés avec Restic (local, SFTP, S3, B2). Politique GFS (daily/weekly/monthly/yearly). RTO/RPO configurables. Restore testé automatiquement.
 </div>
 
 <div class="card" markdown>
-### 🛡️ Security Scanner
+### SSecurity Scanner
 Trivy intégré : scan CVE de toutes les images Docker, rapports de conformité (NIST SP 800-53, CIS Controls v8, ISO 27001, PCI-DSS v4.0, SOC 2).
 </div>
 
 <div class="card" markdown>
-### 🧙 Deploy Wizard
+###  Deploy Wizard
 Interface web de configuration guidée. Génération automatique des secrets, détection DNS, pré-flight checks, déploiement en un clic.
 </div>
 
