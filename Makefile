@@ -40,7 +40,7 @@ GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update \
         test test-unit test-integration test-e2e test-stack-up test-stack-down \
-        cli-install cli-check
+        cli-install cli-check docs
 
 help:           ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -232,6 +232,16 @@ wizard:         ## Launch the deployment wizard on http://localhost:9000  (WIZAR
 		--host 127.0.0.1 --port 9000 \
 		--app-dir services/deploy-wizard \
 		--log-level warning
+
+docs:           ## Serve the built documentation on http://localhost:8001  (run: make docs)
+	@echo ""
+	@echo "  ╔══════════════════════════════════════════╗"
+	@echo "  ║   Autoflow Documentation                 ║"
+	@echo "  ║   URL : http://localhost:8001            ║"
+	@echo "  ║   Press Ctrl+C to stop                   ║"
+	@echo "  ╚══════════════════════════════════════════╝"
+	@echo ""
+	@python3 -m http.server 8001 --directory site/
 
 # ── Secrets (SOPS + Age) ─────────────────────────────────────
 

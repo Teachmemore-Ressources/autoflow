@@ -3,21 +3,30 @@ Field definitions for the Autoflow Deploy Wizard.
 Each field maps to one .env variable.
 """
 
+DOCS_BASE = "http://localhost:8001"
+
 SECTIONS = [
     {"id": "system",         "label": "Système",          "desc": "Utilisateur et mot de passe sudo pour les opérations privilégiées"},
     {"id": "infrastructure", "label": "Infrastructure",   "desc": "Domain, ports and network topology"},
     {"id": "postgresql",     "label": "PostgreSQL",       "desc": "Main database credentials"},
     {"id": "redis",          "label": "Redis",            "desc": "Cache / queue credentials"},
-    {"id": "awx",            "label": "AWX",              "desc": "Automation platform configuration"},
+    {"id": "awx",            "label": "AWX",              "desc": "Automation platform configuration",
+     "doc_url": f"{DOCS_BASE}/configuration/awx/"},
     {"id": "api",            "label": "Autoflow API",     "desc": "REST API, JWT and rate limiting"},
-    {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting"},
+    {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting",
+     "doc_url": f"{DOCS_BASE}/configuration/monitoring/"},
     {"id": "minio",          "label": "MinIO",            "desc": "S3-compatible object storage — backend de stockage Loki (logs)"},
-    {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing"},
-    {"id": "gitea",             "label": "Gitea",                  "desc": "Self-hosted Git service and registry"},
-    {"id": "pki",               "label": "PKI",                    "desc": "Internal certificate authority"},
-    {"id": "advanced",          "label": "Advanced",               "desc": "Intervals, log levels and system tuning"},
-    {"id": "backup",         "label": "Disaster Recovery","desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore."},
-    {"id": "compliance",     "label": "Compliance & Audit","desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0."},
+    {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing",
+     "doc_url": f"{DOCS_BASE}/configuration/event-engine/"},
+    {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry",
+     "doc_url": f"{DOCS_BASE}/configuration/gitea/"},
+    {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority",
+     "doc_url": f"{DOCS_BASE}/configuration/tls-pki/"},
+    {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
+    {"id": "backup",         "label": "Disaster Recovery", "desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore.",
+     "doc_url": f"{DOCS_BASE}/configuration/backup/"},
+    {"id": "compliance",     "label": "Compliance & Audit", "desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0.",
+     "doc_url": f"{DOCS_BASE}/configuration/security-scanner/"},
 ]
 
 # generate_type: hex32 | hex64 | urlsafe32
