@@ -1120,6 +1120,7 @@ const NAV_ICONS = {
   advanced:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34L5.5 6.58A7 7 0 0 1 18 12l1.5 3.24A10 10 0 0 0 19.07 4.93zM4.93 19.07A10 10 0 0 0 17.01 20.66l1.49-3.24A7 7 0 0 1 6 12L4.5 8.76A10 10 0 0 0 4.93 19.07z"/></svg>',
   backup:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
   compliance:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  cleanup:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
 };
 
 function buildNav() {
@@ -1150,6 +1151,12 @@ function buildNav() {
         Exec Environments
       </a>`);
   }
+  // Inject Cleanup nav item at the very bottom of the sidebar
+  nav.insertAdjacentHTML('beforeend', `
+    <a id="nav-cleanup" onclick="activateSection('cleanup');closeSidebar()" style="margin-top:auto;border-top:1px solid var(--border);padding-top:12px">
+      ${NAV_ICONS['cleanup']}
+      Nettoyage
+    </a>`);
 }
 
 function activateSection(id) {
@@ -1161,11 +1168,12 @@ function activateSection(id) {
   if (sec) sec.classList.add('active');
   if (navLink) navLink.classList.add('active');
   const meta = SCHEMA?.sections?.find(s => s.id === id);
-  const labels = { preflight: 'Pre-flight checks', ee: 'Execution Environments', backup: 'Disaster Recovery', compliance: 'Compliance & Audit' };
+  const labels = { preflight: 'Pre-flight checks', ee: 'Execution Environments', backup: 'Disaster Recovery', compliance: 'Compliance & Audit', cleanup: 'Nettoyage & Réinitialisation' };
   document.getElementById('section-label').textContent = labels[id] ?? meta?.label ?? id;
   if (id === 'ee') checkEEStatus();
   if (id === 'backup') checkBackupStatus();
   if (id === 'compliance') checkComplianceStatus();
+  if (id === 'cleanup') loadCleanupStatus();
 }
 
 // ── Section + Field rendering ──────────────────────────────────────────────
@@ -1465,7 +1473,7 @@ function buildSections() {
       </div>`;
   }).join('');
 
-  content.innerHTML = preflightHtml + EE_SECTION_HTML + sectionsHtml;
+  content.innerHTML = preflightHtml + EE_SECTION_HTML + sectionsHtml + CLEANUP_SECTION_HTML;
 
   // Populate EE configuration fields (from execution_envs schema fields)
   const eeConfigDiv = document.getElementById('ee-config-fields');
@@ -2576,6 +2584,272 @@ function runComplianceGenerate() {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 boot();
+
+// ── Cleanup / Reset ────────────────────────────────────────────────────────
+const CLEANUP_SECTION_HTML = `
+<div class="section" id="sec-cleanup">
+  <div class="sec-header">
+    <div class="sec-title">Nettoyage &amp; Réinitialisation</div>
+    <div class="sec-desc">Arrêtez les services, supprimez les volumes, purgez les images et le cache Docker pour repartir d'un environnement sain.</div>
+  </div>
+
+  <!-- Disk usage summary -->
+  <div class="sub-section">
+    <div class="sub-title">Espace disque Docker</div>
+    <div id="cleanup-df" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:10px">
+      <div class="pf-card"><span class="pf-dot" id="df-img-dot"></span><div><div class="pf-title">Images</div><div class="pf-detail" id="df-img">…</div></div></div>
+      <div class="pf-card"><span class="pf-dot" id="df-vol-dot"></span><div><div class="pf-title">Volumes</div><div class="pf-detail" id="df-vol">…</div></div></div>
+      <div class="pf-card"><span class="pf-dot" id="df-ctr-dot"></span><div><div class="pf-title">Conteneurs</div><div class="pf-detail" id="df-ctr">…</div></div></div>
+      <div class="pf-card"><span class="pf-dot" id="df-bld-dot"></span><div><div class="pf-title">Build cache</div><div class="pf-detail" id="df-bld">…</div></div></div>
+    </div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="loadCleanupStatus()">↻ Actualiser</button>
+  </div>
+
+  <!-- Presets -->
+  <div class="sub-section">
+    <div class="sub-title">Préréglages rapides</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">
+
+      <button class="btn btn-secondary" onclick="applyCleanupPreset('stop')" style="flex:1;min-width:140px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Arrêt propre
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Stoppe les conteneurs,<br>conserve toutes les données</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="applyCleanupPreset('reset')" style="flex:1;min-width:140px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+        Réinitialisation
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + suppression volumes<br>(données perdues)</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="applyCleanupPreset('full')" style="flex:1;min-width:140px;border-color:var(--error);color:var(--error)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        Nettoyage complet
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + volumes + images<br>+ cache buildx</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Fine-grained options -->
+  <div class="sub-section">
+    <div class="sub-title">Options détaillées</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px" id="cleanup-options">
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-stop" checked onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Arrêter les conteneurs</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">docker compose down --remove-orphans</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-volumes" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Supprimer les volumes</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">Efface toutes les données (BDD, Redis, PKI…)</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-images" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Supprimer l'image AWX</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">autoflow/awx-patched:* (rebuild requis)</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-ee" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Supprimer les images EE</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">ee-base, ee-security, ee-network</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-cache" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Purger le cache Buildx</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">docker builder prune -af</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-tmp" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px">Nettoyer /tmp</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">/tmp/ee-build-* (contextes ansible-builder)</div>
+        </div>
+      </label>
+
+      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer;border:1px solid var(--error);grid-column:1/-1">
+        <input type="checkbox" id="opt-env" onchange="updateCleanupBtn()">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--error)">⚠ Supprimer le fichier .env</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">Option nucléaire — tous les secrets sont perdus, reconfiguration complète requise</div>
+        </div>
+      </label>
+
+    </div>
+  </div>
+
+  <!-- Confirm + Run -->
+  <div class="sub-section">
+    <div id="cleanup-warn-box" style="display:none;background:rgba(239,68,68,.12);border:1px solid var(--error);border-radius:6px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--error)">
+      <strong>Attention !</strong> Les options cochées sont irréversibles. Assure-toi d'avoir une sauvegarde des données importantes avant de continuer.
+    </div>
+    <button id="btn-run-cleanup" class="btn btn-primary" onclick="runCleanup()" style="width:100%">
+      🧹 Lancer le nettoyage
+    </button>
+  </div>
+
+  <!-- Output -->
+  <div class="sub-section" id="cleanup-output-wrap" style="display:none">
+    <div class="sub-title">Journal d'exécution</div>
+    <div id="cleanup-log" class="sse-log" style="margin-top:8px;height:320px;overflow-y:auto;background:var(--surface2);border-radius:6px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap"></div>
+  </div>
+
+  <!-- Running containers table -->
+  <div class="sub-section">
+    <div class="sub-title">Conteneurs Autoflow</div>
+    <div id="cleanup-containers" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Chargement…</div>
+  </div>
+
+  <!-- Volumes table -->
+  <div class="sub-section">
+    <div class="sub-title">Volumes Autoflow</div>
+    <div id="cleanup-volumes" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Chargement…</div>
+  </div>
+
+</div>`;
+
+// Apply a preset by checking the right checkboxes
+function applyCleanupPreset(mode) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  if (mode === 'stop') {
+    set('opt-stop', true); set('opt-volumes', false); set('opt-images', false);
+    set('opt-ee', false); set('opt-cache', false); set('opt-tmp', false); set('opt-env', false);
+  } else if (mode === 'reset') {
+    set('opt-stop', true); set('opt-volumes', true); set('opt-images', false);
+    set('opt-ee', false); set('opt-cache', false); set('opt-tmp', true); set('opt-env', false);
+  } else if (mode === 'full') {
+    set('opt-stop', true); set('opt-volumes', true); set('opt-images', true);
+    set('opt-ee', true); set('opt-cache', true); set('opt-tmp', true); set('opt-env', false);
+  }
+  updateCleanupBtn();
+}
+
+function updateCleanupBtn() {
+  const dangerous = document.getElementById('opt-volumes')?.checked
+    || document.getElementById('opt-images')?.checked
+    || document.getElementById('opt-ee')?.checked
+    || document.getElementById('opt-cache')?.checked
+    || document.getElementById('opt-env')?.checked;
+  const warn = document.getElementById('cleanup-warn-box');
+  if (warn) warn.style.display = dangerous ? 'block' : 'none';
+}
+
+async function loadCleanupStatus() {
+  // Disk usage
+  try {
+    const d = await fetch('/api/cleanup/status').then(r => r.json());
+    const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setText('df-img', d.disk?.images ?? '?');
+    setText('df-vol', d.disk?.volumes ?? '?');
+    setText('df-ctr', d.disk?.containers ?? '?');
+    setText('df-bld', d.disk?.build_cache ?? '?');
+
+    // Containers table
+    const ctrDiv = document.getElementById('cleanup-containers');
+    if (ctrDiv) {
+      if (!d.containers || d.containers.length === 0) {
+        ctrDiv.innerHTML = '<em>Aucun conteneur autoflow détecté.</em>';
+      } else {
+        ctrDiv.innerHTML = `<table style="width:100%;border-collapse:collapse">
+          <tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px 8px">Conteneur</th><th style="text-align:left;padding:4px 8px">État</th></tr>
+          ${d.containers.map(c => {
+            const up = c.status.toLowerCase().startsWith('up');
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:4px 8px;font-family:monospace">${c.name}</td>
+              <td style="padding:4px 8px"><span style="color:${up ? 'var(--success)' : 'var(--text-muted)'}">${c.status}</span></td>
+            </tr>`;
+          }).join('')}
+        </table>`;
+      }
+    }
+
+    // Volumes list
+    const volDiv = document.getElementById('cleanup-volumes');
+    if (volDiv) {
+      if (!d.volumes || d.volumes.length === 0) {
+        volDiv.innerHTML = '<em>Aucun volume autoflow détecté.</em>';
+      } else {
+        volDiv.innerHTML = d.volumes.map(v =>
+          `<div style="padding:3px 0;font-family:monospace">📦 ${v}</div>`
+        ).join('');
+      }
+    }
+  } catch (e) {
+    console.warn('cleanup/status error:', e);
+  }
+}
+
+async function runCleanup() {
+  const get = id => document.getElementById(id)?.checked ?? false;
+  const params = new URLSearchParams({
+    stop_containers: get('opt-stop'),
+    remove_volumes:  get('opt-volumes'),
+    remove_images:   get('opt-images'),
+    remove_ee:       get('opt-ee'),
+    prune_cache:     get('opt-cache'),
+    clean_tmp:       get('opt-tmp'),
+    remove_env:      get('opt-env'),
+  });
+
+  // Extra confirmation for destructive options
+  const destructive = get('opt-volumes') || get('opt-env');
+  if (destructive) {
+    if (!confirm('⚠️ Cette opération supprimera des données de façon irréversible.\n\nContinuer ?')) return;
+  }
+
+  const wrap = document.getElementById('cleanup-output-wrap');
+  const log  = document.getElementById('cleanup-log');
+  if (wrap) wrap.style.display = 'block';
+  if (log)  log.textContent = '';
+  const btn = document.getElementById('btn-run-cleanup');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Nettoyage en cours…'; }
+
+  const es = new EventSource(`/api/cleanup?${params}`);
+  es.onmessage = e => {
+    if (e.data === '[DONE]') {
+      es.close();
+      if (btn) { btn.disabled = false; btn.textContent = '🧹 Lancer le nettoyage'; }
+      loadCleanupStatus();
+      return;
+    }
+    if (log) {
+      const line = document.createElement('div');
+      line.textContent = e.data;
+      if (e.data.startsWith('[ERROR]'))   line.style.color = 'var(--error)';
+      else if (e.data.startsWith('[SUCCESS]')) line.style.color = 'var(--success)';
+      else if (e.data.startsWith('[WARN]'))    line.style.color = 'var(--warning)';
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    if (btn) { btn.disabled = false; btn.textContent = '🧹 Lancer le nettoyage'; }
+    if (log) {
+      const line = document.createElement('div');
+      line.style.color = 'var(--error)';
+      line.textContent = '[ERREUR] Connexion SSE perdue.';
+      log.appendChild(line);
+    }
+  };
+}
 </script>
 </body>
 </html>
