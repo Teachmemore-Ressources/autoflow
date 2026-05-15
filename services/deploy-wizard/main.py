@@ -3212,5 +3212,372 @@ async def cleanup(
         yield _sse(f"  Build cache : {df['build_cache']}")
         yield _sse("[DONE]")
 
+
+# ── NTP / Time synchronisation ────────────────────────────────────────────────
+
+def _detect_ntp_service() -> str:
+    """Return 'chrony', 'timesyncd', or 'none'."""
+    import shutil
+    if shutil.which("chronyc"):
+        r = subprocess.run(["systemctl", "is-active", "chrony"],
+                           capture_output=True, text=True)
+        if r.stdout.strip() in ("active", "activating"):
+            return "chrony"
+        # Debian/Ubuntu package name
+        r2 = subprocess.run(["systemctl", "is-active", "chronyd"],
+                            capture_output=True, text=True)
+        if r2.stdout.strip() in ("active", "activating"):
+            return "chrony"
+    r = subprocess.run(["systemctl", "is-active", "systemd-timesyncd"],
+                       capture_output=True, text=True)
+    if r.stdout.strip() == "active":
+        return "timesyncd"
+    return "none"
+
+
+def _chrony_tracking() -> dict:
+    """Parse `chronyc tracking` into a dict."""
+    r = subprocess.run(["chronyc", "tracking"], capture_output=True, text=True)
+    result: dict = {}
+    if r.returncode != 0:
+        return result
+    for line in r.stdout.splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            result[k.strip()] = v.strip()
+    return result
+
+
+def _chrony_sources() -> list[dict]:
+    """Parse `chronyc sources -v` → list of {name, stratum, offset_ms, reachable}."""
+    r = subprocess.run(["chronyc", "sources", "-v"], capture_output=True, text=True)
+    sources = []
+    if r.returncode != 0:
+        return sources
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith("=") or line.startswith("M") or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 7:
+            try:
+                sources.append({
+                    "mode":       parts[0],
+                    "name":       parts[1],
+                    "stratum":    parts[2],
+                    "offset_ms":  parts[6],
+                    "reachable":  parts[0] in ("^*", "^+", "=*", "=+"),
+                })
+            except Exception:
+                pass
+    return sources
+
+
+def _timesyncd_status() -> dict:
+    """Return useful fields from `timedatectl show`."""
+    r = subprocess.run(["timedatectl", "show"], capture_output=True, text=True)
+    result: dict = {}
+    if r.returncode != 0:
+        # Fallback: timedatectl (human-readable)
+        r2 = subprocess.run(["timedatectl"], capture_output=True, text=True)
+        for line in r2.stdout.splitlines():
+            if ":" in line:
+                k, _, v = line.partition(":")
+                result[k.strip()] = v.strip()
+        return result
+    for line in r.stdout.splitlines():
+        if "=" in line:
+            k, _, v = line.partition("=")
+            result[k.strip()] = v.strip()
+    return result
+
+
+def _container_time_drift(container: str) -> str | None:
+    """Return ISO timestamp from a running container, or None."""
+    r = subprocess.run(
+        ["docker", "exec", container, "date", "-u", "+%Y-%m-%dT%H:%M:%S"],
+        capture_output=True, text=True, timeout=5,
+    )
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+@app.get("/api/preflight/time")
+def preflight_time():
+    """Return NTP sync status, drift, timezone and container clock comparison."""
+    import time, datetime
+
+    host_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ntp_svc  = _detect_ntp_service()
+
+    # ── Sync state ────────────────────────────────────────────────────────────
+    synced     = False
+    drift_ms   = None   # float ms
+    ntp_servers: list[str] = []
+    detail     = {}
+
+    if ntp_svc == "chrony":
+        tracking = _chrony_tracking()
+        detail["tracking"] = tracking
+        rms = tracking.get("RMS offset", "") or tracking.get("System time", "")
+        ref = tracking.get("Reference ID", "")
+        leap = tracking.get("Leap status", "")
+        synced = "Normal" in leap or ref not in ("", "00000000 ()")
+        # Parse offset  e.g. "0.000123456 seconds slow of NTP time"
+        sys_time = tracking.get("System time", "")
+        try:
+            drift_ms = abs(float(sys_time.split()[0])) * 1000
+        except Exception:
+            pass
+        sources = _chrony_sources()
+        ntp_servers = [s["name"] for s in sources if s["name"] not in ("127.127.1.0",)]
+        detail["sources"] = sources
+
+    elif ntp_svc == "timesyncd":
+        ts = _timesyncd_status()
+        detail["timedatectl"] = ts
+        synced_val = ts.get("NTPSynchronized", ts.get("NTP synchronized", "no"))
+        synced = synced_val.lower() in ("yes", "true", "1")
+        server = ts.get("NTPServer", ts.get("Server", ""))
+        if server:
+            ntp_servers = [server]
+
+    else:
+        # Fallback: read timedatectl anyway (may still work without a named service)
+        ts = _timesyncd_status()
+        detail["timedatectl"] = ts
+        synced_val = ts.get("NTPSynchronized", ts.get("NTP synchronized", "no"))
+        synced = synced_val.lower() in ("yes", "true", "1")
+
+    # ── Timezone ──────────────────────────────────────────────────────────────
+    tz_r = subprocess.run(["timedatectl", "show", "--property=Timezone", "--value"],
+                          capture_output=True, text=True)
+    timezone = tz_r.stdout.strip() if tz_r.returncode == 0 else "unknown"
+    if not timezone:
+        tz_r2 = subprocess.run(["cat", "/etc/timezone"], capture_output=True, text=True)
+        timezone = tz_r2.stdout.strip() or "unknown"
+
+    # ── Container clock check ─────────────────────────────────────────────────
+    containers_to_check = ["autoflow_grafana", "autoflow_loki", "autoflow_awx_web"]
+    container_clocks: list[dict] = []
+    import datetime as _dt
+    host_ts = _dt.datetime.now(_dt.timezone.utc)
+    for cname in containers_to_check:
+        ct = _container_time_drift(cname)
+        if ct:
+            try:
+                ct_ts = _dt.datetime.fromisoformat(ct).replace(tzinfo=_dt.timezone.utc)
+                delta_ms = abs((host_ts - ct_ts).total_seconds() * 1000)
+                container_clocks.append({
+                    "container": cname,
+                    "time":      ct,
+                    "delta_ms":  round(delta_ms, 1),
+                    "ok":        delta_ms < 2000,
+                })
+            except Exception:
+                pass
+
+    # ── Drift severity ────────────────────────────────────────────────────────
+    severity = "ok"
+    if not synced:
+        severity = "warn"
+    if drift_ms is not None:
+        if drift_ms > 5000:
+            severity = "critical"    # TLS / JWT at risk
+        elif drift_ms > 1000:
+            severity = "warn"
+        elif drift_ms > 100:
+            severity = "info"
+
+    return {
+        "host_utc":         host_utc,
+        "timezone":         timezone,
+        "ntp_service":      ntp_svc,
+        "synced":           synced,
+        "drift_ms":         round(drift_ms, 3) if drift_ms is not None else None,
+        "severity":         severity,
+        "ntp_servers":      ntp_servers,
+        "container_clocks": container_clocks,
+        "detail":           detail,
+    }
+
+
+@app.get("/api/system/ntp")
+async def configure_ntp(
+    request: Request,
+    servers:  str  = "",        # comma-separated NTP server list
+    timezone: str  = "UTC",
+    force_sync: bool = True,
+):
+    """SSE: configure NTP servers (Chrony or timesyncd), set timezone, force sync."""
+    _audit(request, "ntp.configure", servers=servers, timezone=timezone, force_sync=force_sync)
+
+    async def stream():
+        svc = _detect_ntp_service()
+        server_list = [s.strip() for s in servers.split(",") if s.strip()]
+
+        yield _sse(f"Service NTP détecté : {svc or 'aucun'}")
+        yield _sse(f"Timezone cible      : {timezone}")
+        if server_list:
+            yield _sse(f"Serveurs NTP        : {', '.join(server_list)}")
+        yield _sse("─" * 50)
+
+        # ── 1. Install chrony if no NTP service found ─────────────────────
+        if svc == "none":
+            yield _sse("[1/4] Aucun service NTP actif — installation de chrony…")
+            install = await _async_sudo_exec(
+                ["apt-get", "install", "-y", "chrony"],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            async for raw in install.stdout:
+                line = raw.decode().rstrip()
+                if line:
+                    yield _sse(f"  {line}")
+            rc = await install.wait()
+            if rc == 0:
+                svc = "chrony"
+                yield _sse("  chrony installé ✔")
+            else:
+                yield _sse("[WARN] Installation chrony échouée — utilisation de timesyncd en fallback.")
+                svc = "timesyncd"
+        else:
+            yield _sse(f"[1/4] Service NTP existant ({svc}) — pas d'installation nécessaire.")
+
+        # ── 2. Write NTP server config ────────────────────────────────────
+        if server_list:
+            if svc == "chrony":
+                yield _sse("[2/4] Configuration des serveurs NTP dans chrony…")
+
+                # Build new chrony.conf — keep existing file, replace pool/server lines
+                read_r = _sudo_run(
+                    ["cat", "/etc/chrony/chrony.conf"],
+                    capture_output=True, text=True,
+                )
+                existing = read_r.stdout if read_r.returncode == 0 else ""
+                # Filter out existing pool/server lines
+                kept = [l for l in existing.splitlines()
+                        if not l.strip().startswith(("pool ", "server "))
+                        and l.strip() != ""]
+                new_servers = [f"server {s} iburst" for s in server_list]
+                # Add pool.ntp.org as fallback if not already in list
+                if not any("ntp.org" in s for s in server_list):
+                    new_servers.append("pool pool.ntp.org iburst")
+                new_conf = "\n".join(new_servers + [""] + kept) + "\n"
+
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tf:
+                    tf.write(new_conf)
+                    tf_path = tf.name
+
+                wr = _sudo_run(
+                    ["bash", "-c",
+                     f"cp '{tf_path}' /etc/chrony/chrony.conf && chmod 644 /etc/chrony/chrony.conf"],
+                    capture_output=True, text=True,
+                )
+                Path(tf_path).unlink(missing_ok=True)
+                if wr.returncode == 0:
+                    yield _sse(f"  /etc/chrony/chrony.conf mis à jour ✔")
+                else:
+                    yield _sse(f"  [WARN] Écriture config chrony échouée: {wr.stderr.strip()}")
+
+            else:  # timesyncd
+                yield _sse("[2/4] Configuration des serveurs NTP dans systemd-timesyncd…")
+                ntp_line = f"NTP={' '.join(server_list)}"
+                fallback  = "FallbackNTP=pool.ntp.org"
+                conf = f"[Time]\n{ntp_line}\n{fallback}\n"
+
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tf:
+                    tf.write(conf)
+                    tf_path = tf.name
+
+                wr = _sudo_run(
+                    ["bash", "-c",
+                     f"mkdir -p /etc/systemd/timesyncd.conf.d && "
+                     f"cp '{tf_path}' /etc/systemd/timesyncd.conf.d/autoflow.conf && "
+                     f"chmod 644 /etc/systemd/timesyncd.conf.d/autoflow.conf"],
+                    capture_output=True, text=True,
+                )
+                Path(tf_path).unlink(missing_ok=True)
+                if wr.returncode == 0:
+                    yield _sse("  /etc/systemd/timesyncd.conf.d/autoflow.conf mis à jour ✔")
+                else:
+                    yield _sse(f"  [WARN] Écriture timesyncd config échouée: {wr.stderr.strip()}")
+        else:
+            yield _sse("[2/4] Aucun serveur NTP fourni — configuration existante conservée.")
+
+        # ── 3. Set timezone ───────────────────────────────────────────────
+        yield _sse(f"[3/4] Configuration du fuseau horaire → {timezone}…")
+        tz_r = _sudo_run(
+            ["timedatectl", "set-timezone", timezone],
+            capture_output=True, text=True,
+        )
+        if tz_r.returncode == 0:
+            yield _sse(f"  Timezone défini à {timezone} ✔")
+        else:
+            yield _sse(f"  [WARN] timedatectl set-timezone échoué: {tz_r.stderr.strip()}")
+            # Fallback: symlink /etc/localtime
+            link_r = _sudo_run(
+                ["ln", "-sf", f"/usr/share/zoneinfo/{timezone}", "/etc/localtime"],
+                capture_output=True, text=True,
+            )
+            if link_r.returncode == 0:
+                yield _sse(f"  /etc/localtime → {timezone} (fallback) ✔")
+            else:
+                yield _sse(f"  [WARN] Fallback ln échoué — timezone non modifié.")
+
+        # ── 4. Restart NTP + force immediate sync ─────────────────────────
+        yield _sse(f"[4/4] Redémarrage du service NTP + synchronisation forcée…")
+
+        svc_name = "chrony" if svc == "chrony" else "systemd-timesyncd"
+        # Some distros use chronyd
+        restart = _sudo_run(
+            ["systemctl", "restart", svc_name],
+            capture_output=True, text=True,
+        )
+        if restart.returncode != 0 and svc == "chrony":
+            restart = _sudo_run(
+                ["systemctl", "restart", "chronyd"],
+                capture_output=True, text=True,
+            )
+        if restart.returncode == 0:
+            yield _sse(f"  {svc_name} redémarré ✔")
+        else:
+            yield _sse(f"  [WARN] Redémarrage {svc_name} échoué: {restart.stderr.strip()}")
+
+        if force_sync and svc == "chrony":
+            await asyncio.sleep(2)  # let chrony connect to servers
+            step_r = _sudo_run(
+                ["chronyc", "makestep"],
+                capture_output=True, text=True,
+            )
+            if step_r.returncode == 0:
+                yield _sse("  chronyc makestep → synchronisation immédiate ✔")
+            else:
+                yield _sse(f"  [WARN] makestep: {step_r.stderr.strip() or step_r.stdout.strip()}")
+
+        # ── Final status ──────────────────────────────────────────────────
+        await asyncio.sleep(2)
+        import datetime as _dt
+        host_utc = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        yield _sse("─" * 50)
+        yield _sse(f"Heure UTC actuelle : {host_utc}")
+
+        tracking = _chrony_tracking() if svc == "chrony" else {}
+        if tracking:
+            leap = tracking.get("Leap status", "?")
+            sys_t = tracking.get("System time", "?")
+            yield _sse(f"Leap status       : {leap}")
+            yield _sse(f"System time offset: {sys_t}")
+
+        ts = _timesyncd_status()
+        ntpsynced = ts.get("NTPSynchronized", ts.get("NTP synchronized", "?"))
+        yield _sse(f"NTP synchronisé   : {ntpsynced}")
+        yield _sse("[SUCCESS] Configuration NTP terminée ✔")
+        yield _sse("[DONE]")
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
