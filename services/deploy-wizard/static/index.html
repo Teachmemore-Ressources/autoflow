@@ -133,7 +133,7 @@ body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100
   --danger    :#c0392b;
 }
 .sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--aw-sb-divider);display:flex;align-items:center;gap:10px}
-.sb-logo-img{width:28px;height:28px;object-fit:contain;filter:brightness(0) invert(1);flex-shrink:0}
+.sb-logo-img{width:28px;height:28px;object-fit:contain;flex-shrink:0}
 .sb-brand h1{font-size:14px;font-weight:700;color:var(--aw-sb-text-active);letter-spacing:-.01em}
 .sb-brand p{font-size:11px;color:var(--aw-sb-text-muted);margin-top:1px}
 .sb-close{display:none;margin-left:auto;padding:4px;cursor:pointer;color:var(--aw-sb-text);border-radius:4px}
@@ -145,17 +145,24 @@ body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100
 .sb-nav a svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
 .sb-nav a:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active)}
 .sb-nav a:hover svg{opacity:1}
-.sb-nav a.active{background:var(--aw-sb-active-bg);color:var(--aw-sb-text-active);font-weight:600;border-left:2px solid var(--aw-sb-active-border);padding-left:8px}
+.sb-nav a.active{background:var(--aw-sb-active-bg);color:var(--aw-sb-text-active);font-weight:600}
 .sb-nav a.active svg{opacity:1}
 .sb-nav a .badge{margin-left:auto;font-size:10px;background:#c0392b;color:#fff;border-radius:99px;padding:1px 6px;display:none;font-weight:700}
 .sb-nav a.has-errors .badge{display:inline}
 
-.sb-foot{padding:12px;border-top:1px solid var(--aw-sb-divider);display:flex;flex-direction:column;gap:6px}
-/* sb-foot buttons — monochromatic, INTERDIT orange */
-.sb-foot .btn-ghost{color:var(--aw-sb-text);border-color:var(--aw-sb-divider)}
+.sb-foot{padding:12px;border-top:1px solid var(--aw-sb-divider);display:flex;flex-direction:column;gap:5px}
+/* sb-foot buttons */
+.sb-foot .btn-ghost{color:var(--aw-sb-text);border-color:rgba(255,255,255,.12)}
 .sb-foot .btn-ghost:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active);border-color:rgba(245,244,240,.20)}
-.sb-foot .btn-primary{background:var(--aw-sb-text-active);color:var(--aw-sb-bg);box-shadow:none}
-.sb-foot .btn-primary:hover{background:#FFFFFF;box-shadow:none}
+/* Save & Deploy — orange kept, it's the primary brand CTA */
+.sb-foot .btn-primary{box-shadow:none}
+.sb-foot .btn-primary:hover{box-shadow:0 2px 8px rgba(232,98,10,.35)}
+/* "Save, Encrypt & Deploy" — outlined secondary */
+.sb-foot .btn-encrypt{background:transparent;color:var(--aw-sb-text);border:1px solid rgba(255,255,255,.18);border-radius:var(--aw-radius-md);padding:6px 11px;font:600 12px/1 var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;transition:.12s}
+.sb-foot .btn-encrypt:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active);border-color:rgba(245,244,240,.25)}
+/* Documentation link — left-aligned like a nav item */
+.sb-doc-link{display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;font-weight:500;color:var(--aw-sb-text);text-decoration:none;border-radius:var(--aw-radius-md);transition:.12s}
+.sb-doc-link:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active)}
 
 /* ── Main ── */
 .main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -210,7 +217,8 @@ select option{background:var(--surface2)}
 .btn-sm{padding:6px 11px;font-size:12px}
 .btn-sm svg{width:13px;height:13px}
 .btn-block{width:100%;justify-content:center}
-.btn-danger{background:var(--danger);color:#fff}
+.btn-danger{background:var(--aw-danger-bg);color:var(--aw-danger-text);border:1px solid var(--aw-danger-border)}
+.btn-danger:hover{background:var(--aw-danger-border);color:var(--aw-danger-text)}
 .btn-warning{background:var(--warning);color:#000;font-weight:700}
 
 /* ── Log panel ── */
@@ -407,7 +415,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .lg-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;max-width:700px;width:100%;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 40px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04);overflow:hidden}
 .lg-header{padding:26px 32px 22px;background:var(--aw-sb-bg);border-bottom:1px solid var(--aw-sb-divider);position:relative;overflow:hidden}
 .lg-header-top{display:flex;align-items:center;gap:14px;margin-bottom:18px;position:relative}
-.lg-logo-img{width:36px;height:36px;object-fit:contain;filter:brightness(0) invert(1);flex-shrink:0}
+.lg-logo-img{width:36px;height:36px;object-fit:contain;flex-shrink:0}
 .lg-brand{flex:1}
 .lg-brand h2{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--aw-sb-text-active)}
 .lg-brand p{font-size:11px;color:var(--aw-sb-text-muted);margin-top:2px}
@@ -621,29 +629,14 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
     <div class="nav-group-label" style="margin-top:4px">Configuration</div>
   </nav>
   <div class="sb-foot">
-    <a class="btn btn-ghost btn-sm btn-block" href="http://localhost:8001" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-      Documentation
-    </a>
-    <div id="sb-version" style="font-size:10px;color:var(--muted2);text-align:center;padding:2px 0">Wizard v<span id="wizard-ver">…</span></div>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      Generate all secrets
-    </button>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="saveConfig()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      Save config
-    </button>
-    <button class="btn btn-primary btn-block" onclick="deploy(false)" id="btn-deploy">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      Save &amp; Deploy
-    </button>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="deploy(true)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      Save, Encrypt &amp; Deploy
-    </button>
-    <div id="preflight-warn" style="display:none;font-size:11px;color:var(--warning);text-align:center;padding:4px 0;display:flex;align-items:center;justify-content:center;gap:4px">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <a class="sb-doc-link" href="http://localhost:8001" target="_blank" rel="noopener">Documentation</a>
+    <div id="sb-version" style="font-size:10px;color:var(--muted2);padding:2px 8px">Wizard v<span id="wizard-ver">…</span></div>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">Generate all secrets</button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="saveConfig()">Save config</button>
+    <button class="btn btn-primary btn-sm btn-block" onclick="deploy(false)" id="btn-deploy">Save &amp; Deploy</button>
+    <button class="btn-encrypt" onclick="deploy(true)">Save, Encrypt &amp; Deploy</button>
+    <div id="preflight-warn" style="display:none;font-size:11px;color:var(--warning);padding:3px 8px;display:flex;align-items:center;gap:4px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       Complete Pre-flight first
     </div>
   </div>
@@ -785,14 +778,11 @@ async function saveSystemCredentials() {
     body: JSON.stringify({ DEPLOY_USER: user, SUDO_PASSWORD: pwd }),
   });
   if (res.ok) {
-    toast('Identifiants système enregistrés ✔', 'ok');
-    document.querySelector('.sys-cred-action .btn').textContent = '';
-    document.querySelector('.sys-cred-action .btn').innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      Identifiants enregistrés`;
-    document.querySelector('.sys-cred-action .btn').classList.replace('btn-primary','btn-success');
+    toast('Credentials saved ✔', 'ok');
+    const btn = document.querySelector('#sec-system .btn-primary[onclick*="saveSystem"]');
+    if (btn) { btn.textContent = 'Saved ✔'; btn.classList.replace('btn-primary','btn-success'); }
   } else {
-    toast('Erreur lors de la sauvegarde', 'err');
+    toast('Error saving credentials', 'err');
   }
 }
 
@@ -1616,15 +1606,9 @@ function buildSections() {
           <div class="sec-desc">${s.desc}</div>
         </div>
         <div class="fields">${fields.map(f => renderField(f)).join('')}</div>
-        <div class="sys-cred-action">
-          <button class="btn btn-primary" onclick="saveSystemCredentials()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Save system credentials
-          </button>
-          <div class="sys-cred-hint">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Saves the system user and sudo password — required before any Pre-flight operation (Docker CA, /etc/hosts, daemon restart…).
-          </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--aw-orange-100);border:1px solid var(--aw-orange-200);border-radius:var(--aw-radius-md)">
+          <div style="flex:1;font-size:11px;color:var(--aw-text-secondary);line-height:1.5">Saves system user + sudo password — required before any Pre-flight operation.</div>
+          <button class="btn btn-primary btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="saveSystemCredentials()">Save credentials</button>
         </div>
       </div>`;
     }
@@ -2931,24 +2915,30 @@ const CLEANUP_SECTION_HTML = `
   <!-- Presets -->
   <div class="sub-section">
     <div class="sub-title">Quick presets</div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px">
 
-      <button class="btn btn-secondary" onclick="applyCleanupPreset('stop')" style="flex:1;min-width:140px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-        Clean stop
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Stop containers,<br>keep all data</span>
+      <button onclick="applyCleanupPreset('stop')" style="
+        background:var(--aw-bg-surface);border:1px solid var(--aw-border-strong);border-radius:var(--aw-radius-md);
+        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
+      " onmouseover="this.style.borderColor='var(--aw-gray-400)'" onmouseout="this.style.borderColor='var(--aw-border-strong)'">
+        <div style="font-size:12px;font-weight:600;color:var(--aw-text-primary);margin-bottom:3px">Clean stop</div>
+        <div style="font-size:10px;color:var(--aw-text-muted);line-height:1.4">Stop containers, keep all data</div>
       </button>
 
-      <button class="btn btn-secondary" onclick="applyCleanupPreset('reset')" style="flex:1;min-width:140px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-        Reset
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + remove volumes<br>(data will be lost)</span>
+      <button onclick="applyCleanupPreset('reset')" style="
+        background:var(--aw-bg-surface);border:1px solid var(--aw-border-strong);border-radius:var(--aw-radius-md);
+        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
+      " onmouseover="this.style.borderColor='var(--aw-gray-400)'" onmouseout="this.style.borderColor='var(--aw-border-strong)'">
+        <div style="font-size:12px;font-weight:600;color:var(--aw-text-primary);margin-bottom:3px">Reset</div>
+        <div style="font-size:10px;color:var(--aw-text-muted);line-height:1.4">Down + remove volumes (data lost)</div>
       </button>
 
-      <button class="btn btn-secondary" onclick="applyCleanupPreset('full')" style="flex:1;min-width:140px;border-color:var(--error);color:var(--error)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        Full cleanup
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + volumes + images<br>+ buildx cache</span>
+      <button onclick="applyCleanupPreset('full')" style="
+        background:var(--aw-danger-bg);border:1px solid var(--aw-danger-border);border-radius:var(--aw-radius-md);
+        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
+      " onmouseover="this.style.borderColor='var(--aw-danger-text)'" onmouseout="this.style.borderColor='var(--aw-danger-border)'">
+        <div style="font-size:12px;font-weight:600;color:var(--aw-danger-text);margin-bottom:3px">Full cleanup</div>
+        <div style="font-size:10px;color:var(--aw-danger-text);opacity:.7;line-height:1.4">Down + volumes + images + cache</div>
       </button>
 
     </div>
@@ -3023,9 +3013,12 @@ const CLEANUP_SECTION_HTML = `
     <div id="cleanup-warn-box" style="display:none;background:rgba(239,68,68,.12);border:1px solid var(--error);border-radius:6px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--error)">
       <strong>Warning!</strong> The checked options are irreversible. Make sure you have a backup of important data before continuing.
     </div>
-    <button id="btn-run-cleanup" class="btn btn-primary" onclick="runCleanup()" style="width:100%">
-      🧹 Run cleanup
-    </button>
+    <div style="display:flex;justify-content:flex-end">
+      <button id="btn-run-cleanup" class="btn btn-danger btn-sm" onclick="runCleanup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        Run cleanup
+      </button>
+    </div>
   </div>
 
   <!-- Output -->
@@ -3109,9 +3102,12 @@ async function loadCleanupStatus() {
       if (!d.volumes || d.volumes.length === 0) {
         volDiv.innerHTML = '<em>No Autoflow volumes detected.</em>';
       } else {
-        volDiv.innerHTML = d.volumes.map(v =>
-          `<div style="padding:3px 0;font-family:monospace">📦 ${v}</div>`
-        ).join('');
+        volDiv.innerHTML = `<div style="display:flex;flex-direction:column;gap:2px">` + d.volumes.map(v =>
+          `<div style="display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:4px;transition:.1s" onmouseover="this.style.background='var(--aw-gray-100)'" onmouseout="this.style.background='transparent'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13" style="flex-shrink:0;color:var(--aw-gray-400)"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+            <span style="font-family:monospace;font-size:12px">${v}</span>
+          </div>`
+        ).join('') + `</div>`;
       }
     }
   } catch (e) {
@@ -3157,7 +3153,7 @@ async function runCleanup() {
   es.onmessage = e => {
     if (e.data === '[DONE]') {
       es.close();
-      if (btn) { btn.disabled = false; btn.textContent = '🧹 Run cleanup'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg> Run cleanup'; }
       loadCleanupStatus();
       return;
     }
@@ -3173,7 +3169,7 @@ async function runCleanup() {
   };
   es.onerror = () => {
     es.close();
-    if (btn) { btn.disabled = false; btn.textContent = '🧹 Run cleanup'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg> Run cleanup'; }
     if (log) {
       const line = document.createElement('div');
       line.style.color = 'var(--error)';
