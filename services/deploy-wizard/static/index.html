@@ -151,15 +151,44 @@ body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100
 .sb-nav a.has-errors .badge{display:inline}
 
 .sb-foot{padding:12px;border-top:1px solid var(--aw-sb-divider);display:flex;flex-direction:column;gap:5px}
-/* sb-foot buttons */
-.sb-foot .btn-ghost{color:var(--aw-sb-text);border-color:rgba(255,255,255,.12)}
-.sb-foot .btn-ghost:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active);border-color:rgba(245,244,240,.20)}
-/* Save & Deploy — orange kept, it's the primary brand CTA */
-.sb-foot .btn-primary{box-shadow:none}
-.sb-foot .btn-primary:hover{box-shadow:0 2px 8px rgba(232,98,10,.35)}
-/* "Save, Encrypt & Deploy" — outlined secondary */
-.sb-foot .btn-encrypt{background:transparent;color:var(--aw-sb-text);border:1px solid rgba(255,255,255,.18);border-radius:var(--aw-radius-md);padding:6px 11px;font:600 12px/1 var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;transition:.12s}
-.sb-foot .btn-encrypt:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active);border-color:rgba(245,244,240,.25)}
+/* ── Sidebar footer buttons ─────────────────────────────────── */
+/* Ghost utility buttons — légère teinte orange pour les distinguer */
+.sb-foot .btn-ghost{
+  color:rgba(232,98,10,.85);
+  border-color:rgba(232,98,10,.28);
+  background:rgba(232,98,10,.07)
+}
+.sb-foot .btn-ghost:hover{
+  background:rgba(232,98,10,.15);
+  color:var(--aw-orange-500);
+  border-color:rgba(232,98,10,.45)
+}
+/* Save & Deploy — primary orange: force la valeur réelle (la sidebar
+   scope override --accent en crème, donc on cible la couleur directement) */
+.sb-foot .btn-primary{
+  background:var(--aw-orange-500) !important;
+  color:#fff !important;
+  box-shadow:none
+}
+.sb-foot .btn-primary:hover{
+  background:var(--aw-orange-600) !important;
+  box-shadow:0 2px 8px rgba(232,98,10,.40)
+}
+/* Save, Encrypt & Deploy — outlined avec teinte orange subtile */
+.sb-foot .btn-encrypt{
+  background:rgba(232,98,10,.07);
+  color:rgba(232,98,10,.85);
+  border:1px solid rgba(232,98,10,.28);
+  border-radius:var(--aw-radius-md);
+  padding:6px 11px;font:600 12px/1 var(--font);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  gap:6px;width:100%;transition:.12s
+}
+.sb-foot .btn-encrypt:hover{
+  background:rgba(232,98,10,.15);
+  color:var(--aw-orange-500);
+  border-color:rgba(232,98,10,.45)
+}
 /* Documentation link — left-aligned like a nav item */
 .sb-doc-link{display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;font-weight:500;color:var(--aw-sb-text);text-decoration:none;border-radius:var(--aw-radius-md);transition:.12s}
 .sb-doc-link:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active)}
@@ -217,8 +246,8 @@ select option{background:var(--surface2)}
 .btn-sm{padding:6px 11px;font-size:12px}
 .btn-sm svg{width:13px;height:13px}
 .btn-block{width:100%;justify-content:center}
-.btn-danger{background:var(--aw-danger-bg);color:var(--aw-danger-text);border:1px solid var(--aw-danger-border)}
-.btn-danger:hover{background:var(--aw-danger-border);color:var(--aw-danger-text)}
+.btn-danger{background:#DC2626;color:#fff;border:none}
+.btn-danger:hover{background:#B91C1C;color:#fff}
 .btn-warning{background:var(--warning);color:#000;font-weight:700}
 
 /* ── Log panel ── */
@@ -779,7 +808,8 @@ async function saveSystemCredentials() {
   });
   if (res.ok) {
     toast('Credentials saved ✔', 'ok');
-    const btn = document.querySelector('#sec-system .btn-primary[onclick*="saveSystem"]');
+    const sudoIw = document.querySelector('#field-SUDO_PASSWORD')?.closest('.iw');
+    const btn = sudoIw?.querySelector('button.btn-primary');
     if (btn) { btn.textContent = 'Saved ✔'; btn.classList.replace('btn-primary','btn-success'); }
   } else {
     toast('Error saving credentials', 'err');
@@ -1606,10 +1636,6 @@ function buildSections() {
           <div class="sec-desc">${s.desc}</div>
         </div>
         <div class="fields">${fields.map(f => renderField(f)).join('')}</div>
-        <div style="margin-top:16px;display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--aw-orange-100);border:1px solid var(--aw-orange-200);border-radius:var(--aw-radius-md)">
-          <div style="flex:1;font-size:11px;color:var(--aw-text-secondary);line-height:1.5">Saves system user + sudo password — required before any Pre-flight operation.</div>
-          <button class="btn btn-primary btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="saveSystemCredentials()">Save credentials</button>
-        </div>
       </div>`;
     }
     if (s.id === 'backup') {
@@ -1655,6 +1681,18 @@ function buildSections() {
   }).join('');
 
   content.innerHTML = preflightHtml + EE_SECTION_HTML + sectionsHtml + CLEANUP_SECTION_HTML;
+
+  // Inject "Save credentials" button directly into SUDO_PASSWORD input-wrapper
+  // so it sits on the same row as the password field, right of the eye-toggle.
+  const sudoIw = document.querySelector('#field-SUDO_PASSWORD')?.closest('.iw');
+  if (sudoIw) {
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary btn-sm';
+    saveBtn.setAttribute('onclick', 'saveSystemCredentials()');
+    saveBtn.style.cssText = 'flex-shrink:0;white-space:nowrap';
+    saveBtn.textContent = 'Save credentials';
+    sudoIw.appendChild(saveBtn);
+  }
 
   // Populate EE configuration fields (from execution_envs schema fields)
   const eeConfigDiv = document.getElementById('ee-config-fields');
@@ -2919,26 +2957,32 @@ const CLEANUP_SECTION_HTML = `
 
       <button onclick="applyCleanupPreset('stop')" style="
         background:var(--aw-bg-surface);border:1px solid var(--aw-border-strong);border-radius:var(--aw-radius-md);
-        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
-      " onmouseover="this.style.borderColor='var(--aw-gray-400)'" onmouseout="this.style.borderColor='var(--aw-border-strong)'">
+        padding:10px 14px;text-align:left;cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .10s;
+        font-family:var(--font);box-shadow:0 1px 3px rgba(0,0,0,.06)
+      " onmouseover="this.style.boxShadow='0 3px 10px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)';this.style.borderColor='var(--aw-gray-400)'"
+         onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)';this.style.transform='';this.style.borderColor='var(--aw-border-strong)'">
         <div style="font-size:12px;font-weight:600;color:var(--aw-text-primary);margin-bottom:3px">Clean stop</div>
-        <div style="font-size:10px;color:var(--aw-text-muted);line-height:1.4">Stop containers, keep all data</div>
+        <div style="font-size:11px;color:var(--aw-text-muted);line-height:1.4">Stop containers, keep all data</div>
       </button>
 
       <button onclick="applyCleanupPreset('reset')" style="
         background:var(--aw-bg-surface);border:1px solid var(--aw-border-strong);border-radius:var(--aw-radius-md);
-        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
-      " onmouseover="this.style.borderColor='var(--aw-gray-400)'" onmouseout="this.style.borderColor='var(--aw-border-strong)'">
+        padding:10px 14px;text-align:left;cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .10s;
+        font-family:var(--font);box-shadow:0 1px 3px rgba(0,0,0,.06)
+      " onmouseover="this.style.boxShadow='0 3px 10px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)';this.style.borderColor='var(--aw-gray-400)'"
+         onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)';this.style.transform='';this.style.borderColor='var(--aw-border-strong)'">
         <div style="font-size:12px;font-weight:600;color:var(--aw-text-primary);margin-bottom:3px">Reset</div>
-        <div style="font-size:10px;color:var(--aw-text-muted);line-height:1.4">Down + remove volumes (data lost)</div>
+        <div style="font-size:11px;color:var(--aw-text-muted);line-height:1.4">Down + remove volumes (data lost)</div>
       </button>
 
       <button onclick="applyCleanupPreset('full')" style="
         background:var(--aw-danger-bg);border:1px solid var(--aw-danger-border);border-radius:var(--aw-radius-md);
-        padding:10px 12px;text-align:left;cursor:pointer;transition:.12s;font-family:var(--font)
-      " onmouseover="this.style.borderColor='var(--aw-danger-text)'" onmouseout="this.style.borderColor='var(--aw-danger-border)'">
+        padding:10px 14px;text-align:left;cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .10s;
+        font-family:var(--font);box-shadow:0 1px 3px rgba(0,0,0,.06)
+      " onmouseover="this.style.boxShadow='0 3px 10px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)';this.style.borderColor='var(--aw-danger-text)'"
+         onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)';this.style.transform='';this.style.borderColor='var(--aw-danger-border)'">
         <div style="font-size:12px;font-weight:600;color:var(--aw-danger-text);margin-bottom:3px">Full cleanup</div>
-        <div style="font-size:10px;color:var(--aw-danger-text);opacity:.7;line-height:1.4">Down + volumes + images + cache</div>
+        <div style="font-size:11px;color:var(--aw-danger-text);opacity:.7;line-height:1.4">Down + volumes + images + cache</div>
       </button>
 
     </div>
@@ -2949,59 +2993,59 @@ const CLEANUP_SECTION_HTML = `
     <div class="sub-title">Granular options</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px" id="cleanup-options">
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-stop" checked onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-stop" checked onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Stop containers</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">docker compose down --remove-orphans</div>
+          <div style="font-weight:600;font-size:13px">Stop containers</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">docker compose down --remove-orphans</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-volumes" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-volumes" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Remove volumes</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">Deletes all data (DB, Redis, PKI…)</div>
+          <div style="font-weight:600;font-size:13px">Remove volumes</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Deletes all data (DB, Redis, PKI…)</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-images" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-images" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Remove AWX image</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">autoflow/awx-patched:* (rebuild required)</div>
+          <div style="font-weight:600;font-size:13px">Remove AWX image</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">autoflow/awx-patched:* (rebuild required)</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-ee" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-ee" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Remove EE images</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">ee-base, ee-security, ee-network</div>
+          <div style="font-weight:600;font-size:13px">Remove EE images</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">ee-base, ee-security, ee-network</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-cache" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-cache" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Purge Buildx cache</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">docker builder prune -af</div>
+          <div style="font-weight:600;font-size:13px">Purge Buildx cache</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">docker builder prune -af</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
-        <input type="checkbox" id="opt-tmp" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--surface2);border-radius:6px;cursor:pointer">
+        <input type="checkbox" id="opt-tmp" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px">Clean /tmp</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">/tmp/ee-build-* (ansible-builder contexts)</div>
+          <div style="font-weight:600;font-size:13px">Clean /tmp</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">/tmp/ee-build-* (ansible-builder contexts)</div>
         </div>
       </label>
 
-      <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer;border:1px solid var(--error);grid-column:1/-1">
-        <input type="checkbox" id="opt-env" onchange="updateCleanupBtn()">
+      <label class="cleanup-opt" style="display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;padding:10px 14px;background:var(--aw-danger-bg);border:1px solid var(--aw-danger-border);border-radius:6px;cursor:pointer;grid-column:1/-1">
+        <input type="checkbox" id="opt-env" onchange="updateCleanupBtn()" style="margin-top:3px">
         <div>
-          <div style="font-weight:500;font-size:13px;color:var(--error)">⚠ Delete .env file</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">Nuclear option — all secrets are lost, full reconfiguration required</div>
+          <div style="font-weight:600;font-size:13px;color:var(--aw-danger-text)">⚠ Delete .env file</div>
+          <div style="font-size:11px;color:var(--aw-danger-text);opacity:.75;margin-top:2px">Nuclear option — all secrets are lost, full reconfiguration required</div>
         </div>
       </label>
 
