@@ -9,6 +9,8 @@ import asyncio
 import json
 import os
 import secrets
+import shlex
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -48,6 +50,9 @@ SOPS_AGE_KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
 
 STATIC_DIR = Path(__file__).parent / "static"
 AUDIT_LOG  = ROOT / "wizard-audit.log"
+
+# ── Version ───────────────────────────────────────────────────────────────────
+WIZARD_VERSION = "1.0.0"
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -113,7 +118,11 @@ async def root():
 
 @app.get("/api/schema")
 def get_schema():
-    return {"sections": SECTIONS, "fields": FIELDS}
+    return {
+        "sections":        SECTIONS,
+        "fields":          FIELDS,
+        "first_start_only": sorted(FIRST_START_ONLY),
+    }
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -168,6 +177,15 @@ def save_config(request: Request, data: dict):
         merged["CORS_ORIGINS"] = (
             f"https://awx.{domain},https://api.{domain},https://pki.{domain}"
         )
+
+    # ── Backup .env before overwriting ────────────────────────────
+    backup_path: str | None = None
+    if ENV_FILE.exists():
+        _bak_ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        _bak    = ENV_FILE.with_name(f".env.bak.{_bak_ts}")
+        shutil.copy2(ENV_FILE, _bak)
+        _bak.chmod(0o600)
+        backup_path = str(_bak)
 
     # ── Write .env preserving template structure ───────────────────
     _write_env(merged)
@@ -232,6 +250,7 @@ def save_config(request: Request, data: dict):
         "affected_services": sorted(services),
         "needs_recreate":    needs_recreate,
         "warnings":          warnings,
+        "backup":            backup_path,
     }
 
 
@@ -297,6 +316,12 @@ def generate_secret(generate_type: str):
             return {"value": secrets.token_urlsafe(32)}
         case _:
             raise HTTPException(400, f"Unknown generate_type: {generate_type}")
+
+
+@app.get("/api/version")
+def get_version():
+    """Return the wizard version."""
+    return {"version": WIZARD_VERSION}
 
 
 # ── SOPS ──────────────────────────────────────────────────────────────────────
@@ -537,6 +562,19 @@ async def deploy(request: Request, encrypt: bool = False):
                 yield _sse(f"[WARN] {label} a échoué : {' | '.join(out)}")
 
         yield _sse("[SUCCESS] AWX instance groups provisionnés ✔")
+        yield _sse("─" * 55)
+
+        # ── Post-deploy URL summary ──────────────────────────────────────────
+        _domain   = cfg.get("DOMAIN", "localhost")
+        _awx_user = cfg.get("AWX_ADMIN_USER", "admin")
+        _git_user = cfg.get("GITEA_ADMIN_USER", "admin")
+        yield _sse("🎉  Deployment complete — your services:")
+        yield _sse(f"  AWX        → https://awx.{_domain}  (user: {_awx_user})")
+        yield _sse(f"  Gitea      → https://git.{_domain}  (user: {_git_user})")
+        yield _sse(f"  API        → https://api.{_domain}")
+        yield _sse(f"  Monitoring → https://monitoring.{_domain}")
+        yield _sse(f"  PKI        → https://pki.{_domain}")
+        yield _sse(f"  MinIO      → https://minio.{_domain}")
         yield _sse("─" * 55)
         yield _sse("[DONE]")
 
@@ -1636,15 +1674,16 @@ async def docker_trust_ca():
             hosts_line = f"127.0.0.1  {registry}"
             check = subprocess.run(["grep", "-qF", registry, "/etc/hosts"], capture_output=True)
             if check.returncode != 0:
+                # Use shlex.quote to prevent shell injection via a crafted DOMAIN value.
                 add = _sudo_run(
-                    ["bash", "-c", f"echo '{hosts_line}' >> /etc/hosts"],
+                    ["bash", "-c", f"printf '%s\\n' {shlex.quote(hosts_line)} >> /etc/hosts"],
                     capture_output=True, text=True,
                 )
                 if add.returncode == 0:
                     yield _sse(f"Entrée ajoutée dans /etc/hosts : {hosts_line} ✔")
                 else:
                     yield _sse(f"[WARN] Impossible d'écrire dans /etc/hosts: {add.stderr.strip()}")
-                    yield _sse(f"[WARN] Ajoute manuellement : echo '{hosts_line}' | sudo tee -a /etc/hosts")
+                    yield _sse(f"[WARN] Ajoute manuellement : echo {shlex.quote(hosts_line)} | sudo tee -a /etc/hosts")
             else:
                 yield _sse(f"Entrée déjà présente dans /etc/hosts pour {registry}.")
 
@@ -3212,6 +3251,9 @@ async def cleanup(
         yield _sse(f"  Build cache : {df['build_cache']}")
         yield _sse("[DONE]")
 
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
 
 # ── NTP / Time synchronisation ────────────────────────────────────────────────
 
@@ -3575,9 +3617,6 @@ async def configure_ntp(
         yield _sse(f"NTP synchronisé   : {ntpsynced}")
         yield _sse("[SUCCESS] Configuration NTP terminée ✔")
         yield _sse("[DONE]")
-
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

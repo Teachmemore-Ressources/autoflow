@@ -6,7 +6,7 @@ Each field maps to one .env variable.
 DOCS_BASE = "http://localhost:8001"
 
 SECTIONS = [
-    {"id": "system",         "label": "Système",          "desc": "Utilisateur et mot de passe sudo pour les opérations privilégiées"},
+    {"id": "system",         "label": "System",           "desc": "System user and sudo password for privileged operations."},
     {"id": "infrastructure", "label": "Infrastructure",   "desc": "Domain, ports and network topology"},
     {"id": "postgresql",     "label": "PostgreSQL",       "desc": "Main database credentials"},
     {"id": "redis",          "label": "Redis",            "desc": "Cache / queue credentials"},
@@ -33,18 +33,18 @@ SECTIONS = [
 FIELDS = [
     # ── Système ───────────────────────────────────────────────────
     {
-        "key": "DEPLOY_USER", "label": "Utilisateur système", "section": "system",
+        "key": "DEPLOY_USER", "label": "System user", "section": "system",
         "type": "text", "required": True,
         "default": "",
         "placeholder": "armel",
-        "description": "Nom d'utilisateur Linux qui exécute le wizard et les commandes de déploiement.",
+        "description": "Linux username that runs the wizard and deployment commands.",
     },
     {
-        "key": "SUDO_PASSWORD", "label": "Mot de passe sudo", "section": "system",
+        "key": "SUDO_PASSWORD", "label": "Sudo password", "section": "system",
         "type": "password", "sensitive": True,
         "default": "",
         "placeholder": "••••••••",
-        "description": "Mot de passe sudo de l'utilisateur ci-dessus — utilisé pour les opérations privilégiées (CA Docker, /etc/hosts, daemon restart). Jamais transmis à l'extérieur.",
+        "description": "Sudo password for the user above — used for privileged operations (Docker CA, /etc/hosts, daemon restart). Never transmitted outside this host.",
     },
 
     # ── Infrastructure ────────────────────────────────────────────

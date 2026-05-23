@@ -4,30 +4,103 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Autoflow — Deploy Wizard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ── Local font — no external CDN dependency (air-gap safe) ── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/static/fonts/inter-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+                 U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+                 U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+                 U+FEFF, U+FFFD;
+}
+</style>
+<style>
+/* ══════════════════════════════════════════════════════════
+   DESIGN TOKENS v2 — AUTOFLOW WIZARD
+   Règle fondamentale : orange UNIQUEMENT dans la zone contenu,
+   JAMAIS dans la sidebar (univers noir/blanc autonome)
+   ══════════════════════════════════════════════════════════ */
 :root {
-  --bg:       #0a0f1e;
-  --surface:  #111827;
-  --surface2: #1a2235;
-  --surface3: #1f2d42;
-  --border:   #1e2d45;
-  --border2:  #263552;
-  --text:     #f0f4ff;
-  --muted:    #6b7fa3;
-  --muted2:   #4a5a7a;
-  --accent:   #3b7bff;
-  --acc-h:    #2563eb;
-  --acc-glow: rgba(59,123,255,.18);
-  --success:  #10b981;
-  --warning:  #f59e0b;
-  --danger:   #ef4444;
-  --radius:   10px;
-  --radius-sm:6px;
-  --sw:       240px;
-  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  /* ── Page & surfaces ──────────────────────────────── */
+  --aw-bg-page        : #FAFAF8;
+  --aw-bg-surface     : #FFFFFF;
+  --aw-bg-surface-alt : #F5F4F0;
+
+  /* ── Sidebar — zéro orange autorisé ──────────────── */
+  --aw-sb-bg           : #1A1A1A;
+  --aw-sb-hover        : #2A2A2A;
+  --aw-sb-active-bg    : #2E2E2E;
+  --aw-sb-active-border: rgba(245,244,240,.70);
+  --aw-sb-text         : rgba(245,244,240,.60);
+  --aw-sb-text-active  : #F5F4F0;
+  --aw-sb-text-muted   : rgba(245,244,240,.30);
+  --aw-sb-divider      : rgba(255,255,255,.07);
+
+  /* ── Orange — contenu uniquement ─────────────────── */
+  --aw-orange-500  : #E8620A;
+  --aw-orange-600  : #C4520A;
+  --aw-orange-700  : #A34208;
+  --aw-orange-100  : #FEF3E7;
+  --aw-orange-200  : #FCD4A8;
+  --aw-orange-text : #7A3205;
+
+  /* ── Gris neutres ────────────────────────────────── */
+  --aw-gray-50  : #F9F9F7;
+  --aw-gray-100 : #EEEDE9;
+  --aw-gray-200 : #DEDDD8;
+  --aw-gray-300 : #C8C7C2;
+  --aw-gray-400 : #9E9D98;
+  --aw-gray-500 : #737270;
+  --aw-gray-600 : #525150;
+  --aw-gray-900 : #1A1A1A;
+
+  /* ── Texte contenu ───────────────────────────────── */
+  --aw-text-primary   : #1A1A1A;
+  --aw-text-secondary : #525150;
+  --aw-text-muted     : #9E9D98;
+  --aw-text-on-orange : #FFFFFF;
+
+  /* ── États sémantiques ───────────────────────────── */
+  --aw-success-bg    : #E8F5EC; --aw-success-border : #B7DFC2; --aw-success-text : #1E7E34;
+  --aw-warning-bg    : #FEF3C7; --aw-warning-border : #FCD34D; --aw-warning-text : #B45309;
+  --aw-danger-bg     : #FDEAEA; --aw-danger-border  : #F9BFBF; --aw-danger-text  : #7A0000;
+  --aw-info-bg       : #EFF6FF; --aw-info-border    : #BFDBFE; --aw-info-text    : #1D4ED8;
+
+  /* ── Bordures ────────────────────────────────────── */
+  --aw-border       : rgba(26,26,26,.10);
+  --aw-border-strong: rgba(26,26,26,.22);
+
+  /* ── Layout ──────────────────────────────────────── */
+  --aw-radius-sm : 4px;
+  --aw-radius-md : 6px;
+  --aw-radius-lg : 10px;
+  --aw-sidebar-w : 240px;
+  --aw-transition: 140ms ease;
+
+  /* ── Alias legacy → nouveaux tokens (zone contenu) ─ */
+  --bg       : var(--aw-bg-page);
+  --surface  : var(--aw-bg-surface);
+  --surface2 : var(--aw-bg-surface-alt);
+  --surface3 : #EAEAE6;
+  --border   : var(--aw-border);
+  --border2  : var(--aw-border-strong);
+  --text     : var(--aw-text-primary);
+  --muted    : var(--aw-text-muted);
+  --muted2   : var(--aw-gray-500);
+  --accent   : var(--aw-orange-500);
+  --acc-h    : var(--aw-orange-600);
+  --acc-glow : rgba(232,98,10,.10);
+  --success  : var(--aw-success-text);
+  --warning  : var(--aw-warning-text);
+  --danger   : var(--aw-danger-text);
+  --radius   : var(--aw-radius-lg);
+  --radius-sm: var(--aw-radius-md);
+  --sw       : var(--aw-sidebar-w);
+  --font     : 'Inter', system-ui, sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{height:100%}
@@ -37,28 +110,52 @@ body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100
 .layout{display:grid;grid-template-columns:var(--sw) 1fr;height:100vh;overflow:hidden}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;backdrop-filter:blur(2px)}
 
-/* ── Sidebar ── */
-.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:transform .25s;z-index:60}
-.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sb-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b7bff,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.sb-logo svg{width:18px;height:18px;color:#fff}
-.sb-brand h1{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.01em}
-.sb-brand p{font-size:11px;color:var(--muted);margin-top:1px}
-.sb-close{display:none;margin-left:auto;padding:4px;cursor:pointer;color:var(--muted);border-radius:4px}
-.sb-close:hover{color:var(--text)}
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+/* ZONE SIDEBAR : zéro orange autorisé — univers noir/blanc autonome */
+.sidebar{
+  background:var(--aw-sb-bg);border-right:1px solid var(--aw-sb-divider);
+  display:flex;flex-direction:column;overflow:hidden;transition:transform .25s;z-index:60;
+  /* Override legacy aliases so no --aw-orange-* can leak into the sidebar
+     via any rule that references --accent, --surface, --text, etc.        */
+  --surface   :var(--aw-sb-hover);
+  --surface2  :var(--aw-sb-active-bg);
+  --surface3  :#2E2E2E;
+  --border    :var(--aw-sb-divider);
+  --border2   :rgba(255,255,255,.15);
+  --text      :var(--aw-sb-text-active);
+  --muted     :var(--aw-sb-text);
+  --muted2    :var(--aw-sb-text-muted);
+  --accent    :var(--aw-sb-text-active);
+  --acc-h     :var(--aw-sb-text-active);
+  --acc-glow  :var(--aw-sb-active-bg);
+  --bg        :var(--aw-sb-bg);
+  --warning   :var(--aw-sb-text);
+  --danger    :#c0392b;
+}
+.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--aw-sb-divider);display:flex;align-items:center;gap:10px}
+.sb-logo-img{width:28px;height:28px;object-fit:contain;filter:brightness(0) invert(1);flex-shrink:0}
+.sb-brand h1{font-size:14px;font-weight:700;color:var(--aw-sb-text-active);letter-spacing:-.01em}
+.sb-brand p{font-size:11px;color:var(--aw-sb-text-muted);margin-top:1px}
+.sb-close{display:none;margin-left:auto;padding:4px;cursor:pointer;color:var(--aw-sb-text);border-radius:4px}
+.sb-close:hover{color:var(--aw-sb-text-active)}
 
-.sb-nav{flex:1;overflow-y:auto;padding:8px 8px}
-.nav-group-label{font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;padding:10px 8px 4px}
-.sb-nav a{display:flex;align-items:center;gap:9px;padding:8px 10px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;cursor:pointer;transition:.12s;border-radius:var(--radius-sm);user-select:none;margin-bottom:1px}
+.sb-nav{flex:1;overflow-y:auto;padding:8px}
+.nav-group-label{font-size:10px;font-weight:600;color:var(--aw-sb-text-muted);text-transform:uppercase;letter-spacing:.08em;padding:10px 8px 4px}
+.sb-nav a{display:flex;align-items:center;gap:9px;padding:8px 10px;color:var(--aw-sb-text);text-decoration:none;font-size:13px;font-weight:500;cursor:pointer;transition:.12s;border-radius:var(--aw-radius-md);user-select:none;margin-bottom:1px}
 .sb-nav a svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
-.sb-nav a:hover{background:var(--surface2);color:var(--text)}
+.sb-nav a:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active)}
 .sb-nav a:hover svg{opacity:1}
-.sb-nav a.active{background:var(--acc-glow);color:var(--accent);font-weight:600}
+.sb-nav a.active{background:var(--aw-sb-active-bg);color:var(--aw-sb-text-active);font-weight:600;border-left:2px solid var(--aw-sb-active-border);padding-left:8px}
 .sb-nav a.active svg{opacity:1}
-.sb-nav a .badge{margin-left:auto;font-size:10px;background:var(--danger);color:#fff;border-radius:99px;padding:1px 6px;display:none;font-weight:700}
+.sb-nav a .badge{margin-left:auto;font-size:10px;background:#c0392b;color:#fff;border-radius:99px;padding:1px 6px;display:none;font-weight:700}
 .sb-nav a.has-errors .badge{display:inline}
 
-.sb-foot{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.sb-foot{padding:12px;border-top:1px solid var(--aw-sb-divider);display:flex;flex-direction:column;gap:6px}
+/* sb-foot buttons — monochromatic, INTERDIT orange */
+.sb-foot .btn-ghost{color:var(--aw-sb-text);border-color:var(--aw-sb-divider)}
+.sb-foot .btn-ghost:hover{background:var(--aw-sb-hover);color:var(--aw-sb-text-active);border-color:rgba(245,244,240,.20)}
+.sb-foot .btn-primary{background:var(--aw-sb-text-active);color:var(--aw-sb-bg);box-shadow:none}
+.sb-foot .btn-primary:hover{background:#FFFFFF;box-shadow:none}
 
 /* ── Main ── */
 .main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -85,7 +182,7 @@ body{background:var(--bg);color:var(--text);font:14px/1.6 var(--font);height:100
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:5px}
 .field label .req{color:var(--danger);font-size:13px;font-weight:700}
-.field label .derived-tag{background:rgba(59,123,255,.15);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:4px;text-transform:none;letter-spacing:0;font-weight:600}
+.field label .derived-tag{background:var(--aw-orange-100);color:var(--aw-orange-text);font-size:10px;padding:1px 6px;border-radius:4px;text-transform:none;letter-spacing:0;font-weight:600}
 .field-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
 .iw{display:flex;gap:6px}
 .iw input,.iw select,.iw textarea{flex:1;min-width:0}
@@ -102,7 +199,7 @@ select option{background:var(--surface2)}
 .btn svg{width:14px;height:14px;flex-shrink:0}
 .btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
 .btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:var(--acc-h);box-shadow:0 2px 12px rgba(59,123,255,.3)}
+.btn-primary:hover{background:var(--acc-h);box-shadow:0 2px 12px rgba(232,98,10,.25)}
 .btn-success{background:var(--success);color:#fff}
 .btn-success:hover{background:#059669}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
@@ -127,7 +224,7 @@ select option{background:var(--surface2)}
 #log .info{color:#60a5fa}
 
 /* ── Toast ── */
-#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 16px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform .25s;pointer-events:none}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 16px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform .25s;pointer-events:none}
 #toast.show{transform:translateY(0)}
 #toast.ok{border-color:var(--success);color:var(--success)}
 #toast.err{border-color:var(--danger);color:var(--danger)}
@@ -139,7 +236,7 @@ select option{background:var(--surface2)}
 
 /* ── Misc ── */
 .divider{height:1px;background:var(--border);margin:24px 0}
-.sys-cred-action{margin-top:20px;padding:16px;background:rgba(59,123,255,.06);border:1px solid rgba(59,123,255,.2);border-radius:var(--radius);display:flex;flex-direction:column;gap:10px}
+.sys-cred-action{margin-top:20px;padding:16px;background:var(--aw-orange-100);border:1px solid var(--aw-orange-200);border-radius:var(--radius);display:flex;flex-direction:column;gap:10px}
 .sys-cred-hint{font-size:11px;color:var(--muted);display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .sys-cred-hint svg{flex-shrink:0;margin-top:1px;opacity:.7}
 .field-heading{width:100%;border-top:1px solid var(--border);margin:20px 0 4px;padding-top:16px}
@@ -158,7 +255,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .ab-chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;flex:1}
 .ab-chip{background:rgba(245,158,11,.15);color:var(--warning);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:600}
 .ab-recreate{font-size:11px;color:var(--danger);font-style:italic}
-#apply-warnings{display:none;padding:7px 24px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.2);font-size:12px;color:#fca5a5;line-height:1.8}
+#apply-warnings{display:none;padding:7px 24px;background:var(--aw-danger-bg);border-bottom:1px solid var(--aw-danger-border);font-size:12px;color:var(--aw-danger-text);line-height:1.8}
 
 /* ── Pre-flight cards ── */
 .preflight-stack{display:flex;flex-direction:column;gap:8px}
@@ -197,6 +294,18 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .wf-step.active .wf-label{color:var(--accent)}
 .wf-step.done .wf-label{color:var(--success)}
 .wf-arrow{color:var(--border2);font-size:18px;font-weight:300;flex-shrink:0}
+
+/* ── First-start-only badge ── */
+.fso-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+  color:rgba(245,158,11,.9);background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22);
+  border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap;
+  cursor:help}
+.fso-badge svg{width:11px;height:11px;flex-shrink:0}
+.field.fso input,.field.fso select,.field.fso textarea{
+  background:repeating-linear-gradient(
+    135deg,var(--surface2),var(--surface2) 6px,
+    rgba(245,158,11,.04) 6px,rgba(245,158,11,.04) 12px
+  );border-color:rgba(245,158,11,.2)!important;color:var(--muted)}
 
 /* ── Section: CA import hint ── */
 .ca-hint-box{margin-top:10px;padding:9px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius-sm);font-size:12px;color:var(--warning);display:flex;align-items:flex-start;gap:7px}
@@ -265,7 +374,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .sys-check-body{min-width:0}
 .sys-check-label{font-size:11px;font-weight:700;color:var(--text);margin-bottom:1px}
 .sys-check-detail{font-size:11px;color:var(--muted);line-height:1.4;word-break:break-word}
-.sys-check-detail.err{color:#fca5a5}
+.sys-check-detail.err{color:var(--aw-danger-text)}
 
 /* ── DR status row ── */
 .dr-status-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:20px}
@@ -296,29 +405,27 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 /* ── Legal Gate ──────────────────────────────────────── */
 #legal-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
 .lg-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;max-width:700px;width:100%;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 40px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04);overflow:hidden}
-.lg-header{padding:26px 32px 22px;background:linear-gradient(135deg,#0c1628 0%,#162040 100%);border-bottom:1px solid var(--border2);position:relative;overflow:hidden}
-.lg-header::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(59,123,255,.07) 0%,rgba(124,58,237,.05) 100%)}
+.lg-header{padding:26px 32px 22px;background:var(--aw-sb-bg);border-bottom:1px solid var(--aw-sb-divider);position:relative;overflow:hidden}
 .lg-header-top{display:flex;align-items:center;gap:14px;margin-bottom:18px;position:relative}
-.lg-logo{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#3b7bff,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 28px rgba(59,123,255,.32)}
-.lg-logo svg{width:20px;height:20px;color:#fff}
+.lg-logo-img{width:36px;height:36px;object-fit:contain;filter:brightness(0) invert(1);flex-shrink:0}
 .lg-brand{flex:1}
-.lg-brand h2{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
-.lg-brand p{font-size:11px;color:var(--muted);margin-top:2px}
+.lg-brand h2{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--aw-sb-text-active)}
+.lg-brand p{font-size:11px;color:var(--aw-sb-text-muted);margin-top:2px}
 .lg-badge{display:flex;align-items:center;gap:5px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.28);color:#fca5a5;padding:5px 10px;border-radius:6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
 .lg-badge svg{width:11px;height:11px}
 .lg-title-row{display:flex;align-items:center;gap:12px;position:relative}
 .lg-shield{width:38px;height:38px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.22);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .lg-shield svg{width:19px;height:19px;color:#f87171}
-.lg-title-text h3{font-size:14px;font-weight:700;color:var(--text)}
-.lg-title-text p{font-size:11.5px;color:var(--muted);margin-top:3px}
+.lg-title-text h3{font-size:14px;font-weight:700;color:var(--aw-sb-text-active)}
+.lg-title-text p{font-size:11.5px;color:var(--aw-sb-text);margin-top:3px}
 .lg-body{flex:1;overflow-y:auto;padding:22px 32px 4px}
 .lg-body::-webkit-scrollbar{width:5px}
 .lg-body::-webkit-scrollbar-track{background:transparent}
 .lg-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-.lg-alert{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;gap:11px;align-items:flex-start}
-.lg-alert>svg{width:15px;height:15px;color:#f87171;flex-shrink:0;margin-top:2px}
-.lg-alert-text{font-size:12px;color:#fca5a5;line-height:1.65}
-.lg-alert-text strong{color:#f87171;font-weight:600}
+.lg-alert{background:var(--aw-danger-bg);border:1px solid var(--aw-danger-border);border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;gap:11px;align-items:flex-start}
+.lg-alert>svg{width:15px;height:15px;color:var(--aw-danger-text);flex-shrink:0;margin-top:2px}
+.lg-alert-text{font-size:12px;color:var(--aw-danger-text);line-height:1.65}
+.lg-alert-text strong{color:var(--aw-danger-text);font-weight:600}
 .lg-terms{background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:20px;max-height:268px;overflow-y:auto}
 .lg-terms::-webkit-scrollbar{width:4px}
 .lg-terms::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
@@ -358,9 +465,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
     <!-- ── Header ── -->
     <div class="lg-header">
       <div class="lg-header-top">
-        <div class="lg-logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        </div>
+        <img class="lg-logo-img" src="/static/logo.png" alt="Autoflow">
         <div class="lg-brand">
           <h2>Autoflow</h2>
           <p>Infrastructure Automation Platform</p>
@@ -498,9 +603,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 <!-- ── Sidebar ─────────────────────────────────── -->
 <aside class="sidebar" id="sidebar">
   <div class="sb-head">
-    <div class="sb-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-    </div>
+    <img class="sb-logo-img" src="/static/logo.png" alt="Autoflow">
     <div class="sb-brand">
       <h1>Autoflow</h1>
       <p>Deploy Wizard</p>
@@ -522,6 +625,7 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
       Documentation
     </a>
+    <div id="sb-version" style="font-size:10px;color:var(--muted2);text-align:center;padding:2px 0">Wizard v<span id="wizard-ver">…</span></div>
     <button class="btn btn-ghost btn-sm btn-block" onclick="generateAllSecrets()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       Generate all secrets
@@ -649,12 +753,15 @@ async function boot() {
 }
 
 async function bootApp() {
-  const [schema, config] = await Promise.all([
+  const [schema, config, ver] = await Promise.all([
     fetch('/api/schema').then(r => r.json()),
     fetch('/api/config').then(r => r.json()),
+    fetch('/api/version').then(r => r.json()).catch(() => ({ version: '?' })),
   ]);
   SCHEMA = schema;
   CONFIG = config;
+  const verEl = document.getElementById('wizard-ver');
+  if (verEl) verEl.textContent = ver.version ?? '?';
   buildNav();
   buildSections();
   activateSection('system');
@@ -671,7 +778,7 @@ async function bootApp() {
 async function saveSystemCredentials() {
   const user = CONFIG['DEPLOY_USER'] ?? '';
   const pwd  = CONFIG['SUDO_PASSWORD'] ?? '';
-  if (!user.trim()) { toast('Utilisateur système requis', 'err'); return; }
+  if (!user.trim()) { toast('System user is required', 'err'); return; }
   const res = await fetch('/api/config', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -753,7 +860,7 @@ async function checkEEDnsStatus() {
           <strong style="color:var(--success)">EE_DNS_SERVER est vide</strong> —
           Docker génère automatiquement le <code>resolv.conf</code> des conteneurs EE à partir des DNS upstream du système.<br>
           <span style="color:var(--muted2);font-size:11px">
-            Serveurs détectés sur cet hôte : <code>${candidates.join('</code>, <code>') || '(aucun)'}</code>.<br>
+            Servers detected on this host: <code>${candidates.join('</code>, <code>') || '(none)'}</code>.<br>
             Cliquer <em>Detect DNS</em> pour vérifier leur accessibilité depuis le bridge et forcer un serveur spécifique si besoin.
           </span>
         </div>`;
@@ -794,7 +901,7 @@ function runEEDnsCheck() {
     det.style.display = '';
     det.innerHTML = `
       <pre id="eedns-log" style="
-        background:var(--sidebar-bg);border:1px solid rgba(255,255,255,.07);
+        background:var(--aw-sb-bg);border:1px solid rgba(255,255,255,.07);
         border-radius:6px;padding:10px 14px;
         font-size:11px;font-family:'JetBrains Mono',monospace, monospace;
         color:var(--muted);max-height:240px;overflow-y:auto;
@@ -867,7 +974,7 @@ function runEEDnsCheck() {
 
   _eednsES.onerror = () => {
     if (_eednsES) { _eednsES.close(); _eednsES = null; }
-    append('\n❌ Connexion SSE interrompue');
+    append('\n❌ SSE connection interrupted');
     dot.className = 'pf-dot err';
     txt.textContent = 'Erreur lors du test DNS';
   };
@@ -1186,7 +1293,7 @@ function buildSections() {
     <div class="section" id="sec-preflight">
       <div class="sec-header">
         <div class="sec-title">Pre-flight &amp; Post-deploy</div>
-        <div class="sec-desc">Suivez les étapes dans l'ordre ci-dessous. Les vérifications pré-déploiement sont obligatoires avant de lancer le stack. Les actions post-déploiement s'exécutent une fois le stack démarré.</div>
+        <div class="sec-desc">Follow the steps below in order. Pre-deployment checks are mandatory before launching the stack. Post-deploy actions run once the stack is up.</div>
       </div>
 
       <div class="preflight-stack">
@@ -1512,11 +1619,11 @@ function buildSections() {
         <div class="sys-cred-action">
           <button class="btn btn-primary" onclick="saveSystemCredentials()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Valider les identifiants système
+            Save system credentials
           </button>
           <div class="sys-cred-hint">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Enregistre l'utilisateur et le mot de passe sudo — requis avant toute opération Pre-flight (CA Docker, /etc/hosts, restart daemon…).
+            Saves the system user and sudo password — required before any Pre-flight operation (Docker CA, /etc/hosts, daemon restart…).
           </div>
         </div>
       </div>`;
@@ -1598,6 +1705,10 @@ function renderField(f) {
   const wide = f.wide ? 'field-wide' : '';
   const derivedTag = f.derived ? '<span class="derived-tag">auto</span>' : '';
   const reqMark = f.required ? '<span class="req">*</span>' : '';
+  const isFSO = SCHEMA.first_start_only?.includes(f.key);
+  const fsoTag = isFSO
+    ? `<span class="fso-badge" title="This value is only read on first container start. Changing it after initial deployment has no effect — update it directly in the service UI instead."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>locked after first start</span>`
+    : '';
 
   let input = '';
   if (f.type === 'select') {
@@ -1627,8 +1738,8 @@ function renderField(f) {
     : '';
 
   return `
-    <div class="field ${wide}" id="wrap-${f.key}">
-      <label for="field-${f.key}">${f.label} ${reqMark} ${derivedTag}</label>
+    <div class="field ${wide}${isFSO ? ' fso' : ''}" id="wrap-${f.key}">
+      <label for="field-${f.key}">${f.label} ${reqMark} ${derivedTag}${fsoTag}</label>
       <div class="iw">${input}${eyeBtn}${genBtn}</div>
       ${f.description ? `<div class="field-desc">${f.description}</div>` : ''}
     </div>`;
@@ -2103,7 +2214,7 @@ async function checkEEStatus() {
 }
 
 const EE_CARD_ICONS = {
-  base:     `<svg viewBox="0 0 24 24" fill="none" stroke="#3b7bff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+  base:     `<svg viewBox="0 0 24 24" fill="none" stroke="#E8620A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
   security: `<svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
   network:  `<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
 };
@@ -2680,14 +2791,14 @@ async function checkNTPStatus() {
   const dot = document.getElementById('ntp-dot');
   const txt = document.getElementById('ntp-status-text');
   if (dot) dot.className = 'pf-dot running';
-  if (txt) txt.textContent = 'Vérification…';
+  if (txt) txt.textContent = 'Checking…';
 
   let d;
   try {
     d = await fetch('/api/preflight/time').then(r => r.json());
   } catch (e) {
     if (dot) dot.className = 'pf-dot err';
-    if (txt) txt.textContent = 'Impossible de joindre le wizard';
+    if (txt) txt.textContent = 'Cannot reach the wizard';
     return;
   }
 
@@ -2698,13 +2809,13 @@ async function checkNTPStatus() {
   const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
   setText('ntp-utc', d.host_utc);
   setText('ntp-tz',  d.timezone);
-  setText('ntp-svc', d.ntp_service === 'none' ? '⚠ Aucun service NTP détecté' : d.ntp_service);
+  setText('ntp-svc', d.ntp_service === 'none' ? '⚠ No NTP service detected' : d.ntp_service);
 
   // Drift
   const driftEl = document.getElementById('ntp-drift');
   if (driftEl) {
     if (d.drift_ms === null || d.drift_ms === undefined) {
-      driftEl.textContent = 'Non disponible';
+      driftEl.textContent = 'Unavailable';
       driftEl.style.color = '';
     } else {
       const ms = d.drift_ms;
@@ -2741,15 +2852,15 @@ async function checkNTPStatus() {
   if (!d.synced || sev === 'critical') {
     if (dot) dot.className = 'pf-dot err';
     if (txt) txt.textContent = !d.synced
-      ? `Non synchronisé — service NTP : ${d.ntp_service}`
-      : `Drift critique : ${d.drift_ms?.toFixed(0)} ms — risque TLS / JWT`;
+      ? `Not synchronized — NTP service: ${d.ntp_service}`
+      : `Critical drift: ${d.drift_ms?.toFixed(0)} ms — TLS / JWT risk`;
   } else if (sev === 'warn' || sev === 'info') {
     if (dot) dot.className = 'pf-dot running';  // orange
-    if (txt) txt.textContent = `Synchronisé avec drift : ${d.drift_ms?.toFixed(1)} ms`;
+    if (txt) txt.textContent = `Synchronized with drift: ${d.drift_ms?.toFixed(1)} ms`;
   } else {
     if (dot) dot.className = 'pf-dot ok';
     const driftTxt = d.drift_ms !== null ? ` — drift ${d.drift_ms?.toFixed(1)} ms` : '';
-    if (txt) txt.textContent = `NTP synchronisé ✔${driftTxt}`;
+    if (txt) txt.textContent = `NTP synchronized ✔${driftTxt}`;
   }
 }
 
@@ -2771,7 +2882,7 @@ function runNTPSync() {
   const dot = document.getElementById('ntp-dot');
   const txt = document.getElementById('ntp-status-text');
   if (dot) dot.className = 'pf-dot running';
-  if (txt) txt.textContent = 'Configuration en cours…';
+  if (txt) txt.textContent = 'Configuring…';
 
   const params = new URLSearchParams({ servers, timezone, force_sync: true });
   const es = new EventSource(`/api/system/ntp?${params}`);
@@ -2793,7 +2904,7 @@ function runNTPSync() {
   es.onerror = () => {
     es.close();
     if (dot) dot.className = 'pf-dot err';
-    if (txt) txt.textContent = 'Connexion SSE perdue';
+    if (txt) txt.textContent = 'SSE connection lost';
   };
 }
 
@@ -2801,43 +2912,43 @@ function runNTPSync() {
 const CLEANUP_SECTION_HTML = `
 <div class="section" id="sec-cleanup">
   <div class="sec-header">
-    <div class="sec-title">Nettoyage &amp; Réinitialisation</div>
-    <div class="sec-desc">Arrêtez les services, supprimez les volumes, purgez les images et le cache Docker pour repartir d'un environnement sain.</div>
+    <div class="sec-title">Cleanup &amp; Reset</div>
+    <div class="sec-desc">Stop services, remove volumes, purge images and Docker build cache to start fresh.</div>
   </div>
 
   <!-- Disk usage summary -->
   <div class="sub-section">
-    <div class="sub-title">Espace disque Docker</div>
+    <div class="sub-title">Docker disk usage</div>
     <div id="cleanup-df" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:10px">
       <div class="pf-card"><span class="pf-dot" id="df-img-dot"></span><div><div class="pf-title">Images</div><div class="pf-detail" id="df-img">…</div></div></div>
       <div class="pf-card"><span class="pf-dot" id="df-vol-dot"></span><div><div class="pf-title">Volumes</div><div class="pf-detail" id="df-vol">…</div></div></div>
-      <div class="pf-card"><span class="pf-dot" id="df-ctr-dot"></span><div><div class="pf-title">Conteneurs</div><div class="pf-detail" id="df-ctr">…</div></div></div>
+      <div class="pf-card"><span class="pf-dot" id="df-ctr-dot"></span><div><div class="pf-title">Containers</div><div class="pf-detail" id="df-ctr">…</div></div></div>
       <div class="pf-card"><span class="pf-dot" id="df-bld-dot"></span><div><div class="pf-title">Build cache</div><div class="pf-detail" id="df-bld">…</div></div></div>
     </div>
-    <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="loadCleanupStatus()">↻ Actualiser</button>
+    <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="loadCleanupStatus()">↻ Refresh</button>
   </div>
 
   <!-- Presets -->
   <div class="sub-section">
-    <div class="sub-title">Préréglages rapides</div>
+    <div class="sub-title">Quick presets</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">
 
       <button class="btn btn-secondary" onclick="applyCleanupPreset('stop')" style="flex:1;min-width:140px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-        Arrêt propre
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Stoppe les conteneurs,<br>conserve toutes les données</span>
+        Clean stop
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Stop containers,<br>keep all data</span>
       </button>
 
       <button class="btn btn-secondary" onclick="applyCleanupPreset('reset')" style="flex:1;min-width:140px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-        Réinitialisation
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + suppression volumes<br>(données perdues)</span>
+        Reset
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + remove volumes<br>(data will be lost)</span>
       </button>
 
       <button class="btn btn-secondary" onclick="applyCleanupPreset('full')" style="flex:1;min-width:140px;border-color:var(--error);color:var(--error)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        Nettoyage complet
-        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + volumes + images<br>+ cache buildx</span>
+        Full cleanup
+        <span style="display:block;font-size:10px;opacity:.7;font-weight:400">Down + volumes + images<br>+ buildx cache</span>
       </button>
 
     </div>
@@ -2845,13 +2956,13 @@ const CLEANUP_SECTION_HTML = `
 
   <!-- Fine-grained options -->
   <div class="sub-section">
-    <div class="sub-title">Options détaillées</div>
+    <div class="sub-title">Granular options</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px" id="cleanup-options">
 
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-stop" checked onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Arrêter les conteneurs</div>
+          <div style="font-weight:500;font-size:13px">Stop containers</div>
           <div style="font-size:11px;opacity:.7;margin-top:2px">docker compose down --remove-orphans</div>
         </div>
       </label>
@@ -2859,23 +2970,23 @@ const CLEANUP_SECTION_HTML = `
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-volumes" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Supprimer les volumes</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">Efface toutes les données (BDD, Redis, PKI…)</div>
+          <div style="font-weight:500;font-size:13px">Remove volumes</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">Deletes all data (DB, Redis, PKI…)</div>
         </div>
       </label>
 
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-images" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Supprimer l'image AWX</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">autoflow/awx-patched:* (rebuild requis)</div>
+          <div style="font-weight:500;font-size:13px">Remove AWX image</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">autoflow/awx-patched:* (rebuild required)</div>
         </div>
       </label>
 
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-ee" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Supprimer les images EE</div>
+          <div style="font-weight:500;font-size:13px">Remove EE images</div>
           <div style="font-size:11px;opacity:.7;margin-top:2px">ee-base, ee-security, ee-network</div>
         </div>
       </label>
@@ -2883,7 +2994,7 @@ const CLEANUP_SECTION_HTML = `
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-cache" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Purger le cache Buildx</div>
+          <div style="font-weight:500;font-size:13px">Purge Buildx cache</div>
           <div style="font-size:11px;opacity:.7;margin-top:2px">docker builder prune -af</div>
         </div>
       </label>
@@ -2891,16 +3002,16 @@ const CLEANUP_SECTION_HTML = `
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer">
         <input type="checkbox" id="opt-tmp" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px">Nettoyer /tmp</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">/tmp/ee-build-* (contextes ansible-builder)</div>
+          <div style="font-weight:500;font-size:13px">Clean /tmp</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">/tmp/ee-build-* (ansible-builder contexts)</div>
         </div>
       </label>
 
       <label class="cleanup-opt" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:6px;cursor:pointer;border:1px solid var(--error);grid-column:1/-1">
         <input type="checkbox" id="opt-env" onchange="updateCleanupBtn()">
         <div>
-          <div style="font-weight:500;font-size:13px;color:var(--error)">⚠ Supprimer le fichier .env</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">Option nucléaire — tous les secrets sont perdus, reconfiguration complète requise</div>
+          <div style="font-weight:500;font-size:13px;color:var(--error)">⚠ Delete .env file</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">Nuclear option — all secrets are lost, full reconfiguration required</div>
         </div>
       </label>
 
@@ -2910,29 +3021,29 @@ const CLEANUP_SECTION_HTML = `
   <!-- Confirm + Run -->
   <div class="sub-section">
     <div id="cleanup-warn-box" style="display:none;background:rgba(239,68,68,.12);border:1px solid var(--error);border-radius:6px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--error)">
-      <strong>Attention !</strong> Les options cochées sont irréversibles. Assure-toi d'avoir une sauvegarde des données importantes avant de continuer.
+      <strong>Warning!</strong> The checked options are irreversible. Make sure you have a backup of important data before continuing.
     </div>
     <button id="btn-run-cleanup" class="btn btn-primary" onclick="runCleanup()" style="width:100%">
-      🧹 Lancer le nettoyage
+      🧹 Run cleanup
     </button>
   </div>
 
   <!-- Output -->
   <div class="sub-section" id="cleanup-output-wrap" style="display:none">
-    <div class="sub-title">Journal d'exécution</div>
+    <div class="sub-title">Execution log</div>
     <div id="cleanup-log" class="sse-log" style="margin-top:8px;height:320px;overflow-y:auto;background:var(--surface2);border-radius:6px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap"></div>
   </div>
 
   <!-- Running containers table -->
   <div class="sub-section">
-    <div class="sub-title">Conteneurs Autoflow</div>
-    <div id="cleanup-containers" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Chargement…</div>
+    <div class="sub-title">Autoflow containers</div>
+    <div id="cleanup-containers" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Loading…</div>
   </div>
 
   <!-- Volumes table -->
   <div class="sub-section">
-    <div class="sub-title">Volumes Autoflow</div>
-    <div id="cleanup-volumes" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Chargement…</div>
+    <div class="sub-title">Autoflow volumes</div>
+    <div id="cleanup-volumes" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Loading…</div>
   </div>
 
 </div>`;
@@ -2977,7 +3088,7 @@ async function loadCleanupStatus() {
     const ctrDiv = document.getElementById('cleanup-containers');
     if (ctrDiv) {
       if (!d.containers || d.containers.length === 0) {
-        ctrDiv.innerHTML = '<em>Aucun conteneur autoflow détecté.</em>';
+        ctrDiv.innerHTML = '<em>No Autoflow containers detected.</em>';
       } else {
         ctrDiv.innerHTML = `<table style="width:100%;border-collapse:collapse">
           <tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px 8px">Conteneur</th><th style="text-align:left;padding:4px 8px">État</th></tr>
@@ -2996,7 +3107,7 @@ async function loadCleanupStatus() {
     const volDiv = document.getElementById('cleanup-volumes');
     if (volDiv) {
       if (!d.volumes || d.volumes.length === 0) {
-        volDiv.innerHTML = '<em>Aucun volume autoflow détecté.</em>';
+        volDiv.innerHTML = '<em>No Autoflow volumes detected.</em>';
       } else {
         volDiv.innerHTML = d.volumes.map(v =>
           `<div style="padding:3px 0;font-family:monospace">📦 ${v}</div>`
@@ -3020,10 +3131,19 @@ async function runCleanup() {
     remove_env:      get('opt-env'),
   });
 
-  // Extra confirmation for destructive options
-  const destructive = get('opt-volumes') || get('opt-env');
-  if (destructive) {
-    if (!confirm('⚠️ Cette opération supprimera des données de façon irréversible.\n\nContinuer ?')) return;
+  // Explicit confirmation for every destructive option
+  const destructiveItems = [];
+  if (get('opt-volumes')) destructiveItems.push('• Remove all data volumes (DB, Redis, PKI, Gitea, Loki, MinIO…)');
+  if (get('opt-images'))  destructiveItems.push('• Delete AWX patched image (rebuild required)');
+  if (get('opt-ee'))      destructiveItems.push('• Delete EE images (ee-base, ee-security, ee-network)');
+  if (get('opt-cache'))   destructiveItems.push('• Purge entire Docker Buildx cache');
+  if (get('opt-env'))     destructiveItems.push('• DELETE .env — all secrets lost, full reconfiguration required');
+
+  if (destructiveItems.length > 0) {
+    const msg = '⚠️  The following irreversible actions will be performed:\n\n'
+      + destructiveItems.join('\n')
+      + '\n\nThis cannot be undone. Are you sure?';
+    if (!confirm(msg)) return;
   }
 
   const wrap = document.getElementById('cleanup-output-wrap');
@@ -3031,13 +3151,13 @@ async function runCleanup() {
   if (wrap) wrap.style.display = 'block';
   if (log)  log.textContent = '';
   const btn = document.getElementById('btn-run-cleanup');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Nettoyage en cours…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cleanup in progress…'; }
 
   const es = new EventSource(`/api/cleanup?${params}`);
   es.onmessage = e => {
     if (e.data === '[DONE]') {
       es.close();
-      if (btn) { btn.disabled = false; btn.textContent = '🧹 Lancer le nettoyage'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🧹 Run cleanup'; }
       loadCleanupStatus();
       return;
     }
@@ -3053,15 +3173,90 @@ async function runCleanup() {
   };
   es.onerror = () => {
     es.close();
-    if (btn) { btn.disabled = false; btn.textContent = '🧹 Lancer le nettoyage'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🧹 Run cleanup'; }
     if (log) {
       const line = document.createElement('div');
       line.style.color = 'var(--error)';
-      line.textContent = '[ERREUR] Connexion SSE perdue.';
+      line.textContent = '[ERROR] SSE connection lost.';
       log.appendChild(line);
     }
   };
 }
+
+// ── Session timeout — 30 min inactivity ────────────────────────────────────
+(function () {
+  const TIMEOUT_MS  = 30 * 60 * 1000; // 30 minutes
+  const WARN_MS     = 28 * 60 * 1000; // warn at 28 min
+  const STORAGE_KEY = 'af_last_activity';
+
+  let _warnTimer, _expireTimer;
+  let _modal = null;
+
+  function touch() {
+    localStorage.setItem(STORAGE_KEY, Date.now());
+    clearTimeout(_warnTimer);
+    clearTimeout(_expireTimer);
+    if (_modal) { _modal.remove(); _modal = null; }
+    _warnTimer   = setTimeout(showWarning,  WARN_MS);
+    _expireTimer = setTimeout(expireSession, TIMEOUT_MS);
+  }
+
+  function showWarning() {
+    if (_modal) return;
+    _modal = document.createElement('div');
+    _modal.id = 'session-warn';
+    _modal.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;' +
+      'background:var(--surface);border:1px solid var(--warning);border-radius:10px;' +
+      'padding:16px 20px;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.5)';
+    _modal.innerHTML =
+      '<div style="font-size:13px;font-weight:600;color:var(--warning);margin-bottom:6px">' +
+        '⚠ Session expiring soon</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">' +
+        'You will be signed out in 2 minutes due to inactivity.</div>' +
+      '<button onclick="document.getElementById(\'session-warn\').remove()" ' +
+        'style="padding:6px 16px;background:var(--accent);border:none;border-radius:6px;' +
+        'color:#fff;font-size:12px;font-weight:600;cursor:pointer">Stay signed in</button>';
+    _modal.querySelector('button').addEventListener('click', touch);
+    document.body.appendChild(_modal);
+  }
+
+  function expireSession() {
+    if (_modal) { _modal.remove(); _modal = null; }
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:#0a0f1e;z-index:99999;' +
+      'display:flex;align-items:center;justify-content:center;' +
+      'font-family:Inter,system-ui,sans-serif';
+    overlay.innerHTML =
+      '<div style="text-align:center;max-width:400px;padding:40px">' +
+        '<div style="width:56px;height:56px;margin:0 auto 24px;border-radius:14px;' +
+          'background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);' +
+          'display:flex;align-items:center;justify-content:center">' +
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#f87171" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>' +
+            '<line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
+        '<div style="font-size:18px;font-weight:700;color:#f0f4ff;margin-bottom:10px">' +
+          'Session expired</div>' +
+        '<div style="font-size:13px;color:#737270;margin-bottom:28px;line-height:1.6">' +
+          'Your session has been inactive for 30 minutes.<br>Please sign in again to continue.</div>' +
+        '<button onclick="window.location.reload()" ' +
+          'style="padding:10px 28px;background:#E8620A;border:none;border-radius:8px;' +
+          'color:#fff;font-size:14px;font-weight:600;cursor:pointer">Sign in again</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  }
+
+  // Reset on any user interaction
+  ['mousemove','mousedown','keydown','touchstart','scroll','click']
+    .forEach(evt => document.addEventListener(evt, touch, { passive: true }));
+
+  // Also sync across tabs via localStorage
+  window.addEventListener('storage', e => {
+    if (e.key === STORAGE_KEY) touch();
+  });
+
+  touch(); // start the timer
+})();
 </script>
 </body>
 </html>

@@ -74,7 +74,7 @@ def _ensure_ee_loaded():
     for name in ("settings", "tracing", "dedup", "rules", "parsers",
                  "awx_client", "event_store", "retry_worker", "scheduler", "main"):
         if name not in sys.modules:
-            _load_module(name, _EE / f"{name}.py", extra_paths=[_EE])
+            _load_module(name, _EE / f"{name}.py", prepend_paths=[_EE])
 
 
 def _ensure_api_loaded():

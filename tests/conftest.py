@@ -31,6 +31,10 @@ os.environ.setdefault("JWT_EXPIRE_MINUTES",     "60")
 os.environ.setdefault("NOTIFICATION_WEBHOOK_URL", "")   # override per-test
 os.environ.setdefault("NOTIFICATION_SLACK_WEBHOOK", "")
 
+# ── Deploy Wizard ─────────────────────────────────────────────────────────────
+# Must be set BEFORE wizard main.py is imported — module-level sys.exit(1) guard.
+os.environ.setdefault("WIZARD_TOKEN",  "test-wizard-token")
+
 # ── Shared ────────────────────────────────────────────────────────────────────
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("OTEL_EXPORTER_OTLP_ENDPOINT", "")  # disable tracing
