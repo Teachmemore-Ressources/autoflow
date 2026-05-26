@@ -238,6 +238,8 @@ services:
         condition: service_completed_successfully
     environment:
       <<: *awx-env
+      DOMAIN: ${DOMAIN:-localhost}
+      TRAEFIK_CERTS_DIR: ${TRAEFIK_CERTS_DIR:-/home/vagrant/autoflow/traefik/certs}
     volumes:
       - ./awx/settings.py:/etc/tower/settings.py:ro
       - ./awx/nginx.default.d.conf:/etc/nginx/default.d/awx.conf:ro
@@ -335,7 +337,7 @@ services:
       <<: *awx-env
       AWX_TASK_HOSTNAME: awx
       DOMAIN: ${DOMAIN:-localhost}
-      TRAEFIK_CERTS_DIR: /home/vagrant/autoflow/traefik/certs
+      TRAEFIK_CERTS_DIR: ${TRAEFIK_CERTS_DIR:-/home/vagrant/autoflow/traefik/certs}
       # Upstream DNS reachable from Docker bridge (not the 127.0.0.53 stub).
       # Set in .env. Leave empty in air-gapped production environments.
       EE_DNS_SERVER: ${EE_DNS_SERVER:-}
