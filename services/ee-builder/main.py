@@ -34,7 +34,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,7 @@ logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 log = logging.getLogger("ee-builder")
 
 from tracing import instrument_app, setup_tracing  # noqa: E402
+
 setup_tracing("autoflow-ee-builder")
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
@@ -261,7 +262,9 @@ def _registry_tags(ee_name: str) -> list[str]:
     Query the Gitea container registry (Docker v2 API) for available tags.
     Returns sorted list (newest dated tags first, then others).
     """
-    import urllib.request, urllib.error, base64
+    import base64
+    import urllib.error
+    import urllib.request
 
     repo  = f"{GITEA_USER}/ee-{ee_name}"
     url   = f"http://{REGISTRY}/v2/{repo}/tags/list"

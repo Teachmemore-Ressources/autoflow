@@ -21,10 +21,16 @@ RUN mkdir -p /home/autoflow/.cache/trivy \
     && chown -R autoflow:autoflow /home/autoflow/.cache
 
 # ── Python dependencies ───────────────────────────────────────────────────────
-COPY requirements.txt .
+# Build context is ./services — requirements.txt lives in the security-scanner/ sub-directory.
+COPY security-scanner/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy shared modules (security_headers, etc.) first so service code can import them.
+COPY shared/ .
+
+# Copy service source files.
+COPY security-scanner/ .
+
 RUN chown -R autoflow:autoflow /app
 
 USER autoflow

@@ -1,9 +1,7 @@
 """Unit tests for the deduplication store (services/event-engine/dedup.py)."""
 import asyncio
-import time
 
 import pytest
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -162,6 +160,7 @@ async def test_redis_ttl_expires():
 async def test_redis_fallback_on_error():
     """When Redis raises, the store falls back to the in-memory path."""
     from unittest.mock import AsyncMock, MagicMock
+
     from dedup import DedupStore
 
     # Make Redis.set raise an exception

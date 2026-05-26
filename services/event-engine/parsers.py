@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── GitHub ────────────────────────────────────────────────────────────────────
 
 def parse_github(event_type: str, payload: dict[str, Any]) -> tuple[str, str, dict]:

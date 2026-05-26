@@ -31,6 +31,22 @@ class Settings(BaseSettings):
     # ── Logging ───────────────────────────────────────────────────────────────
     log_level: str = "info"
 
+    # ── Environment ──────────────────────────────────────────────────────────
+    # Set ENV=production to enable production-only safety guards.
+    env: str = "development"
+
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    # Comma-separated list of allowed origins.
+    # Empty string → no origin allowed (safest default).
+    # "*" → all origins (development only — blocked in production).
+    cors_origins: str = ""
+    cors_allow_credentials: bool = False
+    cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE"]
+    cors_allow_headers: list[str] = ["Authorization", "Content-Type"]
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    security_headers_enabled: bool = True
+
     # ── Redis (event persistence + retry queue + dedup) ───────────────────────
     # redis://[:password@]host[:port]/db  — empty = disable persistence (fire-and-forget)
     redis_url: str = ""

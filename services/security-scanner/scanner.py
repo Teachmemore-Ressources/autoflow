@@ -20,7 +20,6 @@ import logging
 import time
 
 from prometheus_client import Counter, Gauge
-
 from settings import settings
 
 logger = logging.getLogger("scanner")

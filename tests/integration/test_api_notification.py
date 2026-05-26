@@ -16,7 +16,6 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)

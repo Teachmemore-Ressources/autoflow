@@ -13,7 +13,6 @@ import stat
 import pytest
 from dotenv import dotenv_values
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _wm():

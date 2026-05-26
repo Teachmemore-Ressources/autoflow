@@ -1,0 +1,85 @@
+Autoflow
+Copyright 2026 Armel NGANDO
+
+This product is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+=========================================================================
+THIRD-PARTY COMPONENTS
+=========================================================================
+
+This product includes software developed by third parties. The complete
+list of third-party licenses is available in THIRD_PARTY_LICENSES.md.
+
+The following components deserve special acknowledgment:
+
+AWX (24.6.1)
+  Developed by Red Hat, Inc. and the Ansible community.
+  Licensed under the Apache License, Version 2.0.
+  Source: https://github.com/ansible/awx
+  AWX is the core automation engine powering Autoflow's job orchestration.
+
+Traefik (v2.11)
+  Developed by Containous / Traefik Labs.
+  Licensed under the MIT License.
+  Source: https://github.com/traefik/traefik
+  Traefik serves as the single TLS-terminating ingress for all services.
+
+Gitea (1.23)
+  Developed by the Gitea Authors.
+  Licensed under the MIT License.
+  Source: https://github.com/go-gitea/gitea
+  Gitea provides Git hosting, OCI container registry, and CI/CD pipelines.
+
+Grafana (12.4.2)
+  Developed by Grafana Labs.
+  Licensed under the GNU Affero General Public License v3 (AGPL-3.0).
+  Source: https://github.com/grafana/grafana
+  Used unmodified via its HTTP API and embedded UI.
+
+Loki (3.4.2)
+  Developed by Grafana Labs.
+  Licensed under the GNU Affero General Public License v3 (AGPL-3.0).
+  Source: https://github.com/grafana/loki
+  Used unmodified for log aggregation via its HTTP API.
+
+Tempo (2.6.1)
+  Developed by Grafana Labs.
+  Licensed under the GNU Affero General Public License v3 (AGPL-3.0).
+  Source: https://github.com/grafana/tempo
+  Used unmodified for distributed tracing via its HTTP/gRPC API.
+
+MinIO
+  Developed by MinIO, Inc.
+  Licensed under the GNU Affero General Public License v3 (AGPL-3.0).
+  Source: https://github.com/minio/minio
+  Used unmodified as an S3-compatible object storage backend for Loki.
+
+Prometheus (v3.11.1)
+  Developed by the Prometheus Authors.
+  Licensed under the Apache License, Version 2.0.
+  Source: https://github.com/prometheus/prometheus
+
+FastAPI (0.115.5)
+  Developed by Sebastián Ramírez.
+  Licensed under the MIT License.
+  Source: https://github.com/tiangolo/fastapi
+
+PostgreSQL (15.17)
+  Developed by the PostgreSQL Global Development Group.
+  Licensed under the PostgreSQL License.
+  Source: https://www.postgresql.org/
+
+Redis (7.4.8)
+  Developed by Redis Ltd. and contributors.
+  Licensed under BSD 3-Clause License.
+  Source: https://github.com/redis/redis
+
+Restic
+  Developed by Alexander Neumann and contributors.
+  Licensed under BSD 2-Clause License.
+  Source: https://github.com/restic/restic
+
+=========================================================================

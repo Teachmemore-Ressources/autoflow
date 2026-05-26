@@ -24,7 +24,6 @@ import logging
 from dataclasses import dataclass, field
 
 import httpx
-
 from settings import settings
 
 logger = logging.getLogger("notifications")

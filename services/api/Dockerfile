@@ -5,11 +5,16 @@ RUN groupadd -r autoflow && useradd -r -g autoflow autoflow
 
 WORKDIR /app
 
-# Install dependencies before copying source (layer cache)
-COPY requirements.txt .
+# Install dependencies before copying source (layer cache).
+# Build context is ./services — requirements.txt lives in the api/ sub-directory.
+COPY api/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy shared modules (security_headers, etc.) first so service code can import them.
+COPY shared/ .
+
+# Copy service source files.
+COPY api/ .
 
 RUN chown -R autoflow:autoflow /app
 

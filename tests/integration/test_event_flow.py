@@ -18,7 +18,6 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -35,15 +34,14 @@ for _p in (_EE, _STUBS):
 
 # ── Event-engine module imports (canonical names) ─────────────────────────────
 
-from awx_client import AWXClient           # noqa: E402
-from dedup import DedupStore               # noqa: E402
+from awx_client import AWXClient  # noqa: E402
+from dedup import DedupStore  # noqa: E402
 from parsers import parse_alertmanager, parse_github  # noqa: E402
-from rules import RuleEngine               # noqa: E402
-from settings import settings              # noqa: E402
+from rules import RuleEngine  # noqa: E402
+from settings import settings  # noqa: E402
 
 # ── AWX stub ──────────────────────────────────────────────────────────────────
-
-from awx import app as _awx_stub_app       # noqa: E402  (tests/stubs/awx.py)
+from awx import app as _awx_stub_app  # noqa: E402  (tests/stubs/awx.py)
 
 
 @pytest.fixture
@@ -155,8 +153,8 @@ async def test_dispatch_core_dedup_suppresses_second_call(components, awx_stub):
 
     launches = (await awx_stub.get("/_test/launches")).json()
     dedup_launches = [
-        l for l in launches
-        if l["extra_vars"].get("event_action") == "dedup-test"
+        ln for ln in launches
+        if ln["extra_vars"].get("event_action") == "dedup-test"
     ]
     assert len(dedup_launches) == 1
 

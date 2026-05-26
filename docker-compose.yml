@@ -375,8 +375,8 @@ services:
   # ── Autoflow API (FastAPI) ───────────────────
   api:
     build:
-      context: ./services/api
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: api/Dockerfile
     container_name: autoflow_api
     restart: unless-stopped
     environment:
@@ -444,8 +444,8 @@ services:
   # Routes to AWX job templates via YAML rule engine with deduplication.
   event_engine:
     build:
-      context: ./services/event-engine
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: event-engine/Dockerfile
     container_name: autoflow_event_engine
     restart: unless-stopped
     environment:
@@ -693,8 +693,8 @@ services:
   #   stat -c '%g' /var/run/docker.sock
   security_scanner:
     build:
-      context: ./services/security-scanner
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: security-scanner/Dockerfile
       args:
         TRIVY_VERSION: "${TRIVY_VERSION:-0.63.0}"
     container_name: autoflow_security_scanner

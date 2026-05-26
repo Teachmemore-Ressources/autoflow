@@ -23,7 +23,6 @@ import time
 import httpx
 from packaging.version import InvalidVersion, Version
 from prometheus_client import Counter, Gauge
-
 from settings import settings
 
 logger = logging.getLogger("version_check")
@@ -61,7 +60,8 @@ _IMAGE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("prom/prometheus",                            "latest",   "latest",    "prometheus/prometheus"),
     ("grafana/grafana",                            "latest",   "latest",    "grafana/grafana"),
     ("prom/alertmanager",                          "latest",   "latest",    "prometheus/alertmanager"),
-    ("prometheuscommunity/postgres-exporter",      "latest",   "latest",    "prometheus-community/postgres_exporter"),
+    ("prometheuscommunity/postgres-exporter",       "latest",   "latest",
+     "prometheus-community/postgres_exporter"),
     ("oliver006/redis_exporter",                   "latest",   "latest",    "oliver006/redis_exporter"),
 ]
 

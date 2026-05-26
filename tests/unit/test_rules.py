@@ -1,17 +1,14 @@
 """Unit tests for the rule engine (services/event-engine/rules.py)."""
 import textwrap
 
-import pytest
-import yaml
-
 from rules import Rule, RuleEngine
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _engine_from_yaml(text: str, default_id: int = 99) -> RuleEngine:
     """Build a RuleEngine from an inline YAML string."""
-    import tempfile, os
+    import os
+    import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
         f.write(textwrap.dedent(text))
         path = f.name

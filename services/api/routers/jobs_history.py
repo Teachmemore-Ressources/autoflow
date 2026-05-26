@@ -11,10 +11,10 @@ POST /awx/jobs/{id}/watch        – Register a job for completion notification
 """
 from __future__ import annotations
 
+import notifications as notif
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-import notifications as notif
-from routers.auth import require_auth
+from routers.auth import require_auth, require_write_access
 
 router = APIRouter()
 
@@ -147,7 +147,7 @@ async def job_stats(request: Request):
     "/awx/jobs/{job_id}/watch",
     tags=["Jobs"],
     summary="Watch a job for completion notification",
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_write_access)],
 )
 async def watch_job(job_id: int, body: dict = {}):
     """

@@ -10,11 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import notifications
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-import notifications
-from routers.auth import require_auth
-from settings import settings
+from routers.auth import require_auth, require_write_access
 
 router = APIRouter()
 
@@ -50,7 +49,7 @@ async def get_job_template(template_id: int, request: Request):
 
 
 @router.post("/job-templates/{template_id}/launch", summary="Launch a job template",
-             dependencies=[Depends(require_auth)])
+             dependencies=[Depends(require_write_access)])
 async def launch_job_template(template_id: int, request: Request, body: dict = {}):
     """
     Launch an AWX job template.

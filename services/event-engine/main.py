@@ -47,24 +47,25 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+from awx_client import AWXClient, AWXError
+from dedup import DedupStore
+from event_store import EventStore
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from parsers import parse_alertmanager, parse_github
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, field_validator
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from retry_worker import RetryWorker
+from rules import RuleEngine
+from scheduler import EventScheduler
+from security_headers import SecurityHeadersMiddleware, parse_cors_origins
+from settings import settings
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-
-from awx_client import AWXClient, AWXError
-from dedup import DedupStore
-from event_store import EventStore
-from parsers import parse_alertmanager, parse_github
-from retry_worker import RetryWorker
-from rules import RuleEngine
-from scheduler import EventScheduler
-from settings import settings
 from tracing import instrument_app, setup_tracing
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -263,6 +264,25 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+_cors_origins = parse_cors_origins(
+    settings.cors_origins.strip(),
+    settings.env,
+    logging.getLogger("event_engine.cors"),
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
+)
+
+# ── Security headers ──────────────────────────────────────────────────────────
+if settings.security_headers_enabled:
+    app.add_middleware(SecurityHeadersMiddleware)
 
 Instrumentator().instrument(app).expose(app)
 instrument_app(app, "autoflow-event-engine")

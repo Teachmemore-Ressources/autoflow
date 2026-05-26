@@ -1,41 +1,50 @@
 """
 Autoflow PKI Service v2.0 — Security hardened
 """
-import os
-import json
-import time
-import logging
-import ipaddress
 import fcntl
+import ipaddress
+import json
+import logging
+import os
 import re
 import secrets
 import threading
+import time
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+import bcrypt
+import jwt
 import ldap3
-from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, Tls, SUBTREE
-from ldap3.core.exceptions import LDAPException, LDAPBindError, LDAPSocketOpenError
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, field_validator
-from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from cryptography import x509
-from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509 import CertificateRevocationListBuilder, RevokedCertificateBuilder
-import jwt
-import bcrypt
+from cryptography.x509 import (
+    CertificateRevocationListBuilder,
+    RevokedCertificateBuilder,
+)
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server, Tls
+from ldap3.core.exceptions import LDAPBindError, LDAPException, LDAPSocketOpenError
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
+from pydantic import BaseModel, field_validator
 from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # ── Config ───────────────────────────────────────────────────────────────────
@@ -168,6 +177,7 @@ log       = logging.getLogger("pki")
 audit_log = logging.getLogger("pki.audit")
 
 from tracing import instrument_app, setup_tracing  # noqa: E402
+
 setup_tracing("autoflow-pki")
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -289,9 +299,12 @@ def _ldap_resolve_role(groups: list, cfg: dict) -> Optional[str]:
     def _match(dn: str) -> bool:
         return bool(dn) and any(g.lower() == dn.lower() for g in groups)
 
-    if _match(cfg.get("group_admin",    "")): return "admin"
-    if _match(cfg.get("group_operator", "")): return "operator"
-    if _match(cfg.get("group_viewer",   "")): return "viewer"
+    if _match(cfg.get("group_admin",    "")):
+        return "admin"
+    if _match(cfg.get("group_operator", "")):
+        return "operator"
+    if _match(cfg.get("group_viewer",   "")):
+        return "viewer"
     return None
 
 
@@ -509,9 +522,12 @@ def update_metrics() -> None:
         else:
             active += 1
             dl = (exp - now).days
-            if dl <= 7:  exp_7  += 1
-            if dl <= 30: exp_30 += 1
-            if dl <= 90: exp_90 += 1
+            if dl <= 7:
+                exp_7  += 1
+            if dl <= 30:
+                exp_30 += 1
+            if dl <= 90:
+                exp_90 += 1
     CERTS_TOTAL.set(total)
     CERTS_ACTIVE.set(active)
     CERTS_REVOKED.set(revoked)
@@ -617,7 +633,9 @@ def _generate_crl(ca_name: str, db: dict) -> None:
             if db["certificates"].get(serial_hex, {}).get("ca_name") != ca_name:
                 continue
             try:
-                reason   = REVOCATION_REASONS.get(rev_info.get("reason", "unspecified"), x509.ReasonFlags.unspecified)
+                reason   = REVOCATION_REASONS.get(
+                    rev_info.get("reason", "unspecified"), x509.ReasonFlags.unspecified,
+                )
                 rev_date = _parse_dt(rev_info["revoked_at"])
                 revoked  = (
                     RevokedCertificateBuilder()
@@ -655,11 +673,16 @@ def _cert_status(sn: str, info: dict, db: dict, now: datetime) -> tuple[str, int
     days     = max(0, (exp - now).days)
     revoked  = sn in db["revoked_serials"]
     expired  = exp < now
-    if revoked:       status = "revoked"
-    elif expired:     status = "expired"
-    elif days <= 7:   status = "critical"
-    elif days <= 30:  status = "warning"
-    else:             status = "active"
+    if revoked:
+        status = "revoked"
+    elif expired:
+        status = "expired"
+    elif days <= 7:
+        status = "critical"
+    elif days <= 30:
+        status = "warning"
+    else:
+        status = "active"
     return status, days
 
 
@@ -768,7 +791,10 @@ def _auto_renewal_check() -> None:
         # Reuse renew logic inside a locked_db context
         with locked_db() as db2:
             old = db2["certificates"][serial]
-            domains = [s[4:] for s in old.get("sans", []) if s.startswith("DNS:") and not s[4:].startswith("*.")]
+            domains = [
+                s[4:] for s in old.get("sans", [])
+                if s.startswith("DNS:") and not s[4:].startswith("*.")
+            ]
             ips     = [s[3:] for s in old.get("sans", []) if s.startswith("IP:")]
             new_req = CertCreateRequest(
                 ca_name=old["ca_name"],
@@ -1008,7 +1034,9 @@ def _issue_cert_logic(req: CertCreateRequest, db: dict, issued_by: str) -> tuple
         .not_valid_after(now + timedelta(days=req.validity_days))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()), critical=False)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()), critical=False,
+        )
         .add_extension(
             x509.CRLDistributionPoints([
                 x509.DistributionPoint(
@@ -1054,7 +1082,10 @@ def _issue_cert_logic(req: CertCreateRequest, db: dict, issued_by: str) -> tuple
 
     cert       = builder.sign(ca_key, hashes.SHA256(), default_backend())
     serial_hex = _serial_hex(cert.serial_number)
-    exp        = cert.not_valid_after_utc if hasattr(cert, "not_valid_after_utc") else cert.not_valid_after.replace(tzinfo=timezone.utc)
+    exp        = (
+        cert.not_valid_after_utc if hasattr(cert, "not_valid_after_utc")
+        else cert.not_valid_after.replace(tzinfo=timezone.utc)
+    )
 
     _save_key(key, CERTS_DIR / f"{serial_hex}_key.pem")
     (CERTS_DIR / f"{serial_hex}_cert.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
@@ -1258,7 +1289,10 @@ def ldap_test(request: Request, user: dict = Depends(require_permission("user:ma
 
         vendor = ""
         if server.info and server.info.vendor_name:
-            vendor = str(server.info.vendor_name[0]) if isinstance(server.info.vendor_name, list) else str(server.info.vendor_name)
+            vendor = (
+                str(server.info.vendor_name[0]) if isinstance(server.info.vendor_name, list)
+                else str(server.info.vendor_name)
+            )
 
         return {
             "success":               True,
@@ -1360,7 +1394,10 @@ def create_ca(
         _save_key(key, CA_DIR / f"{req.name}_key.pem")
         (CA_DIR / f"{req.name}_cert.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
-        exp        = cert.not_valid_after_utc if hasattr(cert, "not_valid_after_utc") else cert.not_valid_after.replace(tzinfo=timezone.utc)
+        exp        = (
+            cert.not_valid_after_utc if hasattr(cert, "not_valid_after_utc")
+            else cert.not_valid_after.replace(tzinfo=timezone.utc)
+        )
         serial_hex = _serial_hex(cert.serial_number)
         db["cas"][req.name] = {
             "common_name":  req.common_name,
@@ -1452,8 +1489,10 @@ def list_certs(
     result = []
     for sn, info in db["certificates"].items():
         s, days = _cert_status(sn, info, db, now)
-        if ca     and info.get("ca_name") != ca: continue
-        if status and s != status:               continue
+        if ca     and info.get("ca_name") != ca:
+            continue
+        if status and s != status:
+            continue
         rev_info = db["revocations"].get(sn, {})
         result.append({
             **info,
@@ -1675,12 +1714,16 @@ def get_stats(user: dict = Depends(require_permission("cert:list"))):
     expired = active = exp_7 = exp_30 = exp_90 = 0
     for sn, info in db["certificates"].items():
         s, dl = _cert_status(sn, info, db, now)
-        if s == "expired":  expired += 1
+        if s == "expired":
+            expired += 1
         elif s != "revoked":
             active += 1
-            if dl <= 7:  exp_7  += 1
-            if dl <= 30: exp_30 += 1
-            if dl <= 90: exp_90 += 1
+            if dl <= 7:
+                exp_7  += 1
+            if dl <= 30:
+                exp_30 += 1
+            if dl <= 90:
+                exp_90 += 1
     return {
         "total":        total,
         "active":       active,

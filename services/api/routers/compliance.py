@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, Response
 
-from routers.auth import require_auth
+from routers.auth import require_auth, require_write_access
 
 logger = logging.getLogger("compliance")
 
@@ -114,11 +114,16 @@ def _compute_score(jobs: list[dict]) -> dict[str, Any]:
     score        = max(0, min(100, round(success_rate)))
 
     # Notation A-F
-    if   score >= 95: grade = "A"
-    elif score >= 85: grade = "B"
-    elif score >= 70: grade = "C"
-    elif score >= 55: grade = "D"
-    else:             grade = "F"
+    if score >= 95:
+        grade = "A"
+    elif score >= 85:
+        grade = "B"
+    elif score >= 70:
+        grade = "C"
+    elif score >= 55:
+        grade = "D"
+    else:
+        grade = "F"
 
     return {
         "score":        score,
@@ -208,7 +213,8 @@ async def compliance_score(
 
 _REPORT_CSS = """
 body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:0}
-.header{background:linear-gradient(135deg,#1f6feb 0%,#388bfd 100%);padding:32px 40px;display:flex;align-items:center;gap:20px}
+.header{background:linear-gradient(135deg,#1f6feb 0%,#388bfd 100%);
+padding:32px 40px;display:flex;align-items:center;gap:20px}
 .header h1{margin:0;font-size:1.8rem;font-weight:700}
 .header .subtitle{margin:4px 0 0;opacity:.8;font-size:.95rem}
 .badge{background:rgba(255,255,255,.15);border-radius:8px;padding:4px 14px;font-size:.85rem;margin-left:auto}
@@ -226,9 +232,11 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;ma
 .kpi.warn .value{color:#d29922}
 .kpi.bad .value{color:#f85149}
 .section{margin-bottom:32px}
-.section h2{font-size:1.1rem;font-weight:600;color:#58a6ff;border-bottom:1px solid #21262d;padding-bottom:8px;margin-bottom:16px}
+.section h2{font-size:1.1rem;font-weight:600;color:#58a6ff;
+border-bottom:1px solid #21262d;padding-bottom:8px;margin-bottom:16px}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
-th{background:#21262d;color:#8b949e;padding:8px 12px;text-align:left;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+th{background:#21262d;color:#8b949e;padding:8px 12px;text-align:left;
+font-weight:500;text-transform:uppercase;letter-spacing:.04em}
 td{padding:8px 12px;border-bottom:1px solid #21262d}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#161b22}
@@ -238,8 +246,11 @@ tr:hover td{background:#161b22}
 .s-canceled{background:#2d2d1a;color:#d29922}
 .s-running{background:#1a2d3d;color:#79c0ff}
 .s-pending,.s-waiting{background:#1e1e2e;color:#8b949e}
-.footer{text-align:center;color:#8b949e;font-size:.75rem;padding:24px;border-top:1px solid #21262d;margin-top:32px}
-.score-circle{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;margin:0 auto 8px;border:3px solid currentColor}
+.footer{text-align:center;color:#8b949e;font-size:.75rem;
+padding:24px;border-top:1px solid #21262d;margin-top:32px}
+.score-circle{width:80px;height:80px;border-radius:50%;display:flex;
+align-items:center;justify-content:center;font-size:1.8rem;
+font-weight:700;margin:0 auto 8px;border:3px solid currentColor}
 """
 
 
@@ -259,7 +270,8 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
     recent_jobs = jobs[:50]
 
     def status_badge(st: str) -> str:
-        cls = f"s-{st}" if st in ("successful","failed","error","canceled","running","pending","waiting") else ""
+        _valid = {"successful", "failed", "error", "canceled", "running", "pending", "waiting"}
+        cls = f"s-{st}" if st in _valid else ""
         return f'<span class="badge-status {cls}">{st}</span>'
 
     # Tableau des jobs récents
@@ -297,14 +309,21 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
         <div class="section">
           <h2>⚠️ Jobs en échec ({len(failed_jobs)})</h2>
           <table>
-            <tr><th>#</th><th>Template</th><th>Statut</th><th>Démarré</th><th>Durée</th><th>Lancé par</th></tr>
+            <tr><th>#</th><th>Template</th><th>Statut</th>
+            <th>Démarré</th><th>Durée</th><th>Lancé par</th></tr>
             {rows_failed}
           </table>
         </div>"""
 
     # KPIs additionnels
-    success_kpi_cls  = "ok" if score_data["success_rate"] >= 95 else ("warn" if score_data["success_rate"] >= 70 else "bad")
-    failure_kpi_cls  = "ok" if score_data["failure_rate"] < 5  else ("warn" if score_data["failure_rate"] < 15 else "bad")
+    success_kpi_cls = (
+        "ok" if score_data["success_rate"] >= 95
+        else ("warn" if score_data["success_rate"] >= 70 else "bad")
+    )
+    failure_kpi_cls = (
+        "ok" if score_data["failure_rate"] < 5
+        else ("warn" if score_data["failure_rate"] < 15 else "bad")
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
@@ -358,8 +377,9 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
     <div class="section">
       <h2>📋 Historique récent (50 derniers jobs)</h2>
       <table>
-        <tr><th>#</th><th>Template</th><th>Statut</th><th>Type</th><th>Démarré</th><th>Durée</th><th>Lancé par</th></tr>
-        {rows_recent if rows_recent else '<tr><td colspan="7" style="text-align:center;color:#8b949e">Aucun job sur la période</td></tr>'}
+        <tr><th>#</th><th>Template</th><th>Statut</th><th>Type</th>
+        <th>Démarré</th><th>Durée</th><th>Lancé par</th></tr>
+        {rows_recent if rows_recent else '<tr><td colspan="7">Aucun job sur la période</td></tr>'}
       </table>
     </div>
 
@@ -447,7 +467,7 @@ async def compliance_report_latest(request: Request):
 @router.post(
     "/report/generate",
     summary="Trigger immediate compliance report generation",
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_write_access)],
 )
 async def generate_compliance_report(request: Request):
     """
@@ -459,6 +479,6 @@ async def generate_compliance_report(request: Request):
     await _generate_and_cache(request.app.state.http)
     return {
         "status":       "generated",
-        "report_url":   "/compliance/report/latest",
+        "report_url":   "/api/v1/compliance/report/latest",
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

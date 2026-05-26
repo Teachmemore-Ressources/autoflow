@@ -6,7 +6,8 @@ Each field maps to one .env variable.
 DOCS_BASE = "http://localhost:8001"
 
 SECTIONS = [
-    {"id": "system",         "label": "System",           "desc": "System user and sudo password for privileged operations."},
+    {"id": "system",         "label": "System",
+     "desc": "System user and sudo password for privileged operations."},
     {"id": "infrastructure", "label": "Infrastructure",   "desc": "Domain, ports and network topology"},
     {"id": "postgresql",     "label": "PostgreSQL",       "desc": "Main database credentials"},
     {"id": "redis",          "label": "Redis",            "desc": "Cache / queue credentials"},
@@ -15,7 +16,8 @@ SECTIONS = [
     {"id": "api",            "label": "Autoflow API",     "desc": "REST API, JWT and rate limiting"},
     {"id": "monitoring",     "label": "Monitoring",       "desc": "Grafana, Prometheus and alerting",
      "doc_url": f"{DOCS_BASE}/configuration/monitoring/"},
-    {"id": "minio",          "label": "MinIO",            "desc": "S3-compatible object storage — backend de stockage Loki (logs)"},
+    {"id": "minio",          "label": "MinIO",
+     "desc": "S3-compatible object storage — Loki log storage backend"},
     {"id": "event_engine",   "label": "Event Engine",     "desc": "Webhooks, notifications and job routing",
      "doc_url": f"{DOCS_BASE}/configuration/event-engine/"},
     {"id": "gitea",          "label": "Gitea",            "desc": "Self-hosted Git service and registry",
@@ -23,9 +25,14 @@ SECTIONS = [
     {"id": "pki",            "label": "PKI",              "desc": "Internal certificate authority",
      "doc_url": f"{DOCS_BASE}/configuration/tls-pki/"},
     {"id": "advanced",       "label": "Advanced",         "desc": "Intervals, log levels and system tuning"},
-    {"id": "backup",         "label": "Disaster Recovery", "desc": "Restic-based encrypted backups: remote push, GFS retention, cron scheduling and smoke-test restore.",
+    {"id": "backup",         "label": "Disaster Recovery",
+     "desc": "Restic-based encrypted backups: remote push, GFS retention, cron and smoke-test restore.",
      "doc_url": f"{DOCS_BASE}/configuration/backup/"},
-    {"id": "compliance",     "label": "Compliance & Audit", "desc": "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0.",
+    {"id": "compliance",     "label": "Compliance & Audit",
+     "desc": (
+         "On-demand CVE→framework mapping: NIST SP 800-53, CIS Controls v8, "
+         "SOC2 TSC, ISO 27001:2022, PCI-DSS v4.0."
+     ),
      "doc_url": f"{DOCS_BASE}/configuration/security-scanner/"},
 ]
 
@@ -44,7 +51,10 @@ FIELDS = [
         "type": "password", "sensitive": True,
         "default": "",
         "placeholder": "••••••••",
-        "description": "Sudo password for the user above — used for privileged operations (Docker CA, /etc/hosts, daemon restart). Never transmitted outside this host.",
+        "description": (
+            "Sudo password for the user above — used for privileged operations "
+            "(Docker CA, /etc/hosts, daemon restart). Never transmitted outside this host."
+        ),
     },
 
     # ── Infrastructure ────────────────────────────────────────────
@@ -126,12 +136,19 @@ FIELDS = [
         "type": "text", "wide": True, "default": "*",
         "placeholder": "awx.example.com,localhost,awxweb",
         "derived": True,
-        "description": "Django ALLOWED_HOSTS — comma-separated list of hostnames AWX will respond to. Auto-derived from Domain. Use '*' to allow all (dev only). In production set the exact public hostname to prevent HTTP Host-header attacks.",
+        "description": (
+            "Django ALLOWED_HOSTS — comma-separated list of hostnames AWX will respond to. "
+            "Auto-derived from Domain. Use '*' to allow all (dev only). "
+            "In production set the exact public hostname to prevent HTTP Host-header attacks."
+        ),
     },
     {
         "key": "AWX_TOKEN", "label": "API Token", "section": "awx",
         "type": "password",
-        "description": "AWX API token (create in AWX UI after first start: User → Tokens → Add). Leave empty for initial setup.",
+        "description": (
+            "AWX API token (create in AWX UI after first start: User → Tokens → Add). "
+            "Leave empty for initial setup."
+        ),
     },
     {
         "key": "AWX_JOB_TEMPLATE_ID", "label": "Default Job Template ID", "section": "awx",
@@ -202,35 +219,50 @@ FIELDS = [
     {
         "key": "MONITORING_ADMIN_PASSWORD", "label": "BasicAuth Password", "section": "monitoring",
         "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
-        "description": "Password for Prometheus/Alertmanager BasicAuth — auto-hashed to traefik/dynamic/monitoring_users",
+        "description": (
+            "Password for Prometheus/Alertmanager BasicAuth — "
+            "auto-hashed to traefik/dynamic/monitoring_users"
+        ),
     },
     {
         "key": "LOKI_RETENTION", "label": "Loki Log Retention", "section": "monitoring",
         "type": "text", "default": "720h",
         "placeholder": "720h",
-        "description": "Durée de rétention des logs dans Loki (ex: 720h = 30j, 2160h = 90j, 8760h = 1an). Le compactor supprime les chunks MinIO au-delà de cette période.",
+        "description": (
+            "Loki log retention period (e.g. 720h = 30d, 2160h = 90d, 8760h = 1y). "
+            "The compactor removes MinIO chunks beyond this period."
+        ),
     },
 
     # ── MinIO ──────────────────────────────────────────────────────
     {
         "key": "MINIO_ROOT_USER", "label": "Root Username", "section": "minio",
         "type": "text", "default": "minioadmin", "required": True,
-        "description": "Compte root MinIO — accès console et administration. Modifiable après démarrage (MinIO relit l'env au redémarrage).",
+        "description": (
+            "MinIO root account — console access and administration. "
+            "Can be changed after startup (MinIO re-reads env on restart)."
+        ),
     },
     {
         "key": "MINIO_ROOT_PASSWORD", "label": "Root Password", "section": "minio",
         "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
-        "description": "Mot de passe root MinIO — minimum 8 caractères. Modifiable : redémarrer minio après changement.",
+        "description": "MinIO root password — minimum 8 characters. To change: restart minio after updating.",
     },
     {
         "key": "LOKI_S3_ACCESS_KEY", "label": "Loki S3 Access Key", "section": "minio",
         "type": "text", "default": "loki",
-        "description": "Identifiant du compte MinIO dédié à Loki (créé par minio_init au premier démarrage). Changer après setup nécessite une intervention manuelle via mc.",
+        "description": (
+            "MinIO account dedicated to Loki (created by minio_init on first start). "
+            "Changing after setup requires manual intervention via mc."
+        ),
     },
     {
         "key": "LOKI_S3_SECRET_KEY", "label": "Loki S3 Secret Key", "section": "minio",
         "type": "password", "required": True, "auto_generate": True, "generate_type": "hex32",
-        "description": "Mot de passe du compte Loki dans MinIO. Changer après setup : mettre à jour via mc admin user, puis redémarrer loki.",
+        "description": (
+            "Loki account password in MinIO. "
+            "To change after setup: update via mc admin user, then restart loki."
+        ),
     },
 
     # ── Event Engine ───────────────────────────────────────────────
@@ -369,31 +401,44 @@ FIELDS = [
     {
         "key": "BACKUP_RESTIC_PASSWORD", "label": "Restic Repository Password", "section": "backup",
         "type": "password", "required": True, "auto_generate": True, "generate_type": "urlsafe32",
-        "description": "Encrypts the entire backup repository (AES-256). Generate once — losing this password means losing access to all backups. Store it in a password manager separate from the server.",
+        "description": (
+            "Encrypts the entire backup repository (AES-256). Generate once — losing this password "
+            "means losing access to all backups. Store it in a password manager separate from the server."
+        ),
     },
     {
         "key": "BACKUP_BACKEND", "label": "Storage Backend", "section": "backup",
         "type": "select", "default": "local",
         "options": ["local", "sftp", "s3", "b2"],
-        "description": "Where to push backups: local (same machine — unsafe for DR), sftp (remote SSH server), s3 (AWS S3, MinIO, Wasabi, Scaleway, OVH), b2 (Backblaze B2).",
+        "description": (
+            "Where to push backups: local (same machine — unsafe for DR), sftp (remote SSH server), "
+            "s3 (AWS S3, MinIO, Wasabi, Scaleway, OVH), b2 (Backblaze B2)."
+        ),
     },
     {
         "key": "BACKUP_LOCAL_PATH", "label": "Local / SFTP Repository Path", "section": "backup",
         "type": "text", "default": "/var/backups/autoflow/restic",
         "placeholder": "/var/backups/autoflow  or  sftp://user@host:22/backups/autoflow",
-        "description": "Local backend: absolute path on this host. SFTP backend: sftp://user@host:port/path (e.g. sftp://backup@192.168.1.10:22/backups/autoflow).",
+        "description": (
+            "Local backend: absolute path on this host. "
+            "SFTP backend: sftp://user@host:port/path (e.g. sftp://backup@192.168.1.10:22/backups/autoflow)."
+        ),
     },
     {
         "key": "BACKUP_S3_ENDPOINT", "label": "S3 Endpoint URL", "section": "backup",
         "type": "text",
         "placeholder": "https://s3.wasabisys.com  (empty = AWS S3)",
-        "description": "S3-compatible API endpoint. Leave empty for AWS S3. Examples: http://minio:9000 (MinIO), https://s3.wasabisys.com (Wasabi), https://s3.fr-par.scw.cloud (Scaleway Paris).",
+        "description": (
+            "S3-compatible API endpoint. Leave empty for AWS S3. "
+            "Examples: http://minio:9000 (MinIO), https://s3.wasabisys.com (Wasabi), "
+            "https://s3.fr-par.scw.cloud (Scaleway Paris)."
+        ),
     },
     {
         "key": "BACKUP_S3_BUCKET", "label": "S3 / B2 Bucket Name", "section": "backup",
         "type": "text",
         "placeholder": "autoflow-backup",
-        "description": "Bucket name for S3-compatible backends (AWS S3, MinIO, Wasabi, Scaleway) and Backblaze B2.",
+        "description": "Bucket name for S3-compatible backends (AWS S3, MinIO, Wasabi, Scaleway) and B2.",
     },
     {
         "key": "BACKUP_S3_ACCESS_KEY", "label": "S3 Access Key / B2 Account ID", "section": "backup",
@@ -418,7 +463,7 @@ FIELDS = [
     {
         "key": "BACKUP_RETENTION_MONTHLY", "label": "Keep Monthly Snapshots", "section": "backup",
         "type": "number", "default": "12",
-        "description": "GFS retention — keep the last N monthly snapshots (12 = one year of monthly backups).",
+        "description": "GFS retention — keep the last N monthly snapshots (12 = one year).",
     },
     {
         "key": "BACKUP_RETENTION_YEARLY", "label": "Keep Yearly Snapshots", "section": "backup",
@@ -429,17 +474,26 @@ FIELDS = [
         "key": "BACKUP_CRON", "label": "Backup Schedule (cron)", "section": "backup",
         "type": "text", "default": "0 2 * * *",
         "placeholder": "0 2 * * *",
-        "description": "Cron expression for automated backups. Default: 2:00 AM daily. Use crontab.guru to build expressions. Click 'Install cron' in the DR section after saving.",
+        "description": (
+            "Cron expression for automated backups. Default: 2:00 AM daily. "
+            "Use crontab.guru to build expressions. Click 'Install cron' in the DR section after saving."
+        ),
     },
     {
         "key": "BACKUP_RTO_HOURS", "label": "RTO Target (hours)", "section": "backup",
         "type": "number", "default": "4",
-        "description": "Recovery Time Objective — maximum acceptable downtime before service is restored. Document your team's SLA here.",
+        "description": (
+            "Recovery Time Objective — maximum acceptable downtime before service is restored. "
+            "Document your team's SLA here."
+        ),
     },
     {
         "key": "BACKUP_RPO_HOURS", "label": "RPO Target (hours)", "section": "backup",
         "type": "number", "default": "24",
-        "description": "Recovery Point Objective — maximum acceptable data loss window. Should match your backup frequency (daily cron = 24h RPO).",
+        "description": (
+            "Recovery Point Objective — maximum acceptable data loss window. "
+            "Should match your backup frequency (daily cron = 24h RPO)."
+        ),
     },
 
     # ── Compliance & Audit ─────────────────────────────────────────
@@ -448,7 +502,11 @@ FIELDS = [
         "type": "password", "sensitive": True,
         "auto_generate": True, "generate_type": "hex32",
         "placeholder": "auto-generated",
-        "description": "Bearer token required to call the security-scanner compliance endpoints. Auto-generated — copy the value into COMPLIANCE_ADMIN_TOKEN in the scanner's environment. Leave empty to disable auth (not recommended).",
+        "description": (
+            "Bearer token required to call the security-scanner compliance endpoints. "
+            "Auto-generated — copy the value into COMPLIANCE_ADMIN_TOKEN in the scanner's environment. "
+            "Leave empty to disable auth (not recommended)."
+        ),
     },
 
     # ── Advanced ───────────────────────────────────────────────────
@@ -474,9 +532,12 @@ FIELDS = [
         "type": "heading",
     },
     {
-        "key": "EE_DEFAULT_VERSION", "label": "Tag par défaut", "section": "execution_envs",
+        "key": "EE_DEFAULT_VERSION", "label": "Default Tag", "section": "execution_envs",
         "type": "text", "default": "latest",
-        "description": "Tag Docker appliqué aux images EE buildées (ex: latest, 1.0.0). Doit correspondre au tag configuré dans AWX.",
+        "description": (
+            "Docker tag applied to built EE images (e.g. latest, 1.0.0). "
+            "Must match the tag configured in AWX."
+        ),
     },
     {
         "key": "_ee_heading_build", "label": "Build local (make ee-build-push)", "section": "execution_envs",
@@ -485,16 +546,20 @@ FIELDS = [
     {
         "key": "BUILD_PYCMD", "label": "Python build command", "section": "execution_envs",
         "type": "text", "default": "/usr/bin/python3.12",
-        "description": "Chemin Python utilisé par ansible-builder pour le build des EE.",
+        "description": "Python path used by ansible-builder for EE builds.",
     },
     {
-        "key": "_ee_heading_registry", "label": "Registry — Gitea Container Registry", "section": "execution_envs",
+        "key": "_ee_heading_registry", "label": "Registry — Gitea Container Registry",
+        "section": "execution_envs",
         "type": "heading",
     },
     {
         "key": "_ee_registry_info", "label": "", "section": "execution_envs",
         "type": "info",
-        "description": "Les tokens registry (GITEA_REGISTRY_TOKEN, GITEA_WEBHOOK_SECRET) sont configurés dans la section Gitea. Le CA Gitea doit être trusté sur l'hôte avant de builder : make docker-trust-ca",
+        "description": (
+            "Registry tokens (GITEA_REGISTRY_TOKEN, GITEA_WEBHOOK_SECRET) are configured in Gitea section. "
+            "Gitea CA must be trusted before pushing: make docker-trust-ca"
+        ),
     },
     # ── Advanced ──────────────────────────────────────────────────
     {

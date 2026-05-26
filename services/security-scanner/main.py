@@ -15,23 +15,21 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
+import scanner
+from compliance import REPORTS_DIR, run_report
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from security_headers import SecurityHeadersMiddleware, parse_cors_origins
+from settings import settings
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-
-import scanner
-from compliance import REPORTS_DIR, run_report
-from version_check import VersionCheckLoop
-from settings import settings
 from tracing import instrument_app, setup_tracing
-
+from version_check import VersionCheckLoop
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -87,14 +85,23 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+_cors_origins = parse_cors_origins(
+    settings.cors_origins.strip(),
+    settings.env,
+    logging.getLogger("security_scanner.cors"),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
+
+# ── Security headers ──────────────────────────────────────────────────────────
+if settings.security_headers_enabled:
+    app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Prometheus HTTP instrumentation ───────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)

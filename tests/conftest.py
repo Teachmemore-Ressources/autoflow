@@ -26,7 +26,9 @@ os.environ.setdefault("AWX_ADMIN_USER",         "admin")
 os.environ.setdefault("AWX_ADMIN_PASSWORD",     "test-awx-password")
 os.environ.setdefault("JOB_WATCHER_INTERVAL",   "1")    # 1s for fast notification tests
 os.environ.setdefault("AWX_METRICS_INTERVAL",   "0")    # disabled
-os.environ.setdefault("CORS_ORIGINS",           "*")
+os.environ.setdefault("CORS_ORIGINS",           "http://testserver")
+os.environ.setdefault("ENV",                    "development")
+os.environ.setdefault("SECURITY_HEADERS_ENABLED", "true")
 os.environ.setdefault("JWT_EXPIRE_MINUTES",     "60")
 os.environ.setdefault("NOTIFICATION_WEBHOOK_URL", "")   # override per-test
 os.environ.setdefault("NOTIFICATION_SLACK_WEBHOOK", "")

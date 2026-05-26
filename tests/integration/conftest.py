@@ -21,7 +21,6 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -29,10 +28,15 @@ from httpx import ASGITransport, AsyncClient
 
 # ── Repo paths ────────────────────────────────────────────────────────────────
 
-_REPO  = Path(__file__).parent.parent.parent
-_EE    = _REPO / "services" / "event-engine"
-_API   = _REPO / "services" / "api"
-_STUBS = _REPO / "tests" / "stubs"
+_REPO   = Path(__file__).parent.parent.parent
+_EE     = _REPO / "services" / "event-engine"
+_API    = _REPO / "services" / "api"
+_SHARED = _REPO / "services" / "shared"
+_STUBS  = _REPO / "tests" / "stubs"
+
+# Shared modules (security_headers, etc.) must be importable from service modules
+if str(_SHARED) not in sys.path:
+    sys.path.insert(0, str(_SHARED))
 
 
 def _load_module(alias: str, file_path: Path, prepend_paths: list[Path] | None = None):

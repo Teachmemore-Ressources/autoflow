@@ -24,7 +24,6 @@ import asyncio
 
 import pytest
 
-
 # ── Smoke tests ───────────────────────────────────────────────────────────────
 
 @pytest.mark.e2e
@@ -122,7 +121,7 @@ async def test_generic_event_creates_awx_job(ee, awx_stub):
 
     launches = (await awx_stub.get("/_test/launches")).json()
     assert any(
-        l["extra_vars"].get("event_action") == "e2e-test" for l in launches
+        ln["extra_vars"].get("event_action") == "e2e-test" for ln in launches
     )
 
 
@@ -144,8 +143,8 @@ async def test_duplicate_event_suppressed(ee, awx_stub):
 
     launches = (await awx_stub.get("/_test/launches")).json()
     dedup_launches = [
-        l for l in launches
-        if l["extra_vars"].get("event_action") == "dedup-e2e"
+        ln for ln in launches
+        if ln["extra_vars"].get("event_action") == "dedup-e2e"
     ]
     assert len(dedup_launches) == 1
 
@@ -178,7 +177,7 @@ async def test_job_completion_sends_notification(awx_stub, callback):
     async with AsyncClient(base_url=api_url, timeout=15.0) as api:
         # Authenticate
         token_resp = await api.post(
-            "/auth/token",
+            "/api/v1/auth/token",
             json={"username": os.getenv("API_USERNAME", "admin"),
                   "password": os.getenv("API_SECRET_KEY", "test-api-secret-32chars-long-xxxxxxxx")},
         )
@@ -188,7 +187,7 @@ async def test_job_completion_sends_notification(awx_stub, callback):
 
         # Launch a job via the API with our callback URL
         launch_resp = await api.post(
-            "/awx/job-templates/1/launch",
+            "/api/v1/awx/job-templates/1/launch",
             json={
                 "extra_vars": {"e2e": True},
                 "callback_url": callback_receive_url,

@@ -32,8 +32,21 @@ class Settings(BaseSettings):
     # ── Rate limiting (slowapi) ───────────────────────────────────────────────
     rate_limit: str = "60/minute"
 
+    # ── Environment ──────────────────────────────────────────────────────────
+    # Set ENV=production to enable production-only safety guards.
+    env: str = "development"
+
     # ── CORS ─────────────────────────────────────────────────────────────────
-    cors_origins: str = "*"
+    # Comma-separated list of allowed origins.
+    # Empty string → no origin allowed (safest default).
+    # "*" → all origins (development only — blocked in production).
+    cors_origins: str = ""
+    cors_allow_credentials: bool = False
+    cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE"]
+    cors_allow_headers: list[str] = ["Authorization", "Content-Type"]
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    security_headers_enabled: bool = True
 
     # ── Compliance ────────────────────────────────────────────────────────────
     # Bearer token required for all /compliance/* endpoints (leave empty to

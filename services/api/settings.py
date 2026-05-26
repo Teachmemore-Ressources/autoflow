@@ -26,9 +26,23 @@ class Settings(BaseSettings):
     # ── Logging ───────────────────────────────────────────────────────────────
     log_level: str = "info"
 
+    # ── Environment ──────────────────────────────────────────────────────────
+    # Set ENV=production to enable production-only safety guards
+    # (e.g. raises an error if CORS_ORIGINS is still "*").
+    env: str = "development"
+
     # ── CORS ─────────────────────────────────────────────────────────────────
-    # Comma-separated origins. Use "*" for dev, restrict in production.
-    cors_origins: str = "*"
+    # Comma-separated list of allowed origins.
+    # Empty string → no origin allowed (safest default).
+    # "*" → all origins (development only — blocked in production).
+    cors_origins: str = ""
+    cors_allow_credentials: bool = False
+    cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE"]
+    cors_allow_headers: list[str] = ["Authorization", "Content-Type"]
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    # Set to false to disable in local development (e.g. when accessing via HTTP).
+    security_headers_enabled: bool = True
 
     # ── Rate limiting (slowapi) ───────────────────────────────────────────────
     rate_limit: str = "100/minute"
@@ -36,6 +50,19 @@ class Settings(BaseSettings):
     # ── AWX job metrics ───────────────────────────────────────────────────────
     # Background polling interval in seconds (0 = disabled)
     awx_metrics_interval: int = 60
+
+    # ── User store (RBAC) ────────────────────────────────────────────────────
+    # Path to the JSON file containing user accounts and hashed passwords.
+    # On first boot, a default admin user is created (password = API_SECRET_KEY).
+    # Managed via POST/DELETE /api/v1/users  (admin only).
+    users_file: str = "/etc/autoflow/users.json"
+
+    # ── JWT Revocation (optional Redis blacklist) ─────────────────────────────
+    # When set, issued tokens carry a `jti` claim and POST /api/v1/auth/logout
+    # blacklists the jti in Redis with TTL = remaining token lifetime.
+    # Leave empty to disable server-side revocation (logout still works
+    # client-side — the token is simply discarded by the caller).
+    redis_url: str = ""
 
     # ── Notifications ─────────────────────────────────────────────────────────
     # Generic POST webhook called when a watched job reaches terminal status

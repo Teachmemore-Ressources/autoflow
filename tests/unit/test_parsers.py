@@ -1,8 +1,6 @@
 """Unit tests for webhook parsers (services/event-engine/parsers.py)."""
-import pytest
 
 from parsers import parse_alertmanager, parse_github
-
 
 # ── GitHub — push ─────────────────────────────────────────────────────────────
 

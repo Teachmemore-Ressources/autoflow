@@ -22,7 +22,7 @@ import asyncio
 import logging
 from typing import Any, Awaitable, Callable
 
-from event_store import EventStore, MAX_CONCURRENT, POLL_INTERVAL
+from event_store import MAX_CONCURRENT, POLL_INTERVAL, EventStore
 
 logger = logging.getLogger(__name__)
 

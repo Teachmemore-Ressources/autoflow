@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-
 EXPECTED_CHECK_IDS = {"docker", "compose", "ram", "disk", "dns"}
 
 

@@ -80,7 +80,13 @@ def wizard_paths(tmp_path, monkeypatch):
     MONITORING_USERS            — bcrypt hash file (written by save_config)
     GITEA_BEARER_TOKEN_FILE     — Prometheus bearer token (written by save_config)
     AUDIT_LOG                   — append-only JSON audit trail
+
+    Patches both wizard_main (backward compat) and core.env / routers.config
+    (where the functions actually live after the package refactor).
     """
+    import core.auth as core_auth
+    import core.env as core_env
+    import routers.config as routers_config
     import wizard_main as wm
 
     env_file    = tmp_path / ".env"
@@ -89,11 +95,17 @@ def wizard_paths(tmp_path, monkeypatch):
     gitea_tok   = tmp_path / "gitea_token"
     audit_log   = tmp_path / "audit.log"
 
-    monkeypatch.setattr(wm, "ENV_FILE",                env_file)
-    monkeypatch.setattr(wm, "ENV_EXAMPLE_FILE",        env_example)
-    monkeypatch.setattr(wm, "MONITORING_USERS",        mon_users)
-    monkeypatch.setattr(wm, "GITEA_BEARER_TOKEN_FILE", gitea_tok)
-    monkeypatch.setattr(wm, "AUDIT_LOG",               audit_log)
+    # Patch core.env (source of truth) and all modules that imported from it
+    for mod in (wm, core_env, routers_config):
+        monkeypatch.setattr(mod, "ENV_FILE",         env_file)
+        monkeypatch.setattr(mod, "ENV_EXAMPLE_FILE", env_example)
+
+    for mod in (wm, core_env, routers_config):
+        monkeypatch.setattr(mod, "MONITORING_USERS",        mon_users)
+        monkeypatch.setattr(mod, "GITEA_BEARER_TOKEN_FILE", gitea_tok)
+
+    for mod in (wm, core_env, core_auth):
+        monkeypatch.setattr(mod, "AUDIT_LOG", audit_log)
 
     return {
         "env":         env_file,

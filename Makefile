@@ -39,7 +39,9 @@ GITEA_REGISTRY ?= git.$(_DOMAIN)/$(GITEA_USER)
         ee-deps docker-trust-ca gitea-init-network gitea-init-runner \
         secrets-encrypt secrets-decrypt secrets-edit secrets-check \
         awx-build awx-push awx-pull awx-tag images-update \
+        lint lint-fix \
         test test-unit test-integration test-e2e test-stack-up test-stack-down \
+        coverage security-check \
         cli-install cli-check docs
 
 help:           ## Show this help message
@@ -79,6 +81,9 @@ build:          ## Rebuild images (without cache)
 
 pull:           ## Pull latest upstream images
 	$(COMPOSE) pull
+
+rolling-update: ## Update the stack service-by-service with health-check gating  (e.g. make rolling-update ARGS="--dry-run")
+	@./scripts/rolling-update $(ARGS)
 
 # ── Observability ────────────────────────────────────────────
 
@@ -313,17 +318,40 @@ awx-pull:        ## Pull AWX image from Gitea registry (faster than rebuilding)
 TEST_VENV := .test-venv
 _PYTEST   := $(TEST_VENV)/bin/pytest
 
+# ── Linting ─────────────────────────────────────────────────────────────────
+
+LINT_VENV := .lint-venv
+_RUFF     := $(LINT_VENV)/bin/ruff
+_BANDIT   := $(LINT_VENV)/bin/bandit
+
+$(LINT_VENV):
+	python3 -m venv $(LINT_VENV)
+	$(LINT_VENV)/bin/pip install --quiet ruff bandit[toml]
+
+lint: $(LINT_VENV)  ## Check code style (ruff check + ruff format --check)
+	$(_RUFF) check services/ tests/
+	$(_RUFF) format --check services/ tests/
+
+lint-fix: $(LINT_VENV)  ## Auto-fix style issues and reformat (ruff --fix + ruff format)
+	$(_RUFF) check --fix services/ tests/
+	$(_RUFF) format services/ tests/
+
+security-check: $(LINT_VENV)  ## Run bandit static security analysis (MEDIUM+ severity)
+	$(_BANDIT) -r services/ -ll \
+		-x services/pki,services/deploy-wizard \
+		--format txt
+
 $(TEST_VENV):
 	python3 -m venv $(TEST_VENV)
 	$(TEST_VENV)/bin/pip install --quiet -r tests/requirements.txt
 
 test-deps: $(TEST_VENV)  ## Install Python test dependencies into .test-venv
 
-test-unit: $(TEST_VENV)  ## Run unit tests (parsers, rules, dedup)
+test-unit: $(TEST_VENV)  ## Run unit tests (security headers, CORS, parsers, rules, dedup)
 	$(TEST_VENV)/bin/pip install --quiet \
+		-r services/api/requirements.txt \
 		-r services/event-engine/requirements.txt 2>/dev/null || true
-	cd $(shell pwd) && $(_PYTEST) -m "not integration and not e2e" \
-		tests/unit/ -v --tb=short
+	cd $(shell pwd) && $(_PYTEST) tests/unit/ -v --tb=short
 
 test-integration: $(TEST_VENV)  ## Run integration tests (in-process stubs, no Docker)
 	$(TEST_VENV)/bin/pip install --quiet \
@@ -333,6 +361,20 @@ test-integration: $(TEST_VENV)  ## Run integration tests (in-process stubs, no D
 		tests/integration/ -v --tb=short
 
 test: test-unit test-integration  ## Run unit + integration tests (default CI target)
+
+coverage: $(TEST_VENV)  ## Run tests and generate HTML coverage report (opens in ./htmlcov/)
+	$(TEST_VENV)/bin/pip install --quiet \
+		-r services/api/requirements.txt \
+		-r services/event-engine/requirements.txt 2>/dev/null || true
+	cd $(shell pwd) && $(_PYTEST) tests/unit/ tests/integration/ -m "not e2e" \
+		--cov=services/shared \
+		--cov=services/event-engine \
+		--cov=services/api \
+		--cov-report=term-missing \
+		--cov-report=html \
+		--cov-fail-under=70
+	@echo ""
+	@echo "  Coverage report: htmlcov/index.html"
 
 test-stack-up:  ## Start the test stack (AWX stub + callback stub + services)
 	$(COMPOSE) -f docker-compose.yml -f docker-compose.test.yml \

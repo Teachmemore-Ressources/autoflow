@@ -1,0 +1,443 @@
+#!/usr/bin/env python3
+"""
+Autoflow Rolling Update
+=======================
+Update the Autoflow stack service-by-service with health-check gating
+and automatic rollback on failure.
+
+Each service is updated in dependency order:
+  pull new image → recreate container → wait for healthy → proceed to next.
+
+If a service fails its health check the old image is restored and the
+update halts — subsequent services are left untouched.
+
+Usage:
+  ./scripts/rolling-update [OPTIONS]
+
+Options:
+  --plan              Print the update order and exit (no changes)
+  --dry-run           Show every command without executing it
+  --services SVC,...  Only update these services (comma-separated)
+  --skip SVC,...      Skip these services
+  --timeout N         Health-check timeout per service in seconds (default: 120)
+  --no-pull           Skip docker compose pull (recreate with current images)
+  -y / --yes          Skip the confirmation prompt
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# ── ANSI colour helpers ────────────────────────────────────────────────────────
+
+_TTY = sys.stdout.isatty()
+
+
+def _c(code: str, text: str) -> str:
+    return f"{code}{text}\033[0m" if _TTY else text
+
+
+def ok(msg: str)   -> None: print(_c("\033[32m", f"  ✓ {msg}"))
+def warn(msg: str) -> None: print(_c("\033[33m", f"  ⚠ {msg}"))
+def err(msg: str)  -> None: print(_c("\033[31m", f"  ✗ {msg}"), file=sys.stderr)
+def info(msg: str) -> None: print(_c("\033[36m", f"  → {msg}"))
+def dim(msg: str)  -> None: print(_c("\033[2m",  f"    {msg}"))
+def hdr(msg: str)  -> None: print("\n" + _c("\033[1m", msg))
+
+# ── Stack layout ───────────────────────────────────────────────────────────────
+
+ROOT     = Path(__file__).resolve().parent.parent
+ENV_FILE = ROOT / ".env"
+
+# One-shot init containers — never recreated by this script.
+ONE_SHOT: frozenset[str] = frozenset({"awx_migrate", "minio_init"})
+
+# Services that use a local build tag: we still call "docker compose up
+# --force-recreate" so they restart on new build artefacts, but we skip pull.
+LOCAL_BUILDS: frozenset[str] = frozenset({
+    "receptor", "api", "event_engine", "pki", "ee_builder", "security_scanner",
+})
+
+# Container name: compose uses autoflow_<service> (dashes → underscores).
+def _container(service: str) -> str:
+    return f"autoflow_{service.replace('-', '_')}"
+
+
+# Ordered list of services to update (dependency-aware).
+# Stateful infra first, then core apps, then observability, then proxy.
+UPDATE_ORDER: list[str] = [
+    # ── Tier 0: stateful infrastructure ──────────────────────────────────────
+    "postgres",
+    "gitea_postgres",
+    "redis",
+    "minio",
+    # ── Tier 1: core application services ────────────────────────────────────
+    "awx_web",
+    "receptor",
+    "awx_task",
+    "gitea",
+    "pki",
+    "api",
+    "event_engine",
+    # ── Tier 2: observability backend ─────────────────────────────────────────
+    "tempo",
+    "loki",
+    "prometheus",
+    "alertmanager",
+    "otel-collector",
+    "grafana",
+    # ── Tier 3: exporters and sidecar agents ──────────────────────────────────
+    "postgres_exporter",
+    "node_exporter",
+    "redis_exporter",
+    "promtail",
+    # ── Tier 4: application containers ────────────────────────────────────────
+    "ee_builder",
+    "act_runner",
+    "security_scanner",
+    # ── Tier 5: reverse proxy (last — avoids routing gaps during other updates)
+    "traefik",
+]
+
+# ── Subprocess helpers ─────────────────────────────────────────────────────────
+
+
+def _compose(*args: str, capture: bool = False) -> subprocess.CompletedProcess:
+    """Run docker compose with the project .env file."""
+    cmd = ["docker", "compose", "--env-file", str(ENV_FILE), *args]
+    return subprocess.run(
+        cmd,
+        cwd=str(ROOT),
+        capture_output=capture,
+        text=True,
+    )
+
+
+def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(["docker", *args], capture_output=capture, text=True)
+
+
+# ── Service introspection ──────────────────────────────────────────────────────
+
+
+def get_compose_services() -> set[str]:
+    """Return the set of services defined in the active compose file."""
+    r = _compose("config", "--services", capture=True)
+    if r.returncode != 0:
+        return set()
+    return set(r.stdout.strip().splitlines())
+
+
+def get_container_image_id(service: str) -> str | None:
+    """Return the current image SHA of the running container, or None."""
+    r = _docker("inspect", "--format", "{{.Image}}", _container(service), capture=True)
+    return r.stdout.strip() or None if r.returncode == 0 else None
+
+
+def get_service_image_tag(service: str, compose_config: dict) -> str | None:
+    """Return the image tag (e.g. 'redis:7.4.8-alpine') from the resolved config."""
+    return compose_config.get("services", {}).get(service, {}).get("image")
+
+
+def parse_compose_config() -> dict:
+    """Parse `docker compose config` once and return the dict."""
+    r = _compose("config", capture=True)
+    if r.returncode != 0:
+        return {}
+    try:
+        import yaml  # type: ignore[import-untyped]
+        return yaml.safe_load(r.stdout) or {}
+    except Exception:
+        return {}
+
+
+# ── Health check ──────────────────────────────────────────────────────────────
+
+
+def wait_healthy(service: str, timeout: int, dry_run: bool = False) -> bool:
+    """
+    Poll the container state until healthy / running (no healthcheck) or timeout.
+    Returns True on success, False on failure or timeout.
+    """
+    if dry_run:
+        return True
+
+    container = _container(service)
+    deadline   = time.time() + timeout
+    last_shown = ""
+
+    while time.time() < deadline:
+        r = _docker(
+            "inspect", "--format",
+            "{{.State.Status}}|"
+            "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}",
+            container,
+            capture=True,
+        )
+        if r.returncode != 0:
+            time.sleep(3)
+            continue
+
+        raw = r.stdout.strip()
+        state, health = raw.split("|", 1)
+
+        if state == "exited":
+            err(f"    container exited unexpectedly")
+            return False
+        if health == "healthy":
+            return True
+        if health == "unhealthy":
+            err(f"    health check reports unhealthy")
+            return False
+        if health == "none" and state == "running":
+            # No Docker healthcheck defined — give 5 s to confirm still running.
+            time.sleep(5)
+            r2 = _docker("inspect", "--format", "{{.State.Status}}", container, capture=True)
+            return r2.returncode == 0 and r2.stdout.strip() == "running"
+
+        status = f"{state}/{health}"
+        if status != last_shown:
+            dim(f"waiting… ({status})")
+            last_shown = status
+        time.sleep(3)
+
+    err(f"    timed out after {timeout}s")
+    return False
+
+
+# ── Per-service update ─────────────────────────────────────────────────────────
+
+
+def pull_service(service: str, dry_run: bool = False) -> bool:
+    """Pull the upstream image for a service. Skips local-build services."""
+    if service in LOCAL_BUILDS:
+        dim(f"{service}: local build — skipping pull")
+        return True
+    info(f"Pulling {service}…")
+    if dry_run:
+        dim(f"[dry-run] docker compose pull {service}")
+        return True
+    r = _compose("pull", service)
+    if r.returncode != 0:
+        err(f"    pull failed for {service}")
+    return r.returncode == 0
+
+
+def recreate_service(service: str, dry_run: bool = False) -> bool:
+    """Run docker compose up --no-deps --force-recreate for one service."""
+    info(f"Recreating {service}…")
+    if dry_run:
+        dim(f"[dry-run] docker compose up -d --no-deps --force-recreate {service}")
+        return True
+    r = _compose("up", "-d", "--no-deps", "--force-recreate", service)
+    if r.returncode != 0:
+        err(f"    recreate failed for {service}")
+    return r.returncode == 0
+
+
+def rollback_service(
+    service: str,
+    old_image_id: str | None,
+    image_tag: str | None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Attempt to restore the previous image and recreate the service.
+    Strategy: re-tag the old image SHA back to the service's image tag, then
+    `docker compose up --force-recreate` so Compose picks up the old tag.
+    """
+    if not old_image_id:
+        warn(f"No snapshot image for {service} — rollback skipped")
+        return
+
+    warn(f"Rolling back {service}…")
+    if image_tag and not dry_run:
+        r = _docker("tag", old_image_id, image_tag, capture=True)
+        if r.returncode != 0:
+            warn(f"    re-tag failed: {r.stderr.strip()}")
+
+    recreate_service(service, dry_run=dry_run)
+
+
+def update_one(
+    service: str,
+    *,
+    timeout: int,
+    no_pull: bool,
+    dry_run: bool,
+    compose_config: dict,
+) -> tuple[bool, str]:
+    """
+    Full update cycle for one service.
+    Returns (success, human-readable status message).
+    """
+    image_tag   = get_service_image_tag(service, compose_config)
+    old_image   = get_container_image_id(service)
+
+    # 1. Pull
+    if not no_pull:
+        if not pull_service(service, dry_run=dry_run):
+            return False, "pull failed"
+
+    # 2. Recreate
+    if not recreate_service(service, dry_run=dry_run):
+        return False, "recreate failed"
+
+    # 3. Health gate
+    info(f"Health check for {service} (timeout {timeout}s)…")
+    if wait_healthy(service, timeout, dry_run=dry_run):
+        return True, "ok"
+
+    # 4. Rollback on failure
+    rollback_service(service, old_image, image_tag, dry_run=dry_run)
+    return False, "health check failed — rolled back"
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        prog="rolling-update",
+        description="Update the Autoflow stack service-by-service with health-check gating.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("--plan",     action="store_true", help="Print update order and exit")
+    ap.add_argument("--dry-run",  action="store_true", help="Show commands without executing")
+    ap.add_argument("--services", default="", metavar="SVC,...",
+                    help="Only update these services (comma-separated)")
+    ap.add_argument("--skip",     default="", metavar="SVC,...",
+                    help="Skip these services")
+    ap.add_argument("--timeout",  type=int, default=120,
+                    help="Health-check timeout per service in seconds (default: 120)")
+    ap.add_argument("--no-pull",  action="store_true",
+                    help="Skip docker compose pull")
+    ap.add_argument("-y", "--yes", action="store_true",
+                    help="Skip confirmation prompt")
+    args = ap.parse_args()
+
+    # ── Resolve service list ─────────────────────────────────────────────────
+    available = get_compose_services()
+    skip_set  = (set(s.strip() for s in args.skip.split(",") if s.strip()) | ONE_SHOT)
+
+    if args.services:
+        requested = [s.strip() for s in args.services.split(",") if s.strip()]
+        unknown   = set(requested) - available
+        if unknown:
+            err(f"Unknown services: {', '.join(sorted(unknown))}")
+            return 1
+        # Preserve UPDATE_ORDER for known services, append the rest as-is.
+        ordered = [s for s in UPDATE_ORDER if s in requested]
+        ordered += [s for s in requested if s not in ordered]
+        services = [s for s in ordered if s not in skip_set]
+    else:
+        services = [s for s in UPDATE_ORDER if s in available and s not in skip_set]
+
+    # ── Plan mode ────────────────────────────────────────────────────────────
+    if args.plan:
+        hdr("Rolling update plan")
+        for i, svc in enumerate(services, 1):
+            note = " (local build, no pull)" if svc in LOCAL_BUILDS else ""
+            print(f"  {i:2d}. {svc}" + _c("\033[2m", note))
+        skipped = sorted((skip_set - ONE_SHOT) & available)
+        if skipped:
+            print(f"\n  Skipped : {', '.join(skipped)}")
+        print(f"  One-shot: {', '.join(sorted(ONE_SHOT & available))}")
+        print(f"\n  Total to update: {len(services)}")
+        return 0
+
+    if not services:
+        err("No services selected for update.")
+        return 1
+
+    # ── Preflight ────────────────────────────────────────────────────────────
+    if not ENV_FILE.exists():
+        err(f".env not found at {ENV_FILE}")
+        err("Run: cp .env.example .env  and fill in required values.")
+        return 1
+
+    # Parse the resolved compose config once (avoids repeated subprocess calls).
+    compose_config: dict = {} if args.dry_run else parse_compose_config()
+
+    # ── Header ───────────────────────────────────────────────────────────────
+    hdr("Autoflow Rolling Update")
+    print(f"  Stack root  : {ROOT}")
+    print(f"  Services    : {len(services)}")
+    print(f"  Timeout     : {args.timeout}s per service")
+    print(f"  Pull        : {'no (--no-pull)' if args.no_pull else 'yes'}")
+    if args.dry_run:
+        print(_c("\033[33m", "\n  DRY RUN — no changes will be made"))
+
+    hdr("Update order")
+    for i, svc in enumerate(services, 1):
+        note = _c("\033[2m", " (local build)") if svc in LOCAL_BUILDS else ""
+        print(f"  {i:2d}. {svc}{note}")
+
+    # ── Confirmation ─────────────────────────────────────────────────────────
+    if not args.yes and not args.dry_run:
+        print()
+        try:
+            answer = input("  Proceed? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if answer not in ("y", "yes"):
+            print("  Aborted.")
+            return 1
+
+    # ── Execute ───────────────────────────────────────────────────────────────
+    results: list[dict] = []
+    t_start = time.time()
+
+    for svc in services:
+        hdr(f"[{len(results)+1}/{len(services)}] {svc}")
+        t0      = time.time()
+        success, msg = update_one(
+            svc,
+            timeout=args.timeout,
+            no_pull=args.no_pull,
+            dry_run=args.dry_run,
+            compose_config=compose_config,
+        )
+        elapsed = time.time() - t0
+        results.append({"service": svc, "ok": success, "msg": msg, "elapsed": elapsed})
+
+        if success:
+            ok(f"{svc} — {msg} ({elapsed:.1f}s)")
+        else:
+            err(f"{svc} — {msg} ({elapsed:.1f}s)")
+            warn("Update halted — remaining services are unchanged.")
+            break
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    total     = time.time() - t_start
+    done      = {r["service"] for r in results}
+    n_ok      = sum(1 for r in results if r["ok"])
+    n_fail    = sum(1 for r in results if not r["ok"])
+    n_skip    = len(services) - len(done)
+
+    hdr("Summary")
+    for r in results:
+        icon  = "✓" if r["ok"] else "✗"
+        color = "\033[32m" if r["ok"] else "\033[31m"
+        print(f"  {_c(color, icon)} {r['service']:<28} {r['msg']} ({r['elapsed']:.1f}s)")
+    for svc in services:
+        if svc not in done:
+            print("  " + _c("\033[2m", "–") + " " + _c("\033[2m", svc))
+
+    print(
+        f"\n  {n_ok} updated"
+        + (f", {n_fail} failed" if n_fail else "")
+        + (f", {n_skip} not reached" if n_skip else "")
+        + f"  —  {total:.1f}s total"
+    )
+
+    return 0 if n_fail == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

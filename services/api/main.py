@@ -5,13 +5,26 @@ Thin FastAPI service that proxies and augments AWX operations.
 
 Features
 --------
-- JWT + X-API-Key dual authentication  (POST /auth/token for JWT)
+- JWT + X-API-Key dual authentication  (POST /api/v1/auth/token for JWT)
 - Rate limiting via slowapi             (per client IP, configurable via RATE_LIMIT)
-- CORS restricted to CORS_ORIGINS env  (default: "*")
+- CORS restricted to CORS_ORIGINS env  (default: "" — empty, must be set explicitly)
 - Prometheus metrics on /metrics        (HTTP stats + AWX job gauges)
 - Structured JSON audit log             (every non-health request)
 - Job completion notifications          (background watcher + webhook/Slack)
-- Enriched job history & stats         (/awx/jobs/history, /awx/jobs/stats)
+- Enriched job history & stats         (/api/v1/awx/jobs/history, /api/v1/awx/jobs/stats)
+
+Routing
+-------
+All business endpoints are versioned under /api/v1/:
+  /api/v1/auth/*         — authentication (token, refresh, me, logout)
+  /api/v1/awx/*          — AWX proxy (job templates, jobs, inventories, projects)
+  /api/v1/compliance/*   — compliance reporting (CSV, score, HTML report)
+  /api/v1/users/*        — user management (admin only)
+
+Unversioned (no prefix change for infrastructure compatibility):
+  /health  /health/ready  /health/awx  — liveness & readiness probes
+  /metrics                              — Prometheus scrape endpoint
+  /docs  /redoc  /openapi.json          — API documentation
 """
 from __future__ import annotations
 
@@ -23,24 +36,25 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-
 import notifications
+import user_store
 from awx_metrics import collect_loop as awx_metrics_loop
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from limiter import limiter
+from prometheus_fastapi_instrumentator import Instrumentator
 from routers import awx, health
 from routers.auth import router as auth_router
 from routers.compliance import _generate_and_cache
 from routers.compliance import router as compliance_router
 from routers.jobs_history import router as jobs_history_router
+from routers.users import router as users_router
+from security_headers import SecurityHeadersMiddleware, parse_cors_origins
 from settings import settings
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from tracing import instrument_app, setup_tracing
-
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +71,9 @@ _audit_log = logging.getLogger("audit")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialise user store (bootstrap default admin from API_SECRET_KEY if empty)
+    user_store._ensure_loaded(admin_fallback_password=settings.api_secret_key)
+
     # Shared async HTTP client — reused across all requests
     app.state.http = httpx.AsyncClient(
         base_url=settings.awx_url,
@@ -141,14 +158,23 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+_cors_origins = parse_cors_origins(
+    settings.cors_origins.strip(),
+    settings.env,
+    logging.getLogger("autoflow_api.cors"),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
+
+# ── Security headers ──────────────────────────────────────────────────────────
+if settings.security_headers_enabled:
+    app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Prometheus HTTP instrumentation ──────────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
@@ -157,13 +183,22 @@ Instrumentator().instrument(app).expose(app)
 instrument_app(app, "autoflow-api")
 
 # ── Routers ──────────────────────────────────────────────────────────────────
-app.include_router(health.router)
-app.include_router(auth_router)                           # /auth/token, /auth/me, ...
-# jobs_history MUST be registered before awx so /awx/jobs/history and /awx/jobs/stats
-# are matched before the wildcard route /awx/jobs/{job_id}
-app.include_router(jobs_history_router)                   # /awx/jobs/history, /stats, /watch
-app.include_router(awx.router, prefix="/awx", tags=["AWX"])
-app.include_router(compliance_router)                     # /compliance/*
+#
+# Unversioned infrastructure routes (no /api/v1 prefix — used by Docker
+# healthchecks, Prometheus, and Traefik probes; must never change).
+app.include_router(health.router)          # /health  /health/ready  /health/awx
+# /metrics is exposed by Instrumentator above (also unversioned)
+
+# All business routes live under /api/v1/.
+# jobs_history MUST be registered before awx so /api/v1/awx/jobs/history and
+# /api/v1/awx/jobs/stats are matched before the wildcard /api/v1/awx/jobs/{job_id}.
+_v1 = APIRouter(prefix="/api/v1")
+_v1.include_router(auth_router)                              # /api/v1/auth/*
+_v1.include_router(jobs_history_router)                      # /api/v1/awx/jobs/history, /stats, /watch
+_v1.include_router(awx.router, prefix="/awx", tags=["AWX"]) # /api/v1/awx/*
+_v1.include_router(compliance_router)                        # /api/v1/compliance/*
+_v1.include_router(users_router)                             # /api/v1/users/*
+app.include_router(_v1)
 
 
 # ── Audit log middleware ──────────────────────────────────────────────────────

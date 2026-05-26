@@ -52,16 +52,26 @@ def wizard_env_paths(tmp_path, monkeypatch):
     """
     Redirect the wizard's global Path constants to tmp_path so unit tests
     that call _write_env / _load_env / _audit never touch the real repo root.
+
+    Patches both wizard_main (for backward-compat) and core.env (where the
+    functions actually read the module-level globals after the refactor).
     """
+    import core.env as core_env
     import wizard_main as wm
 
     env_file    = tmp_path / ".env"
     env_example = tmp_path / ".env.example"
     audit_log   = tmp_path / "audit.log"
 
+    # Patch wizard_main re-exports (backward compat)
     monkeypatch.setattr(wm, "ENV_FILE",         env_file)
     monkeypatch.setattr(wm, "ENV_EXAMPLE_FILE", env_example)
     monkeypatch.setattr(wm, "AUDIT_LOG",        audit_log)
+
+    # Patch core.env where the functions actually live
+    monkeypatch.setattr(core_env, "ENV_FILE",         env_file)
+    monkeypatch.setattr(core_env, "ENV_EXAMPLE_FILE", env_example)
+    monkeypatch.setattr(core_env, "AUDIT_LOG",        audit_log)
 
     return {
         "env":     env_file,
