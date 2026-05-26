@@ -94,8 +94,12 @@ FIRST_START_ONLY: frozenset[str] = frozenset(
         "GITEA_INTERNAL_TOKEN",
         "POSTGRES_DB",
         "POSTGRES_USER",
+        # Password written into the postgres volume at first init — cannot change after
+        "POSTGRES_PASSWORD",
         "GITEA_DB_NAME",
         "GITEA_DB_USER",
+        # Same for Gitea's separate postgres instance
+        "GITEA_DB_PASSWORD",
         "GRAFANA_ADMIN_USER",
         "PKI_JWT_SECRET",
         # minio_init est restart:no — le bucket/user Loki est créé une seule fois
