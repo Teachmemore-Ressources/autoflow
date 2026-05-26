@@ -1,12 +1,9 @@
 """Unit tests for services/event-engine/scheduler.py (EventScheduler)."""
+
 from __future__ import annotations
 
-import asyncio
 import textwrap
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 async def _noop_dispatch(source, action, data):
@@ -15,6 +12,7 @@ async def _noop_dispatch(source, action, data):
 
 def _make_scheduler(tmp_path, yaml_content: str = ""):
     from scheduler import EventScheduler
+
     schedules_file = tmp_path / "schedules.yml"
     if yaml_content:
         schedules_file.write_text(yaml_content)
@@ -23,8 +21,10 @@ def _make_scheduler(tmp_path, yaml_content: str = ""):
 
 # ── _load: file not found ─────────────────────────────────────────────────────
 
+
 def test_load_missing_file_returns_zero(tmp_path):
     from scheduler import EventScheduler
+
     sched = EventScheduler(str(tmp_path / "no_file.yml"), _noop_dispatch)
     with patch.object(sched._scheduler, "start"):
         count = sched.start()
@@ -33,6 +33,7 @@ def test_load_missing_file_returns_zero(tmp_path):
 
 def test_load_missing_file_does_not_raise(tmp_path):
     from scheduler import EventScheduler
+
     sched = EventScheduler(str(tmp_path / "missing.yml"), _noop_dispatch)
     with patch.object(sched._scheduler, "start"):
         sched.start()
@@ -40,10 +41,12 @@ def test_load_missing_file_does_not_raise(tmp_path):
 
 # ── _load: invalid YAML ───────────────────────────────────────────────────────
 
+
 def test_load_invalid_yaml_returns_zero(tmp_path):
     f = tmp_path / "bad.yml"
     f.write_text("}{not valid yaml")
     from scheduler import EventScheduler
+
     sched = EventScheduler(str(f), _noop_dispatch)
     with patch.object(sched._scheduler, "start"):
         count = sched.start()
@@ -51,6 +54,7 @@ def test_load_invalid_yaml_returns_zero(tmp_path):
 
 
 # ── _load: valid YAML with schedules ─────────────────────────────────────────
+
 
 def test_load_valid_schedule(tmp_path):
     yaml = textwrap.dedent("""\
@@ -102,6 +106,7 @@ def test_load_empty_yaml_returns_zero(tmp_path):
 
 # ── _load: edge cases ─────────────────────────────────────────────────────────
 
+
 def test_load_skips_entry_without_cron(tmp_path, caplog):
     yaml = textwrap.dedent("""\
         schedules:
@@ -150,6 +155,7 @@ def test_load_uses_defaults_for_optional_fields(tmp_path):
 
 # ── start / stop / reload ─────────────────────────────────────────────────────
 
+
 def test_start_returns_count(tmp_path):
     yaml = textwrap.dedent("""\
         schedules:
@@ -168,6 +174,7 @@ def test_start_returns_count(tmp_path):
 
 def test_stop_calls_shutdown_when_running(tmp_path):
     from unittest.mock import PropertyMock
+
     sched = _make_scheduler(tmp_path)
     with patch.object(type(sched._scheduler), "running", new_callable=PropertyMock, return_value=True):
         with patch.object(sched._scheduler, "shutdown") as mock_shutdown:
@@ -177,6 +184,7 @@ def test_stop_calls_shutdown_when_running(tmp_path):
 
 def test_stop_does_not_call_shutdown_when_not_running(tmp_path):
     from unittest.mock import PropertyMock
+
     sched = _make_scheduler(tmp_path)
     with patch.object(type(sched._scheduler), "running", new_callable=PropertyMock, return_value=False):
         with patch.object(sched._scheduler, "shutdown") as mock_shutdown:
@@ -202,8 +210,10 @@ def test_reload_removes_all_jobs_then_reloads(tmp_path):
 
 # ── jobs() introspection ──────────────────────────────────────────────────────
 
+
 def test_jobs_returns_list(tmp_path):
     from datetime import datetime, timezone
+
     sched = _make_scheduler(tmp_path)
     mock_job = MagicMock()
     mock_job.id = "j1"

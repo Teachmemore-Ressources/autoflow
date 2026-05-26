@@ -8,6 +8,7 @@ Validates:
   - Unknown type → 400 error
   - Consecutive calls produce distinct values (randomness)
 """
+
 from __future__ import annotations
 
 import re
@@ -67,9 +68,7 @@ async def test_generate_urlsafe32_non_empty(client):
 async def test_generate_urlsafe32_charset(client):
     value = (await client.get("/api/generate/urlsafe32")).json()["value"]
     # URL-safe base64 uses A-Z a-z 0-9 _ -  (no + / = from standard base64)
-    assert re.match(r"^[A-Za-z0-9_\-]+$", value), (
-        f"urlsafe32 contains unexpected chars: {value!r}"
-    )
+    assert re.match(r"^[A-Za-z0-9_\-]+$", value), f"urlsafe32 contains unexpected chars: {value!r}"
 
 
 @pytest.mark.integration

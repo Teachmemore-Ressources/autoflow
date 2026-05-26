@@ -1,6 +1,7 @@
 """
 routers/deploy.py — Docker Compose deployment, service restart and stack status.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,6 +19,7 @@ router = APIRouter()
 
 # ── Docker Compose deployment ─────────────────────────────────────────────────
 
+
 @router.get("/api/deploy")
 async def deploy(request: Request, encrypt: bool = False):
     """Stream docker compose up -d output via Server-Sent Events."""
@@ -29,9 +31,10 @@ async def deploy(request: Request, encrypt: bool = False):
             yield _sse("Encrypting .env with SOPS…")
             env = {**os.environ, "SOPS_AGE_KEY_FILE": str(SOPS_AGE_KEY_FILE)}
             r = subprocess.run(
-                ["sops", "--encrypt", "--input-type", "dotenv",
-                 "--output-type", "dotenv", str(ENV_FILE)],
-                capture_output=True, text=True, env=env,
+                ["sops", "--encrypt", "--input-type", "dotenv", "--output-type", "dotenv", str(ENV_FILE)],
+                capture_output=True,
+                text=True,
+                env=env,
             )
             if r.returncode != 0:
                 yield _sse(f"[ERROR] SOPS: {r.stderr.strip()}")
@@ -53,14 +56,21 @@ async def deploy(request: Request, encrypt: bool = False):
         for vol in critical_volumes:
             r = subprocess.run(
                 ["docker", "volume", "create", vol],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             status = "already exists" if r.returncode == 0 and r.stdout.strip() == vol else r.stdout.strip()
             yield _sse(f"  volume {vol}: {status}")
 
         yield _sse("Starting: docker compose up -d --build")
         process = await asyncio.create_subprocess_exec(
-            "docker", "compose", "--env-file", str(ENV_FILE), "up", "-d", "--build",
+            "docker",
+            "compose",
+            "--env-file",
+            str(ENV_FILE),
+            "up",
+            "-d",
+            "--build",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(ROOT),
@@ -78,7 +88,7 @@ async def deploy(request: Request, encrypt: bool = False):
 
         # ── Post-deploy: auto-create Gitea admin ─────────────────
         yield _sse("Post-deploy: initializing Gitea admin account…")
-        cfg      = _load_env()
+        cfg = _load_env()
         git_user = cfg.get("GITEA_ADMIN_USER", "admin")
         git_pass = cfg.get("GITEA_ADMIN_PASSWORD", "")
         git_mail = cfg.get("GITEA_ADMIN_EMAIL", f"{git_user}@localhost")
@@ -94,7 +104,8 @@ async def deploy(request: Request, encrypt: bool = False):
                 await asyncio.sleep(5)
                 hc = subprocess.run(
                     ["docker", "inspect", "--format", "{{.State.Health.Status}}", "autoflow_gitea"],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 status = hc.stdout.strip()
                 if status == "healthy":
@@ -106,11 +117,23 @@ async def deploy(request: Request, encrypt: bool = False):
                 yield _sse("[WARN] Gitea not yet healthy — proceeding anyway…")
 
             init_proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", "autoflow_gitea",
-                "gitea", "admin", "user", "create",
-                "--username", git_user, "--password", git_pass,
-                "--email", git_mail, "--admin", "--must-change-password=false",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                "docker",
+                "exec",
+                "autoflow_gitea",
+                "gitea",
+                "admin",
+                "user",
+                "create",
+                "--username",
+                git_user,
+                "--password",
+                git_pass,
+                "--email",
+                git_mail,
+                "--admin",
+                "--must-change-password=false",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
             )
             async for line in init_proc.stdout:
                 yield _sse("  " + line.decode().rstrip())
@@ -130,7 +153,8 @@ async def deploy(request: Request, encrypt: bool = False):
             await asyncio.sleep(5)
             hc = subprocess.run(
                 ["docker", "inspect", "--format", "{{.State.Health.Status}}", "autoflow_awx_web"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if hc.stdout.strip() == "healthy":
                 awx_ready = True
@@ -143,20 +167,32 @@ async def deploy(request: Request, encrypt: bool = False):
         hostname = subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip()
 
         awx_cmds = [
-            (["awx-manage", "provision_instance", f"--hostname={hostname}", "--node_type=control"],
-             "provision_instance"),
-            (["awx-manage", "register_queue", "--queuename=controlplane", "--instance_percent=100"],
-             "register_queue controlplane"),
-            (["awx-manage", "register_queue", "--queuename=default", "--instance_percent=100"],
-             "register_queue default"),
-            (["awx-manage", "register_default_execution_environments"],
-             "register_default_execution_environments"),
+            (
+                ["awx-manage", "provision_instance", f"--hostname={hostname}", "--node_type=control"],
+                "provision_instance",
+            ),
+            (
+                ["awx-manage", "register_queue", "--queuename=controlplane", "--instance_percent=100"],
+                "register_queue controlplane",
+            ),
+            (
+                ["awx-manage", "register_queue", "--queuename=default", "--instance_percent=100"],
+                "register_queue default",
+            ),
+            (
+                ["awx-manage", "register_default_execution_environments"],
+                "register_default_execution_environments",
+            ),
         ]
 
         for cmd, label in awx_cmds:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", "autoflow_awx_task", *cmd,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                "docker",
+                "exec",
+                "autoflow_awx_task",
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
             )
             out = []
             async for line in proc.stdout:
@@ -172,7 +208,7 @@ async def deploy(request: Request, encrypt: bool = False):
         yield _sse("─" * 55)
 
         # ── Post-deploy URL summary ──────────────────────────────────────────
-        _domain   = cfg.get("DOMAIN", "localhost")
+        _domain = cfg.get("DOMAIN", "localhost")
         _awx_user = cfg.get("AWX_ADMIN_USER", "admin")
         _git_user = cfg.get("GITEA_ADMIN_USER", "admin")
         yield _sse("🎉  Deployment complete — your services:")
@@ -185,11 +221,15 @@ async def deploy(request: Request, encrypt: bool = False):
         yield _sse("─" * 55)
         yield _sse("[DONE]")
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Targeted service restart ───────────────────────────────────────────────────
+
 
 @router.get("/api/restart")
 async def restart_services(request: Request, services: str = ""):
@@ -204,8 +244,12 @@ async def restart_services(request: Request, services: str = ""):
             return
         yield _sse(f"Restarting: {', '.join(service_list)}")
         process = await asyncio.create_subprocess_exec(
-            "docker", "compose", "--env-file", str(ENV_FILE),
-            "restart", *service_list,
+            "docker",
+            "compose",
+            "--env-file",
+            str(ENV_FILE),
+            "restart",
+            *service_list,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(ROOT),
@@ -219,17 +263,23 @@ async def restart_services(request: Request, services: str = ""):
             yield _sse(f"[ERROR] docker compose restart exited with code {process.returncode}")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Stack status ──────────────────────────────────────────────────────────────
+
 
 @router.get("/api/status")
 def stack_status():
     result = subprocess.run(
         ["docker", "compose", "ps", "--format", "table {{.Name}}\t{{.Status}}"],
-        capture_output=True, text=True, cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
     )
     running = result.stdout.count("Up") if result.returncode == 0 else 0
     return {"running": running, "output": result.stdout}

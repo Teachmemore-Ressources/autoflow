@@ -4,6 +4,7 @@ from parsers import parse_alertmanager, parse_github
 
 # ── GitHub — push ─────────────────────────────────────────────────────────────
 
+
 def test_github_push_basic():
     payload = {
         "ref": "refs/heads/main",
@@ -33,8 +34,13 @@ def test_github_push_tag():
 def test_github_pull_request_opened():
     payload = {
         "action": "opened",
-        "pull_request": {"number": 42, "title": "My PR", "merged": False,
-                         "base": {"ref": "main"}, "head": {"ref": "feature-x"}},
+        "pull_request": {
+            "number": 42,
+            "title": "My PR",
+            "merged": False,
+            "base": {"ref": "main"},
+            "head": {"ref": "feature-x"},
+        },
         "repository": {},
         "sender": {"login": "bob"},
     }
@@ -47,8 +53,7 @@ def test_github_pull_request_opened():
 def test_github_pull_request_merged():
     payload = {
         "action": "closed",
-        "pull_request": {"number": 7, "merged": True,
-                         "base": {"ref": "main"}, "head": {"ref": "hotfix"}},
+        "pull_request": {"number": 7, "merged": True, "base": {"ref": "main"}, "head": {"ref": "hotfix"}},
         "repository": {},
         "sender": {},
     }
@@ -93,7 +98,7 @@ _ALERTMANAGER_FIRING = {
             "labels": {"alertname": "HighCPU", "severity": "warning", "instance": "web-01"},
             "annotations": {"summary": "CPU above 90%", "description": "CPU usage is 95%"},
             "startsAt": "2026-04-26T10:00:00Z",
-            "endsAt":   "0001-01-01T00:00:00Z",
+            "endsAt": "0001-01-01T00:00:00Z",
         }
     ],
 }

@@ -13,6 +13,7 @@ Tests:
 
 No Docker / Redis container required — Redis is mocked with fakeredis.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -28,13 +29,14 @@ _API = Path(__file__).parent.parent.parent / "services" / "api"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_settings(redis_url: str = "") -> MagicMock:
     s = MagicMock()
     s.effective_jwt_secret = "test-secret-32-chars-long-xxxxxxxxxxx"
-    s.jwt_algorithm        = "HS256"
-    s.jwt_expire_minutes   = 60
-    s.redis_url            = redis_url
-    s.api_secret_key       = "test-api-key"
+    s.jwt_algorithm = "HS256"
+    s.jwt_expire_minutes = 60
+    s.redis_url = redis_url
+    s.api_secret_key = "test-api-key"
     return s
 
 
@@ -52,17 +54,20 @@ def _load_auth(alias: str, settings_mock: MagicMock) -> object:
     user_store_mock.authenticate.return_value = "admin"
 
     spec = importlib.util.spec_from_file_location(alias, _API / "routers" / "auth.py")
-    mod  = importlib.util.module_from_spec(spec)
-    with patch.dict("sys.modules", {
-        "settings":   MagicMock(settings=settings_mock),
-        "limiter":    MagicMock(limiter=MagicMock()),
-        "user_store": user_store_mock,
-    }):
+    mod = importlib.util.module_from_spec(spec)
+    with patch.dict(
+        "sys.modules",
+        {
+            "settings": MagicMock(settings=settings_mock),
+            "limiter": MagicMock(limiter=MagicMock()),
+            "user_store": user_store_mock,
+        },
+    ):
         spec.loader.exec_module(mod)
 
     # Patch the module-level `settings` reference to our mock
-    mod.settings    = settings_mock
-    mod.user_store  = user_store_mock
+    mod.settings = settings_mock
+    mod.user_store = user_store_mock
     return mod
 
 
@@ -89,6 +94,7 @@ def _expired_token(secret: str) -> str:
 
 # ── create_access_token ───────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_create_access_token_has_jti():
     """Issued tokens must include a non-empty jti claim."""
@@ -114,6 +120,7 @@ def test_create_access_token_unique_jti():
 
 
 # ── _decode_token ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 async def test_decode_token_valid():
@@ -162,6 +169,7 @@ async def test_decode_token_revoked():
 
 
 # ── _is_revoked / _revoke ─────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 async def test_is_revoked_false_without_redis():

@@ -1,6 +1,7 @@
 """
 routers/tls.py — TLS/PKI certificate generation, permissions, and CA download.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +24,7 @@ router = APIRouter()
 
 
 # ── TLS helpers ───────────────────────────────────────────────────────────────
+
 
 def _update_tls_yml(domain: str) -> None:
     TLS_YML.write_text(
@@ -71,58 +73,71 @@ _PERM_CHECKS = [
 
 def _check_permissions() -> list[dict]:
     import grp
+
     results = []
     # 1. Scripts executable
-    non_exec = [
-        str(p) for p in (ROOT / "scripts").glob("**/*.sh")
-        if not os.access(p, os.X_OK)
-    ]
+    non_exec = [str(p) for p in (ROOT / "scripts").glob("**/*.sh") if not os.access(p, os.X_OK)]
     for extra in ["awx/init.sh", "awx/init-ees.sh"]:
         p = ROOT / extra
         if p.exists() and not os.access(p, os.X_OK):
             non_exec.append(str(p))
-    results.append({
-        "id": "scripts",
-        "ok": len(non_exec) == 0,
-        "detail": f"{len(non_exec)} script(s) not executable" if non_exec else "All scripts are executable",
-        "items": non_exec[:5],
-    })
+    results.append(
+        {
+            "id": "scripts",
+            "ok": len(non_exec) == 0,
+            "detail": f"{len(non_exec)} script(s) not executable"
+            if non_exec
+            else "All scripts are executable",
+            "items": non_exec[:5],
+        }
+    )
 
     # 2. traefik/certs/ writable
     certs = ROOT / "traefik" / "certs"
     certs_ok = certs.exists() and os.access(certs, os.W_OK)
-    results.append({
-        "id": "certs_dir",
-        "ok": certs_ok,
-        "detail": "traefik/certs/ writable" if certs_ok else "traefik/certs/ not writable",
-    })
+    results.append(
+        {
+            "id": "certs_dir",
+            "ok": certs_ok,
+            "detail": "traefik/certs/ writable" if certs_ok else "traefik/certs/ not writable",
+        }
+    )
 
     # 3. Docker group
     try:
-        docker_gid  = grp.getgrnam("docker").gr_gid
+        docker_gid = grp.getgrnam("docker").gr_gid
         user_groups = os.getgroups()
-        in_docker   = docker_gid in user_groups
+        in_docker = docker_gid in user_groups
     except KeyError:
         in_docker = False
-    results.append({
-        "id": "docker_group",
-        "ok": in_docker,
-        "detail": "User is in the docker group" if in_docker else "User not in docker group — sudo required",
-        "warn_relogin": not in_docker,
-    })
+    results.append(
+        {
+            "id": "docker_group",
+            "ok": in_docker,
+            "detail": "User is in the docker group"
+            if in_docker
+            else "User not in docker group — sudo required",
+            "warn_relogin": not in_docker,
+        }
+    )
 
     # 4. .env writable
     env_ok = (not ENV_FILE.exists()) or os.access(ENV_FILE, os.W_OK)
-    results.append({
-        "id": "env_writable",
-        "ok": env_ok,
-        "detail": ".env writable" if env_ok else ".env is read-only — wizard cannot save the configuration",
-    })
+    results.append(
+        {
+            "id": "env_writable",
+            "ok": env_ok,
+            "detail": ".env writable"
+            if env_ok
+            else ".env is read-only — wizard cannot save the configuration",
+        }
+    )
 
     return results
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/generate-cert")
 async def generate_cert(request: Request):
@@ -132,10 +147,10 @@ async def generate_cert(request: Request):
     async def stream():
         import httpx as _httpx
 
-        config         = _load_env()
-        domain         = config.get("DOMAIN", "localhost")
-        pki_user       = config.get("PKI_ADMIN_USER", "admin")
-        pki_password   = config.get("PKI_ADMIN_PASSWORD", "")
+        config = _load_env()
+        domain = config.get("DOMAIN", "localhost")
+        pki_user = config.get("PKI_ADMIN_USER", "admin")
+        pki_password = config.get("PKI_ADMIN_PASSWORD", "")
         pki_passphrase = config.get("PKI_KEY_PASSPHRASE", "")
 
         if not pki_password:
@@ -147,7 +162,9 @@ async def generate_cert(request: Request):
         yield _sse("Building PKI image (skipped if already cached)…")
         build = subprocess.run(
             ["docker", "compose", "build", "pki"],
-            capture_output=True, text=True, cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT),
         )
         if build.returncode != 0:
             yield _sse(f"[ERROR] docker build pki failed:\n{build.stderr[:400]}")
@@ -157,19 +174,28 @@ async def generate_cert(request: Request):
         # ── 2. Ensure pki_data volume exists (external: true — must pre-exist) ──
         subprocess.run(
             ["docker", "volume", "create", "autoflow_pki_data"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
 
         # ── 3. Start PKI with temporary port exposure ──────────────────────
         yield _sse("Starting PKI service on localhost:8004…")
         start = subprocess.run(
             [
-                "docker", "compose",
-                "-f", str(ROOT / "docker-compose.yml"),
-                "-f", str(WIZARD_PKI_OVERRIDE),
-                "up", "-d", "--no-deps", "pki",
+                "docker",
+                "compose",
+                "-f",
+                str(ROOT / "docker-compose.yml"),
+                "-f",
+                str(WIZARD_PKI_OVERRIDE),
+                "up",
+                "-d",
+                "--no-deps",
+                "pki",
             ],
-            capture_output=True, text=True, cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT),
         )
         if start.returncode != 0:
             yield _sse(f"[ERROR] Could not start PKI:\n{start.stderr[:400]}")
@@ -199,15 +225,15 @@ async def generate_cert(request: Request):
         yield _sse("PKI is ready. Authenticating…")
 
         async with _httpx.AsyncClient() as c:
-
             # Login
-            r = await c.post(f"{PKI_URL}/api/auth/login",
-                             json={"username": pki_user, "password": pki_password})
+            r = await c.post(
+                f"{PKI_URL}/api/auth/login", json={"username": pki_user, "password": pki_password}
+            )
             if r.status_code != 200:
                 yield _sse(f"[ERROR] PKI login failed ({r.status_code}): {r.text[:200]}")
                 yield _sse("[DONE]")
                 return
-            token   = r.json()["access_token"]
+            token = r.json()["access_token"]
             headers = {"Authorization": f"Bearer {token}"}
 
             # Create Root CA (idempotent)
@@ -218,14 +244,18 @@ async def generate_cert(request: Request):
                 yield _sse(f"Root CA '{PKI_CA_NAME}' already exists — skipping creation.")
             else:
                 yield _sse(f"Creating Root CA '{PKI_CA_NAME}' (RSA-4096, 10 years)…")
-                r = await c.post(f"{PKI_URL}/api/ca/create", headers=headers, json={
-                    "name":          PKI_CA_NAME,
-                    "common_name":   "Autoflow Root CA",
-                    "organization":  "Autoflow",
-                    "country":       "FR",
-                    "validity_days": 3650,
-                    "key_size":      4096,
-                })
+                r = await c.post(
+                    f"{PKI_URL}/api/ca/create",
+                    headers=headers,
+                    json={
+                        "name": PKI_CA_NAME,
+                        "common_name": "Autoflow Root CA",
+                        "organization": "Autoflow",
+                        "country": "FR",
+                        "validity_days": 3650,
+                        "key_size": 4096,
+                    },
+                )
                 if r.status_code != 200:
                     yield _sse(f"[ERROR] CA creation failed: {r.text[:300]}")
                     yield _sse("[DONE]")
@@ -235,17 +265,21 @@ async def generate_cert(request: Request):
             # Issue wildcard certificate (825 days = browser X.509 limit)
             cn = f"*.{domain}"[:64]
             yield _sse(f"Issuing wildcard certificate for {cn} (825 days)…")
-            r = await c.post(f"{PKI_URL}/api/certs/issue", headers=headers, json={
-                "ca_name":      PKI_CA_NAME,
-                "common_name":  cn,
-                "domains":      [f"*.{domain}", domain],
-                "organization": "Autoflow",
-                "country":      "FR",
-                "validity_days": 825,
-                "wildcard":     True,
-                "cert_type":    "server",
-                "key_size":     4096,
-            })
+            r = await c.post(
+                f"{PKI_URL}/api/certs/issue",
+                headers=headers,
+                json={
+                    "ca_name": PKI_CA_NAME,
+                    "common_name": cn,
+                    "domains": [f"*.{domain}", domain],
+                    "organization": "Autoflow",
+                    "country": "FR",
+                    "validity_days": 825,
+                    "wildcard": True,
+                    "cert_type": "server",
+                    "key_size": 4096,
+                },
+            )
             if r.status_code != 200:
                 yield _sse(f"[ERROR] Certificate issuance failed: {r.text[:300]}")
                 yield _sse("[DONE]")
@@ -277,7 +311,8 @@ async def generate_cert(request: Request):
             yield _sse("Decrypting private key (PKI_KEY_PASSPHRASE is set)…")
             proc = subprocess.run(
                 ["openssl", "pkey", "-passin", f"pass:{pki_passphrase}"],
-                input=key_pem.encode(), capture_output=True,
+                input=key_pem.encode(),
+                capture_output=True,
             )
             if proc.returncode != 0:
                 yield _sse("[ERROR] Key decryption failed — check PKI_KEY_PASSPHRASE")
@@ -289,7 +324,7 @@ async def generate_cert(request: Request):
         CERTS_DIR.mkdir(parents=True, exist_ok=True)
         crt_file = CERTS_DIR / f"wildcard.{domain}.crt"
         key_file = CERTS_DIR / f"wildcard.{domain}.key"
-        ca_file  = CERTS_DIR / f"ca.{domain}.crt"
+        ca_file = CERTS_DIR / f"ca.{domain}.crt"
 
         crt_file.write_text(cert_pem)
         crt_file.chmod(0o644)
@@ -302,7 +337,7 @@ async def generate_cert(request: Request):
         yield _sse(f"  traefik/certs/wildcard.{domain}.key  — private key (600)")
         yield _sse(f"  traefik/certs/ca.{domain}.crt        — Root CA ← import this in browser/OS")
 
-        yield _sse("traefik/dynamic/tls.yml uses {{ env \"DOMAIN\" }} — no update needed.")
+        yield _sse('traefik/dynamic/tls.yml uses {{ env "DOMAIN" }} — no update needed.')
         yield _sse("")
         yield _sse("[SUCCESS] PKI setup complete!")
         yield _sse(
@@ -310,8 +345,11 @@ async def generate_cert(request: Request):
         )
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/permissions/status")
@@ -325,7 +363,7 @@ async def permissions_fix():
     """SSE: fix all permission issues found."""
 
     async def stream():
-        config      = _load_env()
+        config = _load_env()
         deploy_user = config.get("DEPLOY_USER", "") or os.environ.get("USER", "")
 
         yield _sse(f"Fixing permissions (user: {deploy_user or 'current'})…")
@@ -355,7 +393,8 @@ async def permissions_fix():
             target = deploy_user or os.environ.get("USER", "")
             r = _sudo_run(
                 ["chown", "-R", f"{target}:{target}", str(certs_dir)],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if r.returncode == 0:
                 yield _sse(f"  traefik/certs/ → {target} ✔")
@@ -366,13 +405,15 @@ async def permissions_fix():
 
         # 3. Docker group
         import grp as _grp
+
         try:
             _grp.getgrnam("docker")
             target = deploy_user or os.environ.get("USER", "")
             if target:
                 r = _sudo_run(
                     ["usermod", "-aG", "docker", target],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 if r.returncode == 0:
                     yield _sse(f"→ {target} added to the docker group ✔")
@@ -388,10 +429,10 @@ async def permissions_fix():
             target = deploy_user or os.environ.get("USER", "")
             r = _sudo_run(
                 ["chown", f"{target}:{target}", str(ENV_FILE)],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
-            yield _sse("  .env → writable ✔" if r.returncode == 0
-                       else f"  [WARN] {r.stderr.strip()}")
+            yield _sse("  .env → writable ✔" if r.returncode == 0 else f"  [WARN] {r.stderr.strip()}")
         else:
             yield _sse("→ .env writable ✔")
 
@@ -405,23 +446,26 @@ async def permissions_fix():
                 yield _sse(f"[WARN] {c['id']}: {c['detail']}")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/cert-status")
 def cert_status():
     config = _load_env()
     domain = config.get("DOMAIN", "localhost")
-    crt    = CERTS_DIR / f"wildcard.{domain}.crt"
-    ca     = CERTS_DIR / f"ca.{domain}.crt"
+    crt = CERTS_DIR / f"wildcard.{domain}.crt"
+    ca = CERTS_DIR / f"ca.{domain}.crt"
     return {
-        "domain":    domain,
-        "exists":    crt.exists(),
+        "domain": domain,
+        "exists": crt.exists(),
         "ca_exists": ca.exists(),
-        "ca_name":   PKI_CA_NAME,
-        "path":      str(crt),
-        "ca_path":   str(ca),
+        "ca_name": PKI_CA_NAME,
+        "path": str(crt),
+        "ca_path": str(ca),
     }
 
 
@@ -430,7 +474,7 @@ def download_ca():
     """Serve the Root CA certificate for browser/OS import."""
     config = _load_env()
     domain = config.get("DOMAIN", "localhost")
-    ca     = CERTS_DIR / f"ca.{domain}.crt"
+    ca = CERTS_DIR / f"ca.{domain}.crt"
     if not ca.exists():
         raise HTTPException(404, "CA certificate not found — run the pre-flight first")
     return StreamingResponse(

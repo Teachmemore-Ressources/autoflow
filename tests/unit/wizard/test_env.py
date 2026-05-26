@@ -6,6 +6,7 @@ Covered:
   - _write_env        : writing .env with template structure preserved
   - _load_env         : loading .env with schema-default fallback
 """
+
 from __future__ import annotations
 
 import stat
@@ -15,8 +16,10 @@ from dotenv import dotenv_values
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _wm():
     import wizard_main as wm
+
     return wm
 
 
@@ -24,8 +27,8 @@ def _wm():
 # _quote_env_value
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestQuoteEnvValue:
 
+class TestQuoteEnvValue:
     def test_empty_string_returns_empty(self):
         assert _wm()._quote_env_value("") == ""
 
@@ -86,18 +89,21 @@ class TestQuoteEnvValue:
 # Round-trip: python-dotenv must read back the original value
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestQuoteRoundTrip:
 
-    @pytest.mark.parametrize("raw_value", [
-        "simple",
-        "with space",
-        "has$dollar",
-        'has"quote',
-        "has\\backslash",
-        "https://example.com",
-        "P@$$w0rd;dangerous",
-        "",
-    ])
+class TestQuoteRoundTrip:
+    @pytest.mark.parametrize(
+        "raw_value",
+        [
+            "simple",
+            "with space",
+            "has$dollar",
+            'has"quote',
+            "has\\backslash",
+            "https://example.com",
+            "P@$$w0rd;dangerous",
+            "",
+        ],
+    )
     def test_round_trip(self, tmp_path, raw_value):
         """Values written with _quote_env_value must survive a dotenv_values read."""
         wm = _wm()
@@ -112,8 +118,8 @@ class TestQuoteRoundTrip:
 # _write_env
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestWriteEnv:
 
+class TestWriteEnv:
     def test_writes_key_value_pairs(self, wizard_env_paths):
         _wm()._write_env({"FOO": "bar", "BAZ": "qux"})
         content = wizard_env_paths["env"].read_text()
@@ -126,9 +132,7 @@ class TestWriteEnv:
         assert stat.S_IMODE(mode) == 0o600
 
     def test_preserves_comment_lines_from_template(self, wizard_env_paths):
-        wizard_env_paths["example"].write_text(
-            "# Section header\nFOO=default\nBAR=other\n"
-        )
+        wizard_env_paths["example"].write_text("# Section header\nFOO=default\nBAR=other\n")
         _wm()._write_env({"FOO": "new", "BAR": "other"})
         lines = wizard_env_paths["env"].read_text().splitlines()
         assert lines[0] == "# Section header"
@@ -176,8 +180,8 @@ class TestWriteEnv:
 # _load_env
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestLoadEnv:
 
+class TestLoadEnv:
     def test_returns_dict_with_schema_defaults_when_no_files(self, wizard_env_paths):
         result = _wm()._load_env()
         assert isinstance(result, dict)

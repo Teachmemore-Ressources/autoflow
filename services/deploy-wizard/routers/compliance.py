@@ -1,6 +1,7 @@
 """
 routers/compliance.py — Compliance scanning and report retrieval.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,23 +22,27 @@ _COMPLIANCE_REPORT_DIR = Path("/tmp/wizard-compliance")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _scanner_running() -> bool:
     r = subprocess.run(
         ["docker", "inspect", "--format", "{{.State.Running}}", SCANNER_CONTAINER],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return r.stdout.strip() == "true"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/compliance/status")
 def compliance_status():
     """Return compliance report metadata (last generated, summary)."""
     import json as _j
+
     running = _scanner_running()
     _COMPLIANCE_REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    cached  = _COMPLIANCE_REPORT_DIR / "latest.json"
+    cached = _COMPLIANCE_REPORT_DIR / "latest.json"
 
     result: dict = {
         "scanner_running": running,
@@ -46,9 +51,9 @@ def compliance_status():
     if cached.exists():
         try:
             data = _j.loads(cached.read_text())
-            result["generated_at"]   = data.get("generated_at", "")
+            result["generated_at"] = data.get("generated_at", "")
             result["total_findings"] = data.get("summary", {}).get("total_findings", 0)
-            result["by_severity"]    = data.get("summary", {}).get("by_severity", {})
+            result["by_severity"] = data.get("summary", {}).get("by_severity", {})
         except Exception:
             pass
     return result
@@ -97,10 +102,14 @@ async def compliance_generate():
         _COMPLIANCE_REPORT_DIR.mkdir(parents=True, exist_ok=True)
         for filename in ("latest.json", "latest.md"):
             cp_r = subprocess.run(
-                ["docker", "cp",
-                 f"{SCANNER_CONTAINER}:/tmp/compliance/{filename}",
-                 str(_COMPLIANCE_REPORT_DIR / filename)],
-                capture_output=True, text=True,
+                [
+                    "docker",
+                    "cp",
+                    f"{SCANNER_CONTAINER}:/tmp/compliance/{filename}",
+                    str(_COMPLIANCE_REPORT_DIR / filename),
+                ],
+                capture_output=True,
+                text=True,
             )
             if cp_r.returncode != 0:
                 yield _sse(f"[WARN] Could not copy {filename} from container: {cp_r.stderr.strip()}")
@@ -108,8 +117,11 @@ async def compliance_generate():
         yield _sse("[SUCCESS] Compliance report generated and cached.")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/compliance/report/latest")

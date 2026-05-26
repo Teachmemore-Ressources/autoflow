@@ -16,6 +16,7 @@ reference to the FastAPI application.
 Concurrency is bounded by a semaphore (MAX_CONCURRENT) to prevent
 thundering-herd if the queue has a large backlog.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,9 +45,9 @@ class RetryWorker:
     """
 
     def __init__(self, store: EventStore, dispatch_fn: DispatchFn) -> None:
-        self._store       = store
-        self._dispatch    = dispatch_fn
-        self._sem         = asyncio.Semaphore(MAX_CONCURRENT)
+        self._store = store
+        self._dispatch = dispatch_fn
+        self._sem = asyncio.Semaphore(MAX_CONCURRENT)
         self._tasks: list[asyncio.Task] = []
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -54,11 +55,12 @@ class RetryWorker:
     def start(self) -> None:
         self._tasks = [
             asyncio.create_task(self._run_pending(), name="worker:pending"),
-            asyncio.create_task(self._run_retry(),   name="worker:retry"),
+            asyncio.create_task(self._run_retry(), name="worker:retry"),
         ]
         logger.info(
             "RetryWorker started (max_concurrent=%d poll_interval=%.1fs)",
-            MAX_CONCURRENT, POLL_INTERVAL,
+            MAX_CONCURRENT,
+            POLL_INTERVAL,
         )
 
     def stop(self) -> None:
@@ -126,6 +128,7 @@ class RetryWorker:
             except Exception as exc:
                 logger.warning(
                     "Worker: event %s dispatch failed (%s) — scheduling retry",
-                    event_id, exc,
+                    event_id,
+                    exc,
                 )
                 await self._store.schedule_retry(event_id, str(exc))

@@ -6,6 +6,7 @@ POST /admin/rules/reload.  Rules are evaluated in declaration order;
 the first match wins.  If no rule matches, the engine falls back to
 the default template defined in settings.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _flatten(d: dict, prefix: str = "") -> dict[str, Any]:
     """Recursively flatten a nested dict with dot-separated keys.
@@ -35,6 +37,7 @@ def _flatten(d: dict, prefix: str = "") -> dict[str, Any]:
 
 
 # ── Rule model ────────────────────────────────────────────────────────────────
+
 
 class Rule:
     """
@@ -56,10 +59,10 @@ class Rule:
     """
 
     def __init__(self, raw: dict) -> None:
-        self.name: str             = raw.get("name", "unnamed")
-        self.match: dict           = raw.get("match", {})
-        self.job_template_id: int  = int(raw["job_template_id"])
-        self.extra_vars: dict      = raw.get("extra_vars", {})
+        self.name: str = raw.get("name", "unnamed")
+        self.match: dict = raw.get("match", {})
+        self.job_template_id: int = int(raw["job_template_id"])
+        self.extra_vars: dict = raw.get("extra_vars", {})
         self.extra_vars_from_data: dict = raw.get("extra_vars_from_data", {})
 
     def matches(self, source: str, action: str, data: dict) -> bool:
@@ -94,6 +97,7 @@ class Rule:
 
 
 # ── Rule engine ───────────────────────────────────────────────────────────────
+
 
 class RuleEngine:
     """Loads rules from a YAML file and resolves events to job templates."""
@@ -132,9 +136,7 @@ class RuleEngine:
 
     # ── Resolution ────────────────────────────────────────────────────────────
 
-    def resolve(
-        self, source: str, action: str, data: dict
-    ) -> tuple[int, dict]:
+    def resolve(self, source: str, action: str, data: dict) -> tuple[int, dict]:
         """
         Return (job_template_id, extra_vars) for the first matching rule.
 
@@ -159,5 +161,5 @@ class RuleEngine:
         return self._default_id, {
             "event_source": source,
             "event_action": action,
-            "event_data":   data,
+            "event_data": data,
         }

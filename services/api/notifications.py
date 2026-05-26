@@ -17,6 +17,7 @@ Usage:
     # Start the polling loop as a background task
     asyncio.create_task(collect_loop(http_client, interval=15))
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,11 +31,13 @@ logger = logging.getLogger("notifications")
 
 # ── In-memory watch store ─────────────────────────────────────────────────────
 
+
 @dataclass
 class _WatchedJob:
-    job_id:       int
+    job_id: int
     callback_url: str = ""
-    metadata:     dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
+
 
 _watched: dict[int, _WatchedJob] = {}
 _TERMINAL = frozenset({"successful", "failed", "error", "canceled"})
@@ -51,11 +54,13 @@ def register(
     Silently skips registration when no notification targets are configured
     AND no per-job callback_url is provided.
     """
-    if not any([
-        callback_url,
-        settings.notification_webhook_url,
-        settings.notification_slack_webhook,
-    ]):
+    if not any(
+        [
+            callback_url,
+            settings.notification_webhook_url,
+            settings.notification_slack_webhook,
+        ]
+    ):
         return
 
     _watched[job_id] = _WatchedJob(
@@ -72,6 +77,7 @@ def watched_count() -> int:
 
 
 # ── Polling loop ──────────────────────────────────────────────────────────────
+
 
 async def collect_loop(http: httpx.AsyncClient, interval: int = 15) -> None:
     """
@@ -109,12 +115,11 @@ async def _poll(http: httpx.AsyncClient) -> None:
 
 # ── Notification dispatchers ──────────────────────────────────────────────────
 
+
 async def _fire(job: dict, watched: _WatchedJob) -> None:
     jstatus = job.get("status", "unknown")
     payload = _build_payload(job, watched)
-    logger.info(
-        "Job %d finished — status=%s  firing notifications", watched.job_id, jstatus
-    )
+    logger.info("Job %d finished — status=%s  firing notifications", watched.job_id, jstatus)
 
     tasks: list = []
     if watched.callback_url:
@@ -134,17 +139,17 @@ async def _fire(job: dict, watched: _WatchedJob) -> None:
 def _build_payload(job: dict, watched: _WatchedJob) -> dict:
     sf = job.get("summary_fields", {})
     return {
-        "job_id":           watched.job_id,
-        "status":           job.get("status"),
-        "job_type":         job.get("job_type"),
-        "name":             job.get("name"),
-        "started":          job.get("started"),
-        "finished":         job.get("finished"),
-        "elapsed_seconds":  job.get("elapsed"),
-        "failed":           job.get("failed"),
-        "job_template":     sf.get("job_template", {}).get("name"),
-        "launched_by":      sf.get("created_by", {}).get("username"),
-        "metadata":         watched.metadata,
+        "job_id": watched.job_id,
+        "status": job.get("status"),
+        "job_type": job.get("job_type"),
+        "name": job.get("name"),
+        "started": job.get("started"),
+        "finished": job.get("finished"),
+        "elapsed_seconds": job.get("elapsed"),
+        "failed": job.get("failed"),
+        "job_template": sf.get("job_template", {}).get("name"),
+        "launched_by": sf.get("created_by", {}).get("username"),
+        "metadata": watched.metadata,
     }
 
 
@@ -158,11 +163,11 @@ async def _post_json(url: str, payload: dict) -> None:
 
 
 async def _post_slack(url: str, job: dict, watched: _WatchedJob) -> None:
-    jstatus  = job.get("status", "unknown")
-    color    = "#2eb886" if jstatus == "successful" else "#e01e5a"
-    icon     = "✅" if jstatus == "successful" else "❌"
+    jstatus = job.get("status", "unknown")
+    color = "#2eb886" if jstatus == "successful" else "#e01e5a"
+    icon = "✅" if jstatus == "successful" else "❌"
     template = job.get("summary_fields", {}).get("job_template", {}).get("name", "N/A")
-    elapsed  = job.get("elapsed", 0)
+    elapsed = job.get("elapsed", 0)
 
     blocks = [
         {
@@ -181,10 +186,12 @@ async def _post_slack(url: str, job: dict, watched: _WatchedJob) -> None:
     ]
     if watched.metadata:
         meta = "  ".join(f"`{k}={v}`" for k, v in watched.metadata.items())
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*Metadata:* {meta}"},
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Metadata:* {meta}"},
+            }
+        )
 
     await _post_json(url, {"attachments": [{"color": color, "blocks": blocks}]})
 

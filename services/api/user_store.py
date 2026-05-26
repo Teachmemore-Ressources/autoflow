@@ -24,6 +24,7 @@ Because the API service runs as a single process (uvicorn with ``--workers 1``
 in the default Docker setup), there are no concurrent writers.  For multi-worker
 deployments, migrate to a proper database.
 """
+
 from __future__ import annotations
 
 import json
@@ -114,6 +115,7 @@ def _ensure_loaded(admin_fallback_password: str = "") -> None:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def authenticate(username: str, password: str) -> str | None:
     """

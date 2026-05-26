@@ -1,6 +1,7 @@
 """
 Autoflow Deploy Wizard — Backend
 """
+
 from __future__ import annotations
 
 # Core modules — importing core.auth triggers the WIZARD_TOKEN sys.exit guard
@@ -63,6 +64,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/", response_class=None)
 async def root():
     from fastapi.responses import HTMLResponse
+
     return HTMLResponse((STATIC_DIR / "index.html").read_text())
 
 

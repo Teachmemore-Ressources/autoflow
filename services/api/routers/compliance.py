@@ -11,6 +11,7 @@ GET  /compliance/report            – On-demand HTML compliance report
 GET  /compliance/report/latest     – Last auto-generated report (cached)
 POST /compliance/report/generate   – Trigger immediate report generation
 """
+
 from __future__ import annotations
 
 import csv
@@ -35,6 +36,7 @@ _REPORT_CACHE_FILE = Path(os.getenv("COMPLIANCE_REPORT_PATH", "/tmp/compliance_l
 
 
 # ── Helpers AWX ───────────────────────────────────────────────────────────────
+
 
 def _human_dur(seconds: float | None) -> str:
     if seconds is None:
@@ -68,18 +70,18 @@ async def _get_jobs(http, page: int = 1, page_size: int = 200, days: int = 30) -
 def _enrich_job(j: dict) -> dict:
     sf = j.get("summary_fields", {})
     return {
-        "id":              j.get("id"),
-        "name":            j.get("name", ""),
-        "status":          j.get("status", ""),
-        "job_type":        j.get("job_type", ""),
-        "started":         j.get("started", ""),
-        "finished":        j.get("finished", ""),
+        "id": j.get("id"),
+        "name": j.get("name", ""),
+        "status": j.get("status", ""),
+        "job_type": j.get("job_type", ""),
+        "started": j.get("started", ""),
+        "finished": j.get("finished", ""),
         "elapsed_seconds": j.get("elapsed", ""),
-        "elapsed_human":   _human_dur(j.get("elapsed")),
-        "failed":          j.get("failed", False),
-        "job_template":    sf.get("job_template", {}).get("name", ""),
-        "launched_by":     sf.get("created_by", {}).get("username", ""),
-        "execution_node":  j.get("execution_node", ""),
+        "elapsed_human": _human_dur(j.get("elapsed")),
+        "failed": j.get("failed", False),
+        "job_template": sf.get("job_template", {}).get("name", ""),
+        "launched_by": sf.get("created_by", {}).get("username", ""),
+        "execution_node": j.get("execution_node", ""),
     }
 
 
@@ -93,25 +95,25 @@ def _compute_score(jobs: list[dict]) -> dict[str, Any]:
     terminal_statuses = {"successful", "failed", "error", "canceled"}
     terminal = [j for j in jobs if j.get("status") in terminal_statuses]
     successful = [j for j in terminal if j.get("status") == "successful"]
-    failed     = [j for j in terminal if j.get("status") in ("failed", "error")]
-    canceled   = [j for j in terminal if j.get("status") == "canceled"]
+    failed = [j for j in terminal if j.get("status") in ("failed", "error")]
+    canceled = [j for j in terminal if j.get("status") == "canceled"]
 
     total = len(terminal)
     if total == 0:
         return {
-            "score":              100,
-            "grade":              "A",
-            "total_jobs":         0,
-            "successful":         0,
-            "failed":             0,
-            "canceled":           0,
-            "success_rate":       100.0,
-            "failure_rate":       0.0,
+            "score": 100,
+            "grade": "A",
+            "total_jobs": 0,
+            "successful": 0,
+            "failed": 0,
+            "canceled": 0,
+            "success_rate": 100.0,
+            "failure_rate": 0.0,
         }
 
     success_rate = round(len(successful) / total * 100, 1)
-    failure_rate = round(len(failed)     / total * 100, 1)
-    score        = max(0, min(100, round(success_rate)))
+    failure_rate = round(len(failed) / total * 100, 1)
+    score = max(0, min(100, round(success_rate)))
 
     # Notation A-F
     if score >= 95:
@@ -126,18 +128,19 @@ def _compute_score(jobs: list[dict]) -> dict[str, Any]:
         grade = "F"
 
     return {
-        "score":        score,
-        "grade":        grade,
-        "total_jobs":   total,
-        "successful":   len(successful),
-        "failed":       len(failed),
-        "canceled":     len(canceled),
+        "score": score,
+        "grade": grade,
+        "total_jobs": total,
+        "successful": len(successful),
+        "failed": len(failed),
+        "canceled": len(canceled),
         "success_rate": success_rate,
         "failure_rate": failure_rate,
     }
 
 
 # ── CSV Export ────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/export/jobs.csv",
@@ -164,9 +167,18 @@ async def export_jobs_csv(
     jobs = [_enrich_job(j) for j in raw_jobs]
 
     fields = [
-        "id", "name", "status", "job_type",
-        "started", "finished", "elapsed_seconds", "elapsed_human",
-        "failed", "job_template", "launched_by", "execution_node",
+        "id",
+        "name",
+        "status",
+        "job_type",
+        "started",
+        "finished",
+        "elapsed_seconds",
+        "elapsed_human",
+        "failed",
+        "job_template",
+        "launched_by",
+        "execution_node",
     ]
 
     buf = io.StringIO()
@@ -184,6 +196,7 @@ async def export_jobs_csv(
 
 
 # ── Score ─────────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/score",
@@ -204,7 +217,7 @@ async def compliance_score(
     raw_jobs = await _get_jobs(request.app.state.http, days=days)
     jobs = [_enrich_job(j) for j in raw_jobs]
     score = _compute_score(jobs)
-    score["period_days"]  = days
+    score["period_days"] = days
     score["generated_at"] = datetime.now(timezone.utc).isoformat()
     return score
 
@@ -256,13 +269,13 @@ font-weight:700;margin:0 auto 8px;border:3px solid currentColor}
 
 def _build_html_report(jobs: list[dict], days: int) -> str:
     score_data = _compute_score(jobs)
-    score      = score_data["score"]
-    grade      = score_data["grade"]
-    grade_cls  = f"score-{grade.lower()}"
+    score = score_data["score"]
+    grade = score_data["grade"]
+    grade_cls = f"score-{grade.lower()}"
 
-    now_str     = datetime.now(timezone.utc).strftime("%d/%m/%Y à %H:%M UTC")
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y à %H:%M UTC")
     period_from = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%d/%m/%Y")
-    period_to   = datetime.now(timezone.utc).strftime("%d/%m/%Y")
+    period_to = datetime.now(timezone.utc).strftime("%d/%m/%Y")
 
     # Top N jobs en échec
     failed_jobs = [j for j in jobs if j.get("status") in ("failed", "error")][:20]
@@ -278,29 +291,29 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
     rows_recent = ""
     for j in recent_jobs:
         rows_recent += (
-            f'<tr>'
-            f'<td>{j["id"]}</td>'
-            f'<td>{j["job_template"] or j["name"]}</td>'
-            f'<td>{status_badge(j["status"])}</td>'
-            f'<td>{j["job_type"]}</td>'
-            f'<td>{(j["started"] or "")[:16].replace("T"," ")}</td>'
-            f'<td>{j["elapsed_human"]}</td>'
-            f'<td>{j["launched_by"] or "—"}</td>'
-            f'</tr>'
+            f"<tr>"
+            f"<td>{j['id']}</td>"
+            f"<td>{j['job_template'] or j['name']}</td>"
+            f"<td>{status_badge(j['status'])}</td>"
+            f"<td>{j['job_type']}</td>"
+            f"<td>{(j['started'] or '')[:16].replace('T', ' ')}</td>"
+            f"<td>{j['elapsed_human']}</td>"
+            f"<td>{j['launched_by'] or '—'}</td>"
+            f"</tr>"
         )
 
     # Tableau jobs en échec
     rows_failed = ""
     for j in failed_jobs:
         rows_failed += (
-            f'<tr>'
-            f'<td>{j["id"]}</td>'
-            f'<td>{j["job_template"] or j["name"]}</td>'
-            f'<td>{status_badge(j["status"])}</td>'
-            f'<td>{(j["started"] or "")[:16].replace("T"," ")}</td>'
-            f'<td>{j["elapsed_human"]}</td>'
-            f'<td>{j["launched_by"] or "—"}</td>'
-            f'</tr>'
+            f"<tr>"
+            f"<td>{j['id']}</td>"
+            f"<td>{j['job_template'] or j['name']}</td>"
+            f"<td>{status_badge(j['status'])}</td>"
+            f"<td>{(j['started'] or '')[:16].replace('T', ' ')}</td>"
+            f"<td>{j['elapsed_human']}</td>"
+            f"<td>{j['launched_by'] or '—'}</td>"
+            f"</tr>"
         )
 
     failed_section = ""
@@ -317,12 +330,10 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
 
     # KPIs additionnels
     success_kpi_cls = (
-        "ok" if score_data["success_rate"] >= 95
-        else ("warn" if score_data["success_rate"] >= 70 else "bad")
+        "ok" if score_data["success_rate"] >= 95 else ("warn" if score_data["success_rate"] >= 70 else "bad")
     )
     failure_kpi_cls = (
-        "ok" if score_data["failure_rate"] < 5
-        else ("warn" if score_data["failure_rate"] < 15 else "bad")
+        "ok" if score_data["failure_rate"] < 5 else ("warn" if score_data["failure_rate"] < 15 else "bad")
     )
 
     return f"""<!DOCTYPE html>
@@ -352,23 +363,23 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
         <div class="label">Score Global</div>
       </div>
       <div class="kpi {success_kpi_cls}">
-        <div class="value">{score_data['success_rate']}%</div>
+        <div class="value">{score_data["success_rate"]}%</div>
         <div class="label">Taux de Réussite</div>
       </div>
       <div class="kpi {failure_kpi_cls}">
-        <div class="value">{score_data['failure_rate']}%</div>
+        <div class="value">{score_data["failure_rate"]}%</div>
         <div class="label">Taux d'Échec</div>
       </div>
       <div class="kpi">
-        <div class="value" style="color:#58a6ff">{score_data['total_jobs']}</div>
+        <div class="value" style="color:#58a6ff">{score_data["total_jobs"]}</div>
         <div class="label">Jobs Exécutés</div>
       </div>
       <div class="kpi ok">
-        <div class="value">{score_data['successful']}</div>
+        <div class="value">{score_data["successful"]}</div>
         <div class="label">Réussis</div>
       </div>
-      <div class="kpi {'bad' if score_data['failed'] > 0 else 'ok'}">
-        <div class="value">{score_data['failed']}</div>
+      <div class="kpi {"bad" if score_data["failed"] > 0 else "ok"}">
+        <div class="value">{score_data["failed"]}</div>
         <div class="label">Échoués</div>
       </div>
     </div>
@@ -398,8 +409,8 @@ def _build_html_report(jobs: list[dict], days: int) -> str:
 async def _generate_and_cache(http) -> str:
     """Génère le rapport HTML, le met en cache sur disque et retourne le contenu."""
     raw_jobs = await _get_jobs(http, days=30)
-    jobs     = [_enrich_job(j) for j in raw_jobs]
-    html     = _build_html_report(jobs, days=30)
+    jobs = [_enrich_job(j) for j in raw_jobs]
+    html = _build_html_report(jobs, days=30)
     try:
         _REPORT_CACHE_FILE.write_text(html, encoding="utf-8")
         logger.info("Rapport de conformité mis en cache : %s", _REPORT_CACHE_FILE)
@@ -409,6 +420,7 @@ async def _generate_and_cache(http) -> str:
 
 
 # ── Endpoints HTML ────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/report",
@@ -433,8 +445,8 @@ async def compliance_report(
     - `days` : plage temporelle (défaut 30, max 365)
     """
     raw_jobs = await _get_jobs(request.app.state.http, days=days)
-    jobs     = [_enrich_job(j) for j in raw_jobs]
-    html     = _build_html_report(jobs, days=days)
+    jobs = [_enrich_job(j) for j in raw_jobs]
+    html = _build_html_report(jobs, days=days)
     # Mise en cache uniquement pour la période par défaut (30j)
     if days == 30:
         try:
@@ -478,7 +490,7 @@ async def generate_compliance_report(request: Request):
     """
     await _generate_and_cache(request.app.state.http)
     return {
-        "status":       "generated",
-        "report_url":   "/api/v1/compliance/report/latest",
+        "status": "generated",
+        "report_url": "/api/v1/compliance/report/latest",
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

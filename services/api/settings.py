@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     awx_admin_password: str
 
     # ── Authentication ────────────────────────────────────────────────────────
-    api_secret_key: str          # used as X-API-Key value (legacy)
+    api_secret_key: str  # used as X-API-Key value (legacy)
 
     # Credentials for POST /auth/token
     # api_password defaults to api_secret_key if left empty

@@ -13,6 +13,7 @@ Metrics
   version_last_check_timestamp_seconds
       – Unix ts of the last completed version check cycle
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -53,16 +54,15 @@ _last_check_ts = Gauge(
 #   check_type "latest"   → tag is "latest"; comparison is not meaningful, skip
 
 _IMAGE_REGISTRY: list[tuple[str, str, str, str]] = [
-    ("ghcr.io/ansible/awx",                       None,       "github",    "ansible/awx"),
-    ("quay.io/ansible/receptor",                   "latest",   "latest",    "ansible/receptor"),
-    ("postgres",                                   "15.17-alpine","dockerhub", "library/postgres"),
-    ("redis",                                      "7.4.8-alpine", "dockerhub", "library/redis"),
-    ("prom/prometheus",                            "latest",   "latest",    "prometheus/prometheus"),
-    ("grafana/grafana",                            "latest",   "latest",    "grafana/grafana"),
-    ("prom/alertmanager",                          "latest",   "latest",    "prometheus/alertmanager"),
-    ("prometheuscommunity/postgres-exporter",       "latest",   "latest",
-     "prometheus-community/postgres_exporter"),
-    ("oliver006/redis_exporter",                   "latest",   "latest",    "oliver006/redis_exporter"),
+    ("ghcr.io/ansible/awx", None, "github", "ansible/awx"),
+    ("quay.io/ansible/receptor", "latest", "latest", "ansible/receptor"),
+    ("postgres", "15.17-alpine", "dockerhub", "library/postgres"),
+    ("redis", "7.4.8-alpine", "dockerhub", "library/redis"),
+    ("prom/prometheus", "latest", "latest", "prometheus/prometheus"),
+    ("grafana/grafana", "latest", "latest", "grafana/grafana"),
+    ("prom/alertmanager", "latest", "latest", "prometheus/alertmanager"),
+    ("prometheuscommunity/postgres-exporter", "latest", "latest", "prometheus-community/postgres_exporter"),
+    ("oliver006/redis_exporter", "latest", "latest", "oliver006/redis_exporter"),
 ]
 
 
@@ -85,6 +85,7 @@ _pre_init_metrics()
 
 
 # ── Version check loop ────────────────────────────────────────────────────────
+
 
 class VersionCheckLoop:
     def __init__(self) -> None:
@@ -187,6 +188,7 @@ class VersionCheckLoop:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _set_outdated(image: str, current: str, latest: str, value: int) -> None:
     """Set the image_version_outdated gauge, clearing stale label combos."""

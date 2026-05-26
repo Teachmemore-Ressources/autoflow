@@ -12,6 +12,7 @@ because this file is always loaded before api modules change sys.path).
 The ``ee_client`` fixture (for the single HTTP test) comes from
 ``tests/integration/conftest.py``.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,7 +26,7 @@ from httpx import ASGITransport, AsyncClient
 
 # ── Ensure event-engine is on sys.path before any service import ──────────────
 
-_EE    = Path(__file__).parent.parent.parent / "services" / "event-engine"
+_EE = Path(__file__).parent.parent.parent / "services" / "event-engine"
 _STUBS = Path(__file__).parent.parent / "stubs"
 
 for _p in (_EE, _STUBS):
@@ -64,7 +65,7 @@ async def components():
         headers={"Authorization": "Bearer test-awx-token"},
         timeout=30.0,
     )
-    awx   = AWXClient(awx_http, settings.awx_job_template_id)
+    awx = AWXClient(awx_http, settings.awx_job_template_id)
     rules = RuleEngine(settings.rules_file or None, settings.awx_job_template_id)
     dedup = DedupStore(ttl_seconds=settings.dedup_ttl)
 
@@ -74,6 +75,7 @@ async def components():
 
 
 # ── Direct dispatch tests ─────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_dispatch_core_launches_awx_job(components, awx_stub):
@@ -141,21 +143,26 @@ async def test_dispatch_core_dedup_suppresses_second_call(components, awx_stub):
 
     data = {"sha": "unique-for-dedup-test"}
     r1 = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        "ci", "dedup-test", data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        "ci",
+        "dedup-test",
+        data,
     )
     r2 = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        "ci", "dedup-test", data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        "ci",
+        "dedup-test",
+        data,
     )
     assert r1["status"] == "accepted"
     assert r2["status"] == "deduplicated"
 
     launches = (await awx_stub.get("/_test/launches")).json()
-    dedup_launches = [
-        ln for ln in launches
-        if ln["extra_vars"].get("event_action") == "dedup-test"
-    ]
+    dedup_launches = [ln for ln in launches if ln["extra_vars"].get("event_action") == "dedup-test"]
     assert len(dedup_launches) == 1
 
 
@@ -166,8 +173,12 @@ async def test_dispatch_core_different_data_not_deduplicated(components, awx_stu
 
     for sha in ("sha-111", "sha-222"):
         await _dispatch_core(
-            components["dedup"], components["rules"], components["awx"],
-            "ci", "build", {"sha": sha},
+            components["dedup"],
+            components["rules"],
+            components["awx"],
+            "ci",
+            "build",
+            {"sha": sha},
         )
     launches = (await awx_stub.get("/_test/launches")).json()
     assert len(launches) == 2
@@ -179,8 +190,12 @@ async def test_dispatch_core_event_id_injected_into_extra_vars(components, awx_s
     from main import _dispatch_core
 
     await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        "ci", "release", {"tag": "v1.0"},
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        "ci",
+        "release",
+        {"tag": "v1.0"},
         event_id="evt-abc-123",
     )
     launches = (await awx_stub.get("/_test/launches")).json()
@@ -189,25 +204,28 @@ async def test_dispatch_core_event_id_injected_into_extra_vars(components, awx_s
 
 # ── GitHub webhook parsing + dispatch ─────────────────────────────────────────
 
+
 @pytest.mark.integration
 async def test_github_push_parse_and_dispatch(components, awx_stub):
     """parse_github push + _dispatch_core reaches AWX with correct vars."""
     from main import _dispatch_core
 
     payload = {
-        "ref":         "refs/heads/main",
-        "after":       "cafebabe",
-        "before":      "00000000",
-        "repository":  {"full_name": "acme/app", "name": "app",
-                         "html_url": "https://github.com/acme/app"},
-        "sender":      {"login": "alice"},
-        "head_commit": {"id": "cafebabe", "message": "fix: prod",
-                         "author": {"name": "Alice"}},
+        "ref": "refs/heads/main",
+        "after": "cafebabe",
+        "before": "00000000",
+        "repository": {"full_name": "acme/app", "name": "app", "html_url": "https://github.com/acme/app"},
+        "sender": {"login": "alice"},
+        "head_commit": {"id": "cafebabe", "message": "fix: prod", "author": {"name": "Alice"}},
     }
     source, action, data = parse_github("push", payload)
     result = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        source, action, data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        source,
+        action,
+        data,
     )
     assert result["status"] == "accepted"
     launches = (await awx_stub.get("/_test/launches")).json()
@@ -222,18 +240,25 @@ async def test_github_pr_opened_parse_and_dispatch(components, awx_stub):
     from main import _dispatch_core
 
     payload = {
-        "action":       "opened",
+        "action": "opened",
         "pull_request": {
-            "number": 12, "title": "feat", "merged": False,
-            "base":   {"ref": "main"}, "head": {"ref": "feat/x"},
+            "number": 12,
+            "title": "feat",
+            "merged": False,
+            "base": {"ref": "main"},
+            "head": {"ref": "feat/x"},
         },
         "repository": {"full_name": "acme/app"},
-        "sender":     {"login": "bob"},
+        "sender": {"login": "bob"},
     }
     source, action, data = parse_github("pull_request", payload)
     result = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        source, action, data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        source,
+        action,
+        data,
     )
     assert result["status"] == "accepted"
     assert result["action"] == "opened"
@@ -241,28 +266,34 @@ async def test_github_pr_opened_parse_and_dispatch(components, awx_stub):
 
 # ── Alertmanager webhook parsing + dispatch ───────────────────────────────────
 
+
 @pytest.mark.integration
 async def test_alertmanager_firing_parse_and_dispatch(components, awx_stub):
     """parse_alertmanager firing + _dispatch_core dispatches correctly."""
     from main import _dispatch_core
 
     payload = {
-        "status":      "firing",
-        "receiver":    "autoflow-webhook",
+        "status": "firing",
+        "receiver": "autoflow-webhook",
         "externalURL": "https://alertmanager.example.com",
         "groupLabels": {"alertname": "HighMemory"},
-        "alerts": [{
-            "labels":      {"alertname": "HighMemory", "severity": "critical",
-                              "instance": "db-01"},
-            "annotations": {"summary": "Memory above 95%"},
-            "startsAt":    "2026-04-26T10:00:00Z",
-            "endsAt":      "0001-01-01T00:00:00Z",
-        }],
+        "alerts": [
+            {
+                "labels": {"alertname": "HighMemory", "severity": "critical", "instance": "db-01"},
+                "annotations": {"summary": "Memory above 95%"},
+                "startsAt": "2026-04-26T10:00:00Z",
+                "endsAt": "0001-01-01T00:00:00Z",
+            }
+        ],
     }
     source, action, data = parse_alertmanager(payload)
     result = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        source, action, data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        source,
+        action,
+        data,
     )
     assert result["status"] == "accepted"
     launches = (await awx_stub.get("/_test/launches")).json()
@@ -277,20 +308,26 @@ async def test_alertmanager_resolved_parse_and_dispatch(components, awx_stub):
     from main import _dispatch_core
 
     payload = {
-        "status":      "resolved",
-        "receiver":    "autoflow",
+        "status": "resolved",
+        "receiver": "autoflow",
         "groupLabels": {"alertname": "HighCPU"},
-        "alerts": [{
-            "labels":      {"alertname": "HighCPU", "severity": "warning"},
-            "annotations": {},
-            "startsAt":    "2026-04-26T09:00:00Z",
-            "endsAt":      "2026-04-26T09:30:00Z",
-        }],
+        "alerts": [
+            {
+                "labels": {"alertname": "HighCPU", "severity": "warning"},
+                "annotations": {},
+                "startsAt": "2026-04-26T09:00:00Z",
+                "endsAt": "2026-04-26T09:30:00Z",
+            }
+        ],
     }
     source, action, data = parse_alertmanager(payload)
     result = await _dispatch_core(
-        components["dedup"], components["rules"], components["awx"],
-        source, action, data,
+        components["dedup"],
+        components["rules"],
+        components["awx"],
+        source,
+        action,
+        data,
     )
     assert result["status"] == "accepted"
     assert result["action"] == "resolved"
@@ -298,29 +335,32 @@ async def test_alertmanager_resolved_parse_and_dispatch(components, awx_stub):
 
 # ── Rule-based routing ────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 async def test_rule_routes_to_correct_template(awx_stub):
     """Events are routed to specific AWX templates via YAML rules."""
     from main import _dispatch_core
 
-    rules_content = yaml.dump({
-        "rules": [
-            {
-                "name": "github-main-push",
-                "match": {
-                    "source": "github",
-                    "action": "push",
-                    "ref":    "refs/heads/main",
+    rules_content = yaml.dump(
+        {
+            "rules": [
+                {
+                    "name": "github-main-push",
+                    "match": {
+                        "source": "github",
+                        "action": "push",
+                        "ref": "refs/heads/main",
+                    },
+                    "job_template_id": 42,
                 },
-                "job_template_id": 42,
-            },
-            {
-                "name": "alertmanager-critical",
-                "match": {"source": "alertmanager", "action": "firing"},
-                "job_template_id": 77,
-            },
-        ]
-    })
+                {
+                    "name": "alertmanager-critical",
+                    "match": {"source": "alertmanager", "action": "firing"},
+                    "job_template_id": 77,
+                },
+            ]
+        }
+    )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
         f.write(rules_content)
@@ -333,33 +373,40 @@ async def test_rule_routes_to_correct_template(awx_stub):
             headers={"Authorization": "Bearer test-awx-token"},
             timeout=30.0,
         )
-        awx   = AWXClient(awx_http, 1)
+        awx = AWXClient(awx_http, 1)
         rules = RuleEngine(rules_path, 1)
         dedup = DedupStore(ttl_seconds=0)  # no dedup for this test
 
         # GitHub push to main → template 42
-        source, action, data = parse_github("push", {
-            "ref":         "refs/heads/main",
-            "repository":  {"full_name": "acme/app"},
-            "sender":      {"login": "alice"},
-            "head_commit": {"id": "x", "message": "y", "author": {"name": "a"}},
-        })
+        source, action, data = parse_github(
+            "push",
+            {
+                "ref": "refs/heads/main",
+                "repository": {"full_name": "acme/app"},
+                "sender": {"login": "alice"},
+                "head_commit": {"id": "x", "message": "y", "author": {"name": "a"}},
+            },
+        )
         result = await _dispatch_core(dedup, rules, awx, source, action, data)
         assert result["template_id"] == 42
         launches = (await awx_stub.get("/_test/launches")).json()
         assert launches[-1]["template_id"] == 42
 
         # Alertmanager firing → template 77
-        source2, action2, data2 = parse_alertmanager({
-            "status":      "firing",
-            "groupLabels": {"alertname": "Disk"},
-            "alerts": [{
-                "labels":      {"alertname": "Disk", "severity": "critical"},
-                "annotations": {},
-                "startsAt":    "2026-04-26T10:00:00Z",
-                "endsAt":      "0001-01-01T00:00:00Z",
-            }],
-        })
+        source2, action2, data2 = parse_alertmanager(
+            {
+                "status": "firing",
+                "groupLabels": {"alertname": "Disk"},
+                "alerts": [
+                    {
+                        "labels": {"alertname": "Disk", "severity": "critical"},
+                        "annotations": {},
+                        "startsAt": "2026-04-26T10:00:00Z",
+                        "endsAt": "0001-01-01T00:00:00Z",
+                    }
+                ],
+            }
+        )
         result2 = await _dispatch_core(dedup, rules, awx, source2, action2, data2)
         assert result2["template_id"] == 77
         launches = (await awx_stub.get("/_test/launches")).json()
@@ -371,6 +418,7 @@ async def test_rule_routes_to_correct_template(awx_stub):
 
 
 # ── HTTP health endpoint ──────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_health_endpoint_responds(ee_client):

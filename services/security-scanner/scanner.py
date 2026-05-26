@@ -12,6 +12,7 @@ Metrics
   trivy_scan_errors_total{image}                    – Scan failure counter
   security_scanner_healthy                          – 1 if last full cycle succeeded
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -92,6 +93,7 @@ _pre_init_metrics()
 
 # ── Scanner loop ──────────────────────────────────────────────────────────────
 
+
 async def scan_loop(interval: int) -> None:
     """Infinite loop: run a full scan cycle then sleep for *interval* seconds."""
     logger.info("Trivy scanner started (interval=%ds)", interval)
@@ -130,13 +132,19 @@ async def _scan_image(image: str, tag: str) -> None:
     t0 = time.monotonic()
 
     cmd = [
-        "trivy", "image",
-        "--format", "json",
-        "--exit-code", "0",      # never exit non-zero on findings
+        "trivy",
+        "image",
+        "--format",
+        "json",
+        "--exit-code",
+        "0",  # never exit non-zero on findings
         "--no-progress",
-        "--scanners", "vuln",    # vulnerability only — skip secret scanning (much faster)
-        "--cache-dir", settings.trivy_cache_dir,
-        "--timeout", f"{settings.trivy_timeout}s",
+        "--scanners",
+        "vuln",  # vulnerability only — skip secret scanning (much faster)
+        "--cache-dir",
+        settings.trivy_cache_dir,
+        "--timeout",
+        f"{settings.trivy_timeout}s",
         full_ref,
     ]
 
@@ -167,9 +175,7 @@ async def _scan_image(image: str, tag: str) -> None:
     counts = _parse_trivy_output(stdout.decode(errors="replace"))
 
     for severity in _SEVERITIES:
-        _vuln_gauge.labels(image=image, tag=tag, severity=severity).set(
-            counts.get(severity, 0)
-        )
+        _vuln_gauge.labels(image=image, tag=tag, severity=severity).set(counts.get(severity, 0))
 
     _last_scan_ts.labels(image=image).set(time.time())
     _scan_duration.labels(image=image).set(round(elapsed, 2))

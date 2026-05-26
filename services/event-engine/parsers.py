@@ -4,11 +4,13 @@ Webhook payload parsers.
 Each parser normalises a vendor-specific webhook body into the canonical
 (source, action, data) triple consumed by the RuleEngine.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 # ── GitHub ────────────────────────────────────────────────────────────────────
+
 
 def parse_github(event_type: str, payload: dict[str, Any]) -> tuple[str, str, dict]:
     """
@@ -57,36 +59,36 @@ def parse_github(event_type: str, payload: dict[str, Any]) -> tuple[str, str, di
 
     data: dict[str, Any] = {
         # Common
-        "ref":        payload.get("ref", ""),
-        "after":      payload.get("after", ""),
-        "before":     payload.get("before", ""),
+        "ref": payload.get("ref", ""),
+        "after": payload.get("after", ""),
+        "before": payload.get("before", ""),
         # Repository
         "repository": {
             "full_name": repo.get("full_name", ""),
-            "name":      repo.get("name", ""),
-            "url":       repo.get("html_url", ""),
+            "name": repo.get("name", ""),
+            "url": repo.get("html_url", ""),
             "default_branch": repo.get("default_branch", "main"),
         },
         # Sender
         "sender": sender.get("login", ""),
         # Push-specific
         "head_commit": {
-            "id":      head_commit.get("id", ""),
+            "id": head_commit.get("id", ""),
             "message": head_commit.get("message", ""),
-            "author":  head_commit.get("author", {}).get("name", ""),
+            "author": head_commit.get("author", {}).get("name", ""),
         },
         # Pull request-specific
         "pull_request": {
             "number": pull_request.get("number", ""),
-            "title":  pull_request.get("title", ""),
+            "title": pull_request.get("title", ""),
             "merged": pull_request.get("merged", False),
-            "base":   pull_request.get("base", {}).get("ref", ""),
-            "head":   pull_request.get("head", {}).get("ref", ""),
+            "base": pull_request.get("base", {}).get("ref", ""),
+            "head": pull_request.get("head", {}).get("ref", ""),
         },
         # Release-specific
         "release": {
             "tag_name": payload.get("release", {}).get("tag_name", ""),
-            "name":     payload.get("release", {}).get("name", ""),
+            "name": payload.get("release", {}).get("name", ""),
         },
         # Raw event type for rules
         "github_event": event_type,
@@ -96,6 +98,7 @@ def parse_github(event_type: str, payload: dict[str, Any]) -> tuple[str, str, di
 
 
 # ── Alertmanager ──────────────────────────────────────────────────────────────
+
 
 def parse_alertmanager(payload: dict[str, Any]) -> tuple[str, str, dict]:
     """
@@ -120,27 +123,27 @@ def parse_alertmanager(payload: dict[str, Any]) -> tuple[str, str, dict]:
     action: str = status
 
     alerts: list[dict] = payload.get("alerts", [])
-    first: dict        = alerts[0] if alerts else {}
+    first: dict = alerts[0] if alerts else {}
 
-    labels:      dict = first.get("labels", {})
+    labels: dict = first.get("labels", {})
     annotations: dict = first.get("annotations", {})
 
     data: dict[str, Any] = {
-        "alertname":    labels.get("alertname", "unknown"),
-        "severity":     labels.get("severity", "unknown"),
-        "status":       status,
-        "summary":      annotations.get("summary", ""),
-        "description":  annotations.get("description", ""),
-        "receiver":     payload.get("receiver", ""),
+        "alertname": labels.get("alertname", "unknown"),
+        "severity": labels.get("severity", "unknown"),
+        "status": status,
+        "summary": annotations.get("summary", ""),
+        "description": annotations.get("description", ""),
+        "receiver": payload.get("receiver", ""),
         "external_url": payload.get("externalURL", ""),
         "alerts_count": len(alerts),
         "group_labels": payload.get("groupLabels", {}),
         # Keep full first alert for advanced rules
         "first_alert": {
-            "labels":      labels,
+            "labels": labels,
             "annotations": annotations,
-            "starts_at":   first.get("startsAt", ""),
-            "ends_at":     first.get("endsAt", ""),
+            "starts_at": first.get("startsAt", ""),
+            "ends_at": first.get("endsAt", ""),
         },
     }
 

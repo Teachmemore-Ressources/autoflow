@@ -18,6 +18,7 @@ Run:
     EE_URL=http://localhost:8001 AWX_STUB_URL=http://localhost:8052 \
     CALLBACK_URL=http://localhost:9999 pytest -m e2e -v tests/e2e/
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,7 @@ import asyncio
 import pytest
 
 # ── Smoke tests ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.e2e
 async def test_event_engine_health(ee):
@@ -52,18 +54,17 @@ async def test_callback_stub_ready(callback):
 
 # ── Webhook → AWX job ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.e2e
 async def test_github_push_creates_awx_job(ee, awx_stub):
     """GitHub push webhook → event engine → AWX job launched."""
     payload = {
-        "ref":         "refs/heads/main",
-        "after":       "cafebabe",
-        "before":      "00000000",
-        "repository":  {"full_name": "acme/app", "name": "app",
-                         "html_url": "https://github.com/acme/app"},
-        "sender":      {"login": "alice"},
-        "head_commit": {"id": "cafebabe", "message": "fix: prod bug",
-                         "author": {"name": "Alice"}},
+        "ref": "refs/heads/main",
+        "after": "cafebabe",
+        "before": "00000000",
+        "repository": {"full_name": "acme/app", "name": "app", "html_url": "https://github.com/acme/app"},
+        "sender": {"login": "alice"},
+        "head_commit": {"id": "cafebabe", "message": "fix: prod bug", "author": {"name": "Alice"}},
     }
     resp = await ee.post(
         "/webhook/github",
@@ -86,17 +87,16 @@ async def test_github_push_creates_awx_job(ee, awx_stub):
 async def test_alertmanager_firing_creates_awx_job(ee, awx_stub):
     """Alertmanager firing webhook → event engine → AWX job launched."""
     payload = {
-        "status":      "firing",
-        "receiver":    "autoflow-webhook",
+        "status": "firing",
+        "receiver": "autoflow-webhook",
         "externalURL": "https://alertmanager.example.com",
         "groupLabels": {"alertname": "DiskUsage"},
         "alerts": [
             {
-                "labels":      {"alertname": "DiskUsage", "severity": "warning",
-                                  "instance": "storage-01"},
+                "labels": {"alertname": "DiskUsage", "severity": "warning", "instance": "storage-01"},
                 "annotations": {"summary": "Disk 90% full"},
-                "startsAt":    "2026-04-26T11:00:00Z",
-                "endsAt":      "0001-01-01T00:00:00Z",
+                "startsAt": "2026-04-26T11:00:00Z",
+                "endsAt": "0001-01-01T00:00:00Z",
             }
         ],
     }
@@ -120,12 +120,11 @@ async def test_generic_event_creates_awx_job(ee, awx_stub):
     assert resp.status_code in (200, 202), resp.text
 
     launches = (await awx_stub.get("/_test/launches")).json()
-    assert any(
-        ln["extra_vars"].get("event_action") == "e2e-test" for ln in launches
-    )
+    assert any(ln["extra_vars"].get("event_action") == "e2e-test" for ln in launches)
 
 
 # ── Deduplication (live) ──────────────────────────────────────────────────────
+
 
 @pytest.mark.e2e
 async def test_duplicate_event_suppressed(ee, awx_stub):
@@ -133,7 +132,7 @@ async def test_duplicate_event_suppressed(ee, awx_stub):
     payload = {
         "action": "dedup-e2e",
         "source": "pytest",
-        "data":   {"unique_key": "dedup-e2e-test-run"},
+        "data": {"unique_key": "dedup-e2e-test-run"},
     }
     r1 = await ee.post("/event", json=payload)
     r2 = await ee.post("/event", json=payload)
@@ -142,14 +141,12 @@ async def test_duplicate_event_suppressed(ee, awx_stub):
     assert r2.json()["status"] == "deduplicated"
 
     launches = (await awx_stub.get("/_test/launches")).json()
-    dedup_launches = [
-        ln for ln in launches
-        if ln["extra_vars"].get("event_action") == "dedup-e2e"
-    ]
+    dedup_launches = [ln for ln in launches if ln["extra_vars"].get("event_action") == "dedup-e2e"]
     assert len(dedup_launches) == 1
 
 
 # ── Full notification flow ────────────────────────────────────────────────────
+
 
 @pytest.mark.e2e
 async def test_job_completion_sends_notification(awx_stub, callback):
@@ -166,6 +163,7 @@ async def test_job_completion_sends_notification(awx_stub, callback):
       API_URL must be set and the API service must be pointing at awx-stub.
     """
     import os
+
     api_url = os.getenv("API_URL")
     if not api_url:
         pytest.skip("API_URL not set — skipping notification E2E test")
@@ -178,8 +176,10 @@ async def test_job_completion_sends_notification(awx_stub, callback):
         # Authenticate
         token_resp = await api.post(
             "/api/v1/auth/token",
-            json={"username": os.getenv("API_USERNAME", "admin"),
-                  "password": os.getenv("API_SECRET_KEY", "test-api-secret-32chars-long-xxxxxxxx")},
+            json={
+                "username": os.getenv("API_USERNAME", "admin"),
+                "password": os.getenv("API_SECRET_KEY", "test-api-secret-32chars-long-xxxxxxxx"),
+            },
         )
         assert token_resp.status_code == 200, token_resp.text
         token = token_resp.json()["access_token"]
@@ -212,9 +212,7 @@ async def test_job_completion_sends_notification(awx_stub, callback):
     received = (await callback.get("/_test/received")).json()
     assert len(received) >= 1
 
-    notif = next(
-        (r for r in received if r.get("job_id") == job_id), None
-    )
+    notif = next((r for r in received if r.get("job_id") == job_id), None)
     assert notif is not None, f"No notification for job {job_id}: {received}"
     assert notif["status"] == "successful"
     assert notif["metadata"]["test"] == "e2e-notification"

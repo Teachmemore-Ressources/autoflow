@@ -1,6 +1,7 @@
 """
 core/shell.py — SSE helper, sudo wrappers, PKI constants and Gitea URL helper.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -10,18 +11,20 @@ from core.env import ROOT, _load_env
 
 # ── PKI constants ─────────────────────────────────────────────────────────────
 
-PKI_URL             = "http://localhost:8004"
-PKI_CA_NAME         = "autoflow-root"
+PKI_URL = "http://localhost:8004"
+PKI_CA_NAME = "autoflow-root"
 WIZARD_PKI_OVERRIDE = ROOT / "docker-compose.wizard-pki.yml"
 
 
 # ── SSE helper ────────────────────────────────────────────────────────────────
+
 
 def _sse(msg: str) -> str:
     return f"data: {msg}\n\n"
 
 
 # ── Sudo helpers ──────────────────────────────────────────────────────────────
+
 
 def _sudo_password() -> str:
     return _load_env().get("SUDO_PASSWORD", "")
@@ -44,7 +47,10 @@ async def _async_sudo_exec(cmd: list, *, password: str | None = None, **kwargs):
     pw = password if password is not None else _sudo_password()
     if pw:
         proc = await asyncio.create_subprocess_exec(
-            "sudo", "-S", "--", *cmd,
+            "sudo",
+            "-S",
+            "--",
+            *cmd,
             stdin=asyncio.subprocess.PIPE,
             **kwargs,
         )
@@ -57,6 +63,7 @@ async def _async_sudo_exec(cmd: list, *, password: str | None = None, **kwargs):
 
 
 # ── Gitea API URL ─────────────────────────────────────────────────────────────
+
 
 def _gitea_api_url() -> str:
     """Return the Gitea API base URL reachable from the host.

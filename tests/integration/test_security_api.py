@@ -13,6 +13,7 @@ For tests that exercise /auth/token specifically (Cache-Control on the real
 auth router), we load the API main.py via importlib to stay consistent with
 the project's module isolation strategy.
 """
+
 from __future__ import annotations
 
 import sys
@@ -25,7 +26,7 @@ from httpx import ASGITransport, AsyncClient
 
 # ── Ensure shared module is importable ───────────────────────────────────────
 
-_ROOT   = Path(__file__).parent.parent.parent
+_ROOT = Path(__file__).parent.parent.parent
 _SHARED = _ROOT / "services" / "shared"
 if str(_SHARED) not in sys.path:
     sys.path.insert(0, str(_SHARED))
@@ -83,6 +84,7 @@ def _build_test_app(
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 async def client():
     """HTTP test client against the minimal secured app."""
@@ -106,6 +108,7 @@ async def https_client():
 
 
 # ── Security headers on /health ───────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_health_returns_200(client):
@@ -134,6 +137,7 @@ async def test_health_no_cache_control_no_store(client):
 
 # ── Cache-Control on /auth/token ──────────────────────────────────────────────
 
+
 @pytest.mark.integration
 async def test_auth_token_has_cache_control_no_store(client):
     """POST /auth/token must return Cache-Control: no-store to prevent token caching."""
@@ -150,6 +154,7 @@ async def test_auth_token_also_has_security_headers(client):
 
 
 # ── HSTS on HTTPS ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_hsts_injected_on_https(https_client):
@@ -168,6 +173,7 @@ async def test_hsts_absent_on_http(client):
 
 
 # ── CORS — cross-origin rejection ─────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_cors_allowed_origin_granted(client):

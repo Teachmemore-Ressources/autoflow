@@ -30,6 +30,7 @@ Excluded from Cache-Control
 Routes /health, /metrics, /docs, /redoc and /openapi.json are public operational
 endpoints that must remain cacheable by proxies and monitoring tools.
 """
+
 from __future__ import annotations
 
 import logging
@@ -93,6 +94,7 @@ def parse_cors_origins(
 
     return [o.strip() for o in cors_raw.split(",") if o.strip()]
 
+
 # Routes that must NOT receive Cache-Control: no-store
 # (public / monitoring / docs — not sensitive)
 _NO_CACHE_SKIP_PREFIXES: tuple[str, ...] = (
@@ -127,18 +129,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "geolocation=(), microphone=(), camera=()"
-        )
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; frame-ancestors 'none'"
-        )
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
 
         # ── HSTS — only over HTTPS ────────────────────────────────────────────
         if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         # ── Cache-Control: no-store — auth routes only ────────────────────────
         is_auth_route = any(path.startswith(p) for p in _AUTH_PREFIXES)

@@ -8,6 +8,7 @@ Validates:
   - all_ok is consistent with individual check results
   - The endpoint is callable synchronously (no SSE, returns JSON immediately)
 """
+
 from __future__ import annotations
 
 import pytest
@@ -63,9 +64,7 @@ async def test_preflight_check_ok_is_bool(client):
 async def test_preflight_check_detail_is_string(client):
     checks = (await client.get("/api/system/preflight")).json()["checks"]
     for check in checks:
-        assert isinstance(check["detail"], str), (
-            f"check[{check['id']!r}]['detail'] should be str"
-        )
+        assert isinstance(check["detail"], str), f"check[{check['id']!r}]['detail'] should be str"
 
 
 @pytest.mark.integration
@@ -78,11 +77,9 @@ async def test_preflight_known_check_ids_present(client):
 
 @pytest.mark.integration
 async def test_preflight_all_ok_consistent_with_checks(client):
-    body   = (await client.get("/api/system/preflight")).json()
+    body = (await client.get("/api/system/preflight")).json()
     computed = all(c["ok"] for c in body["checks"])
-    assert body["all_ok"] == computed, (
-        f"all_ok={body['all_ok']} but individual checks compute to {computed}"
-    )
+    assert body["all_ok"] == computed, f"all_ok={body['all_ok']} but individual checks compute to {computed}"
 
 
 @pytest.mark.integration

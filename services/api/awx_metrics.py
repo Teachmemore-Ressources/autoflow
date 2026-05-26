@@ -12,6 +12,7 @@ Metrics
   awx_running_jobs         – Jobs currently executing
   awx_pending_jobs         – Jobs waiting to be dispatched (pending + waiting + new)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,12 +38,13 @@ _awx_pending = Gauge("awx_pending_jobs", "AWX jobs waiting to start (pending + w
 for _s in ("successful", "failed", "error", "canceled", "running", "pending", "waiting", "new"):
     _awx_jobs.labels(status=_s)
 
-_TERMINAL  = ("successful", "failed", "error", "canceled")
-_ACTIVE    = ("running",)
-_WAITING   = ("pending", "waiting", "new")
+_TERMINAL = ("successful", "failed", "error", "canceled")
+_ACTIVE = ("running",)
+_WAITING = ("pending", "waiting", "new")
 
 
 # ── Collector loop ────────────────────────────────────────────────────────────
+
 
 async def collect_loop(http: httpx.AsyncClient, interval: int = 60) -> None:
     """

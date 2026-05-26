@@ -11,6 +11,7 @@ The ``client`` fixture is function-scoped: a fresh ASGI AsyncClient per test.
 The ``wizard_paths`` fixture is function-scoped: redirects global Path constants
 via monkeypatch so tests never touch the real repo's .env / audit log.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -21,9 +22,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-_WIZARD_DIR = (
-    Path(__file__).parent.parent.parent.parent / "services" / "deploy-wizard"
-)
+_WIZARD_DIR = Path(__file__).parent.parent.parent.parent / "services" / "deploy-wizard"
 
 # Token must match what root conftest set in os.environ["WIZARD_TOKEN"]
 _TOKEN = os.environ.get("WIZARD_TOKEN", "test-wizard-token")
@@ -40,12 +39,10 @@ def _load_wizard_main():
     if str(_WIZARD_DIR) not in sys.path:
         sys.path.append(str(_WIZARD_DIR))
 
-    spec = importlib.util.spec_from_file_location(
-        alias, str(_WIZARD_DIR / "main.py")
-    )
-    mod = importlib.util.module_from_spec(spec)       # type: ignore[arg-type]
+    spec = importlib.util.spec_from_file_location(alias, str(_WIZARD_DIR / "main.py"))
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     sys.modules[alias] = mod
-    spec.loader.exec_module(mod)                      # type: ignore[union-attr]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
 
@@ -89,29 +86,29 @@ def wizard_paths(tmp_path, monkeypatch):
     import routers.config as routers_config
     import wizard_main as wm
 
-    env_file    = tmp_path / ".env"
+    env_file = tmp_path / ".env"
     env_example = tmp_path / ".env.example"
-    mon_users   = tmp_path / "monitoring_users"
-    gitea_tok   = tmp_path / "gitea_token"
-    audit_log   = tmp_path / "audit.log"
+    mon_users = tmp_path / "monitoring_users"
+    gitea_tok = tmp_path / "gitea_token"
+    audit_log = tmp_path / "audit.log"
 
     # Patch core.env (source of truth) and all modules that imported from it
     for mod in (wm, core_env, routers_config):
-        monkeypatch.setattr(mod, "ENV_FILE",         env_file)
+        monkeypatch.setattr(mod, "ENV_FILE", env_file)
         monkeypatch.setattr(mod, "ENV_EXAMPLE_FILE", env_example)
 
     for mod in (wm, core_env, routers_config):
-        monkeypatch.setattr(mod, "MONITORING_USERS",        mon_users)
+        monkeypatch.setattr(mod, "MONITORING_USERS", mon_users)
         monkeypatch.setattr(mod, "GITEA_BEARER_TOKEN_FILE", gitea_tok)
 
     for mod in (wm, core_env, core_auth):
         monkeypatch.setattr(mod, "AUDIT_LOG", audit_log)
 
     return {
-        "env":         env_file,
-        "example":     env_example,
-        "mon_users":   mon_users,
+        "env": env_file,
+        "example": env_example,
+        "mon_users": mon_users,
         "gitea_token": gitea_tok,
-        "audit":       audit_log,
-        "tmp":         tmp_path,
+        "audit": audit_log,
+        "tmp": tmp_path,
     }

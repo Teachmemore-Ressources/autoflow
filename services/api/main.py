@@ -26,6 +26,7 @@ Unversioned (no prefix change for infrastructure compatibility):
   /metrics                              — Prometheus scrape endpoint
   /docs  /redoc  /openapi.json          — API documentation
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -69,6 +70,7 @@ _audit_log = logging.getLogger("audit")
 
 # ── Lifespan ─────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialise user store (bootstrap default admin from API_SECRET_KEY if empty)
@@ -88,17 +90,13 @@ async def lifespan(app: FastAPI):
     # AWX job metrics background collector
     if settings.awx_metrics_interval > 0:
         background_tasks.append(
-            asyncio.create_task(
-                awx_metrics_loop(app.state.http, settings.awx_metrics_interval)
-            )
+            asyncio.create_task(awx_metrics_loop(app.state.http, settings.awx_metrics_interval))
         )
 
     # Job completion watcher (notifications)
     if settings.job_watcher_interval > 0:
         background_tasks.append(
-            asyncio.create_task(
-                notifications.collect_loop(app.state.http, settings.job_watcher_interval)
-            )
+            asyncio.create_task(notifications.collect_loop(app.state.http, settings.job_watcher_interval))
         )
 
     # Rapport de conformité hebdomadaire — génération automatique chaque lundi à 06h00 UTC
@@ -114,7 +112,8 @@ async def lifespan(app: FastAPI):
             wait_seconds = (next_run - now).total_seconds()
             logging.getLogger("compliance").info(
                 "Prochain rapport de conformité : %s (dans %.0fh)",
-                next_run.isoformat(), wait_seconds / 3600,
+                next_run.isoformat(),
+                wait_seconds / 3600,
             )
             await asyncio.sleep(wait_seconds)
             try:
@@ -124,9 +123,7 @@ async def lifespan(app: FastAPI):
                     "Erreur lors de la génération du rapport hebdomadaire : %s", exc
                 )
 
-    background_tasks.append(
-        asyncio.create_task(_weekly_compliance_loop(app.state.http))
-    )
+    background_tasks.append(asyncio.create_task(_weekly_compliance_loop(app.state.http)))
 
     yield
 
@@ -186,32 +183,46 @@ instrument_app(app, "autoflow-api")
 #
 # Unversioned infrastructure routes (no /api/v1 prefix — used by Docker
 # healthchecks, Prometheus, and Traefik probes; must never change).
-app.include_router(health.router)          # /health  /health/ready  /health/awx
+app.include_router(health.router)  # /health  /health/ready  /health/awx
 # /metrics is exposed by Instrumentator above (also unversioned)
 
 # All business routes live under /api/v1/.
 # jobs_history MUST be registered before awx so /api/v1/awx/jobs/history and
 # /api/v1/awx/jobs/stats are matched before the wildcard /api/v1/awx/jobs/{job_id}.
 _v1 = APIRouter(prefix="/api/v1")
-_v1.include_router(auth_router)                              # /api/v1/auth/*
-_v1.include_router(jobs_history_router)                      # /api/v1/awx/jobs/history, /stats, /watch
-_v1.include_router(awx.router, prefix="/awx", tags=["AWX"]) # /api/v1/awx/*
-_v1.include_router(compliance_router)                        # /api/v1/compliance/*
-_v1.include_router(users_router)                             # /api/v1/users/*
+_v1.include_router(auth_router)  # /api/v1/auth/*
+_v1.include_router(jobs_history_router)  # /api/v1/awx/jobs/history, /stats, /watch
+_v1.include_router(awx.router, prefix="/awx", tags=["AWX"])  # /api/v1/awx/*
+_v1.include_router(compliance_router)  # /api/v1/compliance/*
+_v1.include_router(users_router)  # /api/v1/users/*
 app.include_router(_v1)
 
 
 # ── Audit log middleware ──────────────────────────────────────────────────────
 
-_AUDIT_SKIP = frozenset({
-    "/metrics", "/health", "/health/ready", "/health/awx",
-})
+_AUDIT_SKIP = frozenset(
+    {
+        "/metrics",
+        "/health",
+        "/health/ready",
+        "/health/awx",
+    }
+)
 
 # Paramètres de query string à masquer pour éviter la fuite de secrets dans les logs
-_SENSITIVE_PARAMS = frozenset({
-    "token", "access_token", "api_key", "apikey", "key",
-    "password", "passwd", "secret", "authorization",
-})
+_SENSITIVE_PARAMS = frozenset(
+    {
+        "token",
+        "access_token",
+        "api_key",
+        "apikey",
+        "key",
+        "password",
+        "passwd",
+        "secret",
+        "authorization",
+    }
+)
 
 
 def _sanitize_query(query: str) -> str | None:
@@ -241,14 +252,14 @@ async def audit_middleware(request: Request, call_next):
         _audit_log.info(
             json.dumps(
                 {
-                    "ts":          datetime.now(timezone.utc).isoformat(),
-                    "method":      request.method,
-                    "path":        request.url.path,
-                    "query":       _sanitize_query(str(request.url.query)),
-                    "status":      response.status_code,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query": _sanitize_query(str(request.url.query)),
+                    "status": response.status_code,
                     "duration_ms": duration_ms,
-                    "client_ip":   request.client.host if request.client else None,
-                    "user_agent":  request.headers.get("user-agent"),
+                    "client_ip": request.client.host if request.client else None,
+                    "user_agent": request.headers.get("user-agent"),
                 },
                 default=str,
             )

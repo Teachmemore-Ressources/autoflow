@@ -1,20 +1,19 @@
 """Unit tests for services/event-engine/retry_worker.py (RetryWorker)."""
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 
 def _make_store():
     store = MagicMock()
-    store.pop_pending       = AsyncMock(return_value=[])
-    store.pop_due_retries   = AsyncMock(return_value=[])
-    store.get_event         = AsyncMock(return_value=None)
-    store.mark_completed    = AsyncMock()
+    store.pop_pending = AsyncMock(return_value=[])
+    store.pop_due_retries = AsyncMock(return_value=[])
+    store.get_event = AsyncMock(return_value=None)
+    store.mark_completed = AsyncMock()
     store.mark_deduplicated = AsyncMock()
-    store.schedule_retry    = AsyncMock()
+    store.schedule_retry = AsyncMock()
     return store
 
 
@@ -25,11 +24,13 @@ def _make_dispatch(result=None):
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
+
 def test_start_creates_two_tasks():
     from retry_worker import RetryWorker
-    store    = _make_store()
+
+    store = _make_store()
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     loop = asyncio.new_event_loop()
     try:
@@ -50,11 +51,11 @@ async def _start_and_stop(worker):
 
 
 def test_stop_cancels_all_tasks():
-    from unittest.mock import patch as _patch
     from retry_worker import RetryWorker
-    store    = _make_store()
+
+    store = _make_store()
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     cancelled = []
 
@@ -62,9 +63,11 @@ def test_stop_cancels_all_tasks():
         worker.start()
         for t in worker._tasks:
             real_cancel = t.cancel
+
             def _track_cancel(msg=None, _orig=real_cancel):
                 cancelled.append(True)
                 return _orig(msg)
+
             t.cancel = _track_cancel
         worker.stop()
 
@@ -74,14 +77,20 @@ def test_stop_cancels_all_tasks():
 
 # ── _process: success paths ───────────────────────────────────────────────────
 
+
 async def test_process_calls_mark_completed():
     from retry_worker import RetryWorker
-    store    = _make_store()
-    store.get_event = AsyncMock(return_value={
-        "source": "ci", "action": "deploy", "data": {},
-    })
+
+    store = _make_store()
+    store.get_event = AsyncMock(
+        return_value={
+            "source": "ci",
+            "action": "deploy",
+            "data": {},
+        }
+    )
     dispatch = _make_dispatch({"status": "accepted", "job_id": 99})
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     await worker._process("evt-1")
 
@@ -92,12 +101,17 @@ async def test_process_calls_mark_completed():
 
 async def test_process_calls_mark_deduplicated():
     from retry_worker import RetryWorker
-    store    = _make_store()
-    store.get_event = AsyncMock(return_value={
-        "source": "s", "action": "a", "data": {},
-    })
+
+    store = _make_store()
+    store.get_event = AsyncMock(
+        return_value={
+            "source": "s",
+            "action": "a",
+            "data": {},
+        }
+    )
     dispatch = _make_dispatch({"status": "deduplicated"})
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     await worker._process("evt-2")
 
@@ -107,14 +121,20 @@ async def test_process_calls_mark_deduplicated():
 
 # ── _process: error / retry paths ────────────────────────────────────────────
 
+
 async def test_process_schedules_retry_on_dispatch_error():
     from retry_worker import RetryWorker
-    store    = _make_store()
-    store.get_event = AsyncMock(return_value={
-        "source": "s", "action": "a", "data": {},
-    })
+
+    store = _make_store()
+    store.get_event = AsyncMock(
+        return_value={
+            "source": "s",
+            "action": "a",
+            "data": {},
+        }
+    )
     dispatch = AsyncMock(side_effect=RuntimeError("AWX unreachable"))
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     await worker._process("evt-3")
 
@@ -126,10 +146,11 @@ async def test_process_schedules_retry_on_dispatch_error():
 
 async def test_process_skips_missing_event():
     from retry_worker import RetryWorker
-    store    = _make_store()
+
+    store = _make_store()
     store.get_event = AsyncMock(return_value=None)
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     await worker._process("ghost-id")
 
@@ -140,12 +161,14 @@ async def test_process_skips_missing_event():
 
 # ── _run_pending: CancelledError exits cleanly ────────────────────────────────
 
+
 async def test_run_pending_exits_on_cancel():
     from retry_worker import RetryWorker
-    store    = _make_store()
+
+    store = _make_store()
     store.pop_pending = AsyncMock(side_effect=asyncio.CancelledError)
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     task = asyncio.create_task(worker._run_pending())
     await asyncio.sleep(0)
@@ -158,10 +181,11 @@ async def test_run_pending_exits_on_cancel():
 
 async def test_run_retry_exits_on_cancel():
     from retry_worker import RetryWorker
-    store    = _make_store()
+
+    store = _make_store()
     store.pop_due_retries = AsyncMock(side_effect=asyncio.CancelledError)
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     task = asyncio.create_task(worker._run_retry())
     await asyncio.sleep(0)
@@ -174,6 +198,7 @@ async def test_run_retry_exits_on_cancel():
 
 async def test_run_pending_handles_non_cancel_exception():
     from retry_worker import RetryWorker
+
     call_count = 0
 
     async def boom():
@@ -183,10 +208,10 @@ async def test_run_pending_handles_non_cancel_exception():
             raise ConnectionError("redis down")
         raise asyncio.CancelledError
 
-    store    = _make_store()
+    store = _make_store()
     store.pop_pending = boom
     dispatch = _make_dispatch()
-    worker   = RetryWorker(store, dispatch)
+    worker = RetryWorker(store, dispatch)
 
     with patch("retry_worker.POLL_INTERVAL", 0):
         task = asyncio.create_task(worker._run_pending())

@@ -15,6 +15,7 @@ Coverage:
 
 No Docker / external server required.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -73,25 +74,25 @@ def pki(pki_data):
         return m
 
     prometheus_mock = MagicMock()
-    prometheus_mock.Gauge.side_effect       = _metric_stub
-    prometheus_mock.Counter.side_effect     = _metric_stub
-    prometheus_mock.Histogram.side_effect   = _metric_stub
+    prometheus_mock.Gauge.side_effect = _metric_stub
+    prometheus_mock.Counter.side_effect = _metric_stub
+    prometheus_mock.Histogram.side_effect = _metric_stub
     prometheus_mock.generate_latest.return_value = b""
-    prometheus_mock.CONTENT_TYPE_LATEST     = "text/plain"
+    prometheus_mock.CONTENT_TYPE_LATEST = "text/plain"
 
     tracing_mock = MagicMock()
     tracing_mock.instrument_app = MagicMock()
-    tracing_mock.setup_tracing  = MagicMock()
+    tracing_mock.setup_tracing = MagicMock()
 
     env = {
-        "PKI_DATA_DIR":       str(pki_data),
-        "PKI_JWT_SECRET":     "test-pki-secret-32chars-xxxxxxxxxxx",
+        "PKI_DATA_DIR": str(pki_data),
+        "PKI_JWT_SECRET": "test-pki-secret-32chars-xxxxxxxxxxx",
         "PKI_ADMIN_PASSWORD": "AdminTestPass99",
-        "PKI_ADMIN_USER":     "admin",
+        "PKI_ADMIN_USER": "admin",
     }
 
     spec = importlib.util.spec_from_file_location(alias, _PKI_APP / "main.py")
-    mod  = importlib.util.module_from_spec(spec)
+    mod = importlib.util.module_from_spec(spec)
     sys.modules[alias] = mod
 
     # Manually install the two mocks and save whatever was there before.
@@ -128,6 +129,7 @@ def pki(pki_data):
 def reset_pki_db(pki, pki_data):
     """Reset DB + CA + certs dirs before every test that uses pki."""
     import shutil
+
     db_path = pki_data / "db.json"
     if db_path.exists():
         db_path.unlink()
@@ -141,6 +143,7 @@ def reset_pki_db(pki, pki_data):
 
 # ── Helper: create a CA in memory ────────────────────────────────────────────
 
+
 def _make_ca(pki, ca_name: str = "test-ca") -> str:
     """
     Create a CA using PKI's internal logic.
@@ -152,17 +155,17 @@ def _make_ca(pki, ca_name: str = "test-ca") -> str:
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
 
-    ca_dir  = pki.CA_DIR
+    ca_dir = pki.CA_DIR
 
-    key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048, backend=default_backend()
-    )
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
     now = datetime.now(timezone.utc)
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Org"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "Test CA"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Org"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "Test CA"),
+        ]
+    )
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -172,22 +175,30 @@ def _make_ca(pki, ca_name: str = "test-ca") -> str:
         .not_valid_before(now)
         .not_valid_after(now + timedelta(days=3650))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(x509.KeyUsage(
-            digital_signature=True, key_cert_sign=True, crl_sign=True,
-            content_commitment=False, key_encipherment=False,
-            data_encipherment=False, key_agreement=False,
-            encipher_only=False, decipher_only=False,
-        ), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_cert_sign=True,
+                crl_sign=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
         .sign(key, hashes.SHA256(), default_backend())
     )
 
-    key_pem  = key.private_bytes(
+    key_pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
     cert_pem = cert.public_bytes(serialization.Encoding.PEM)
-    serial   = pki._serial_hex(cert.serial_number)
+    serial = pki._serial_hex(cert.serial_number)
 
     (ca_dir / f"{ca_name}_key.pem").write_bytes(key_pem)
     (ca_dir / f"{ca_name}_cert.pem").write_bytes(cert_pem)
@@ -201,18 +212,19 @@ def _db_with_ca(pki, ca_name: str = "test-ca") -> dict:
     serial = _make_ca(pki, ca_name)
     db = pki._empty_db()
     db["cas"][ca_name] = {
-        "common_name":  "Test CA",
+        "common_name": "Test CA",
         "organization": "Test Org",
-        "country":      "FR",
-        "not_after":    (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat(),
-        "serial":       serial,
-        "fingerprint":  "AABBCC",
-        "created_at":   datetime.now(timezone.utc).isoformat(),
+        "country": "FR",
+        "not_after": (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat(),
+        "serial": serial,
+        "fingerprint": "AABBCC",
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     return db
 
 
 # ── _parse_dt ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_parse_dt_naive(pki):
@@ -232,6 +244,7 @@ def test_parse_dt_aware(pki):
 
 # ── _serial_hex ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_serial_hex_basic(pki):
     assert pki._serial_hex(255) == "FF"
@@ -250,11 +263,12 @@ def test_serial_hex_large(pki):
 
 # ── _cert_status ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_cert_status_active(pki):
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     info = {"not_after": (now + timedelta(days=90)).isoformat()}
-    db   = {"revoked_serials": [], "revocations": {}}
+    db = {"revoked_serials": [], "revocations": {}}
     status, days = pki._cert_status("SN1", info, db, now)
     assert status == "active"
     assert days > 30
@@ -262,41 +276,42 @@ def test_cert_status_active(pki):
 
 @pytest.mark.unit
 def test_cert_status_warning(pki):
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     info = {"not_after": (now + timedelta(days=20)).isoformat()}
-    db   = {"revoked_serials": [], "revocations": {}}
+    db = {"revoked_serials": [], "revocations": {}}
     status, days = pki._cert_status("SN2", info, db, now)
     assert status == "warning"
 
 
 @pytest.mark.unit
 def test_cert_status_critical(pki):
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     info = {"not_after": (now + timedelta(days=5)).isoformat()}
-    db   = {"revoked_serials": [], "revocations": {}}
+    db = {"revoked_serials": [], "revocations": {}}
     status, days = pki._cert_status("SN3", info, db, now)
     assert status == "critical"
 
 
 @pytest.mark.unit
 def test_cert_status_expired(pki):
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     info = {"not_after": (now - timedelta(days=1)).isoformat()}
-    db   = {"revoked_serials": [], "revocations": {}}
+    db = {"revoked_serials": [], "revocations": {}}
     status, _ = pki._cert_status("SN4", info, db, now)
     assert status == "expired"
 
 
 @pytest.mark.unit
 def test_cert_status_revoked(pki):
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     info = {"not_after": (now + timedelta(days=200)).isoformat()}
-    db   = {"revoked_serials": ["SNREV"], "revocations": {}}
+    db = {"revoked_serials": ["SNREV"], "revocations": {}}
     status, _ = pki._cert_status("SNREV", info, db, now)
     assert status == "revoked"
 
 
 # ── Password helpers ──────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_hash_and_verify_password(pki):
@@ -313,6 +328,7 @@ def test_verify_password_invalid_hash(pki):
 
 
 # ── bootstrap_admin ───────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_bootstrap_admin_creates_file(pki, pki_data):
@@ -346,13 +362,15 @@ def test_bootstrap_admin_idempotent(pki, pki_data):
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_create_token_contains_claims(pki):
     """create_token must include sub, role, exp, iat, jti."""
     import jwt
-    token   = pki.create_token("alice", "operator")
+
+    token = pki.create_token("alice", "operator")
     payload = jwt.decode(token, pki.JWT_SECRET, algorithms=[pki.JWT_ALGORITHM])
-    assert payload["sub"]  == "alice"
+    assert payload["sub"] == "alice"
     assert payload["role"] == "operator"
     assert "exp" in payload and "iat" in payload and "jti" in payload
 
@@ -361,10 +379,11 @@ def test_create_token_contains_claims(pki):
 async def test_get_current_user_valid(pki):
     """A valid token must resolve to the correct user dict."""
     from fastapi.security import HTTPAuthorizationCredentials
+
     token = pki.create_token("bob", "admin")
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-    user  = await pki.get_current_user(creds)
-    assert user["sub"]  == "bob"
+    user = await pki.get_current_user(creds)
+    assert user["sub"] == "bob"
     assert user["role"] == "admin"
 
 
@@ -394,6 +413,7 @@ async def test_get_current_user_expired(pki):
 async def test_get_current_user_missing(pki):
     """No credentials must raise HTTP 401."""
     from fastapi import HTTPException
+
     with pytest.raises(HTTPException) as exc_info:
         await pki.get_current_user(None)
     assert exc_info.value.status_code == 401
@@ -401,12 +421,13 @@ async def test_get_current_user_missing(pki):
 
 # ── LDAP role resolution ──────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_ldap_resolve_role_admin(pki):
     cfg = {
-        "group_admin":    "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
+        "group_admin": "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
         "group_operator": "CN=PKI-Operators,OU=Groups,DC=example,DC=com",
-        "group_viewer":   "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
+        "group_viewer": "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
     }
     groups = ["CN=PKI-Admins,OU=Groups,DC=example,DC=com"]
     assert pki._ldap_resolve_role(groups, cfg) == "admin"
@@ -415,9 +436,9 @@ def test_ldap_resolve_role_admin(pki):
 @pytest.mark.unit
 def test_ldap_resolve_role_operator(pki):
     cfg = {
-        "group_admin":    "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
+        "group_admin": "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
         "group_operator": "CN=PKI-Operators,OU=Groups,DC=example,DC=com",
-        "group_viewer":   "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
+        "group_viewer": "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
     }
     groups = ["CN=PKI-Operators,OU=Groups,DC=example,DC=com"]
     assert pki._ldap_resolve_role(groups, cfg) == "operator"
@@ -426,9 +447,9 @@ def test_ldap_resolve_role_operator(pki):
 @pytest.mark.unit
 def test_ldap_resolve_role_viewer(pki):
     cfg = {
-        "group_admin":    "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
+        "group_admin": "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
         "group_operator": "CN=PKI-Operators,OU=Groups,DC=example,DC=com",
-        "group_viewer":   "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
+        "group_viewer": "CN=PKI-Viewers,OU=Groups,DC=example,DC=com",
     }
     groups = ["CN=PKI-Viewers,OU=Groups,DC=example,DC=com"]
     assert pki._ldap_resolve_role(groups, cfg) == "viewer"
@@ -437,9 +458,9 @@ def test_ldap_resolve_role_viewer(pki):
 @pytest.mark.unit
 def test_ldap_resolve_role_none(pki):
     cfg = {
-        "group_admin":    "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
+        "group_admin": "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
         "group_operator": "",
-        "group_viewer":   "",
+        "group_viewer": "",
     }
     groups = ["CN=SomeOtherGroup,OU=Groups,DC=example,DC=com"]
     assert pki._ldap_resolve_role(groups, cfg) is None
@@ -449,9 +470,9 @@ def test_ldap_resolve_role_none(pki):
 def test_ldap_resolve_role_admin_wins_over_operator(pki):
     """Admin takes priority when user is in both groups."""
     cfg = {
-        "group_admin":    "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
+        "group_admin": "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
         "group_operator": "CN=PKI-Operators,OU=Groups,DC=example,DC=com",
-        "group_viewer":   "",
+        "group_viewer": "",
     }
     groups = [
         "CN=PKI-Admins,OU=Groups,DC=example,DC=com",
@@ -461,6 +482,7 @@ def test_ldap_resolve_role_admin_wins_over_operator(pki):
 
 
 # ── LDAP authenticate (mock server) ──────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_ldap_authenticate_disabled(pki):
@@ -487,22 +509,22 @@ def test_ldap_authenticate_invalid_credentials(pki):
     _ldap_authenticate must return None.
     """
     cfg = {
-        "enabled":        True,
-        "url":            "ldap://ldap.example.com",
-        "bind_dn":        "cn=svc,dc=example,dc=com",
-        "bind_password":  "svcpass",
-        "base_dn":        "dc=example,dc=com",
-        "user_filter":    "(uid={username})",
-        "group_base_dn":  "",
-        "group_admin":    "",
+        "enabled": True,
+        "url": "ldap://ldap.example.com",
+        "bind_dn": "cn=svc,dc=example,dc=com",
+        "bind_password": "svcpass",
+        "base_dn": "dc=example,dc=com",
+        "user_filter": "(uid={username})",
+        "group_base_dn": "",
+        "group_admin": "",
         "group_operator": "",
-        "group_viewer":   "",
-        "tls_ca_cert":    "",
-        "tls_verify":     False,
-        "starttls":       False,
-        "timeout":        5,
+        "group_viewer": "",
+        "tls_ca_cert": "",
+        "tls_verify": False,
+        "starttls": False,
+        "timeout": 5,
         "fallback_local": True,
-        "mode":           "ldap",
+        "mode": "ldap",
     }
 
     # Patch pki.Connection (the name captured at import time in the PKI
@@ -511,18 +533,21 @@ def test_ldap_authenticate_invalid_credentials(pki):
     # local reference to Connection.
     mock_conn = MagicMock()
     mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-    mock_conn.__exit__  = MagicMock(return_value=False)
+    mock_conn.__exit__ = MagicMock(return_value=False)
 
-    with patch.object(pki, "load_ldap_config", return_value=cfg), \
-         patch.object(pki, "_build_ldap_server", return_value=MagicMock()), \
-         patch.object(pki, "Connection", return_value=mock_conn), \
-         patch.object(pki, "_ldap_get_user_dn", return_value=None):
+    with (
+        patch.object(pki, "load_ldap_config", return_value=cfg),
+        patch.object(pki, "_build_ldap_server", return_value=MagicMock()),
+        patch.object(pki, "Connection", return_value=mock_conn),
+        patch.object(pki, "_ldap_get_user_dn", return_value=None),
+    ):
         result = pki._ldap_authenticate("nobody", "wrongpass")
 
     assert result is None
 
 
 # ── _issue_cert_logic ─────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_issue_cert_logic_success(pki):
@@ -548,7 +573,8 @@ def test_issue_cert_logic_success(pki):
 def test_issue_cert_logic_missing_ca(pki):
     """_issue_cert_logic must raise HTTP 404 when the CA does not exist."""
     from fastapi import HTTPException
-    db  = pki._empty_db()
+
+    db = pki._empty_db()
     req = pki.CertCreateRequest(
         ca_name="nonexistent-ca",
         common_name="x.example.com",
@@ -595,12 +621,15 @@ def test_issue_cert_logic_with_ip(pki):
 
 # ── _revoke_cert_logic ────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_revoke_cert_logic_success(pki):
     """Revoking a cert must add it to revoked_serials and revocations."""
     db = _db_with_ca(pki, "test-ca")
     req = pki.CertCreateRequest(
-        ca_name="test-ca", common_name="revoke.example.com", validity_days=30,
+        ca_name="test-ca",
+        common_name="revoke.example.com",
+        validity_days=30,
     )
     serial, _ = pki._issue_cert_logic(req, db, "admin")
 
@@ -614,9 +643,12 @@ def test_revoke_cert_logic_success(pki):
 def test_revoke_cert_logic_already_revoked(pki):
     """Revoking an already-revoked cert must raise HTTP 400."""
     from fastapi import HTTPException
+
     db = _db_with_ca(pki, "test-ca")
     req = pki.CertCreateRequest(
-        ca_name="test-ca", common_name="double.example.com", validity_days=30,
+        ca_name="test-ca",
+        common_name="double.example.com",
+        validity_days=30,
     )
     serial, _ = pki._issue_cert_logic(req, db, "admin")
     pki._revoke_cert_logic(serial, "unspecified", "admin", db)
@@ -630,6 +662,7 @@ def test_revoke_cert_logic_already_revoked(pki):
 def test_revoke_cert_logic_not_found(pki):
     """Revoking a non-existent serial must raise HTTP 404."""
     from fastapi import HTTPException
+
     db = pki._empty_db()
     with pytest.raises(HTTPException) as exc_info:
         pki._revoke_cert_logic("DEADBEEF", "unspecified", "admin", db)
@@ -637,6 +670,7 @@ def test_revoke_cert_logic_not_found(pki):
 
 
 # ── _generate_crl ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_generate_crl_empty(pki):
@@ -660,7 +694,9 @@ def test_generate_crl_contains_revoked(pki):
 
     db = _db_with_ca(pki, "test-ca")
     req = pki.CertCreateRequest(
-        ca_name="test-ca", common_name="crl.example.com", validity_days=30,
+        ca_name="test-ca",
+        common_name="crl.example.com",
+        validity_days=30,
     )
     serial, _ = pki._issue_cert_logic(req, db, "admin")
     pki._revoke_cert_logic(serial, "key_compromise", "admin", db)
@@ -679,7 +715,9 @@ def test_generate_crl_reason_preserved(pki):
 
     db = _db_with_ca(pki, "test-ca")
     req = pki.CertCreateRequest(
-        ca_name="test-ca", common_name="reason.example.com", validity_days=30,
+        ca_name="test-ca",
+        common_name="reason.example.com",
+        validity_days=30,
     )
     serial, _ = pki._issue_cert_logic(req, db, "admin")
     pki._revoke_cert_logic(serial, "superseded", "admin", db)
@@ -694,6 +732,7 @@ def test_generate_crl_reason_preserved(pki):
 
 # ── _generate_crl missing CA ──────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_generate_crl_missing_ca_files(pki):
     """_generate_crl must silently return (no exception) when CA files are absent."""
@@ -705,6 +744,7 @@ def test_generate_crl_missing_ca_files(pki):
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_empty_db_structure(pki):

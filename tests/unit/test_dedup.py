@@ -1,16 +1,20 @@
 """Unit tests for the deduplication store (services/event-engine/dedup.py)."""
+
 import asyncio
 
 import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _store(ttl: int = 60):
     from dedup import DedupStore
+
     return DedupStore(ttl_seconds=ttl)
 
 
 # ── In-memory backend ─────────────────────────────────────────────────────────
+
 
 async def test_first_call_is_not_duplicate():
     store = _store()
@@ -21,18 +25,18 @@ async def test_second_identical_call_is_duplicate():
     store = _store()
     data = {"ref": "refs/heads/main", "sha": "abc123"}
     assert not await store.is_duplicate("github", "push", data)
-    assert     await store.is_duplicate("github", "push", data)
+    assert await store.is_duplicate("github", "push", data)
 
 
 async def test_different_action_is_not_duplicate():
     store = _store()
-    await store.is_duplicate("github", "push",  {"ref": "main"})
+    await store.is_duplicate("github", "push", {"ref": "main"})
     assert not await store.is_duplicate("github", "merge", {"ref": "main"})
 
 
 async def test_different_source_is_not_duplicate():
     store = _store()
-    await store.is_duplicate("github",       "push", {"ref": "main"})
+    await store.is_duplicate("github", "push", {"ref": "main"})
     assert not await store.is_duplicate("alertmanager", "push", {"ref": "main"})
 
 
@@ -60,7 +64,7 @@ async def test_expired_entry_is_not_duplicate():
 async def test_clear_removes_all_entries():
     store = _store()
     await store.is_duplicate("github", "push", {"a": 1})
-    await store.is_duplicate("ci",     "deploy", {"b": 2})
+    await store.is_duplicate("ci", "deploy", {"b": 2})
     assert store.size() == 2
     store.clear()
     assert store.size() == 0
@@ -82,15 +86,16 @@ async def test_size_evicts_expired_entries():
     await store.is_duplicate("s1", "a1", {})
     assert store.size() == 1
     await asyncio.sleep(1.05)
-    assert store.size() == 0   # eviction triggered by size()
+    assert store.size() == 0  # eviction triggered by size()
 
 
 async def test_fingerprint_is_deterministic():
     """Same inputs always produce the same fingerprint."""
     from dedup import DedupStore
+
     fp1 = DedupStore._fingerprint("github", "push", {"ref": "main", "sha": "abc"})
     fp2 = DedupStore._fingerprint("github", "push", {"sha": "abc", "ref": "main"})
-    assert fp1 == fp2   # sort_keys=True in json.dumps
+    assert fp1 == fp2  # sort_keys=True in json.dumps
 
 
 async def test_nested_data_fingerprint():
@@ -103,6 +108,7 @@ async def test_nested_data_fingerprint():
 
 
 # ── Redis backend (fakeredis) ─────────────────────────────────────────────────
+
 
 @pytest.fixture
 async def redis_store():
@@ -124,11 +130,11 @@ async def test_redis_first_call_not_duplicate(redis_store):
 async def test_redis_second_call_is_duplicate(redis_store):
     data = {"ref": "refs/heads/main", "sha": "def456"}
     assert not await redis_store.is_duplicate("github", "push", data)
-    assert     await redis_store.is_duplicate("github", "push", data)
+    assert await redis_store.is_duplicate("github", "push", data)
 
 
 async def test_redis_different_action_not_duplicate(redis_store):
-    await redis_store.is_duplicate("alertmanager", "firing",   {"alertname": "HighCPU"})
+    await redis_store.is_duplicate("alertmanager", "firing", {"alertname": "HighCPU"})
     assert not await redis_store.is_duplicate("alertmanager", "resolved", {"alertname": "HighCPU"})
 
 
@@ -173,4 +179,4 @@ async def test_redis_fallback_on_error():
     # Should not raise; falls back to in-memory
     assert not await store.is_duplicate("github", "push", {"ref": "main"})
     # In-memory state was written, so second call IS a duplicate
-    assert     await store.is_duplicate("github", "push", {"ref": "main"})
+    assert await store.is_duplicate("github", "push", {"ref": "main"})

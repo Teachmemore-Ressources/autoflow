@@ -1,6 +1,7 @@
 """
 routers/setup.py — Post-deploy setup: Gitea admin, AWX token, runner registration, Grafana export.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,16 +28,17 @@ def _grafana_api_url() -> str:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/init-gitea")
 async def init_gitea(request: Request):
     """SSE: create the Gitea admin user via 'gitea admin user create'."""
     _audit(request, "gitea.init_admin")
 
     async def stream():
-        config   = _load_env()
+        config = _load_env()
         username = config.get("GITEA_ADMIN_USER", "admin")
         password = config.get("GITEA_ADMIN_PASSWORD", "")
-        email    = config.get("GITEA_ADMIN_EMAIL", f"{username}@localhost")
+        email = config.get("GITEA_ADMIN_EMAIL", f"{username}@localhost")
 
         if not password:
             yield _sse("[ERROR] GITEA_ADMIN_PASSWORD is not set. Fill in the Gitea section first.")
@@ -46,7 +48,8 @@ async def init_gitea(request: Request):
         # Check the container is running
         check = subprocess.run(
             ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_gitea"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if check.stdout.strip() != "true":
             yield _sse("[ERROR] Container 'autoflow_gitea' is not running. Deploy the stack first.")
@@ -55,11 +58,19 @@ async def init_gitea(request: Request):
 
         yield _sse(f"Creating Gitea admin user '{username}'…")
         proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", "autoflow_gitea",
-            "gitea", "admin", "user", "create",
-            "--username", username,
-            "--password", password,
-            "--email",    email,
+            "docker",
+            "exec",
+            "autoflow_gitea",
+            "gitea",
+            "admin",
+            "user",
+            "create",
+            "--username",
+            username,
+            "--password",
+            password,
+            "--email",
+            email,
             "--admin",
             "--must-change-password=false",
             stdout=asyncio.subprocess.PIPE,
@@ -75,25 +86,32 @@ async def init_gitea(request: Request):
             yield _sse("[ERROR] User creation failed (may already exist — try logging in).")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/init-gitea-status")
 def init_gitea_status():
     """Check whether the Gitea admin user already exists."""
-    config   = _load_env()
+    config = _load_env()
     username = config.get("GITEA_ADMIN_USER", "admin")
-    result   = subprocess.run(
-        ["docker", "exec", "autoflow_gitea",
-         "gitea", "admin", "user", "list", "--admin"],
-        capture_output=True, text=True,
+    result = subprocess.run(
+        ["docker", "exec", "autoflow_gitea", "gitea", "admin", "user", "list", "--admin"],
+        capture_output=True,
+        text=True,
     )
     exists = username in result.stdout if result.returncode == 0 else False
-    running = subprocess.run(
-        ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_gitea"],
-        capture_output=True, text=True,
-    ).stdout.strip() == "true"
+    running = (
+        subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_gitea"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == "true"
+    )
     return {"username": username, "exists": exists, "running": running}
 
 
@@ -103,8 +121,8 @@ async def init_awx_token(request: Request):
     _audit(request, "awx.init_token")
 
     async def stream():
-        config       = _load_env()
-        awx_user     = config.get("AWX_ADMIN_USER", "admin")
+        config = _load_env()
+        awx_user = config.get("AWX_ADMIN_USER", "admin")
         awx_password = config.get("AWX_ADMIN_PASSWORD", "")
 
         if not awx_password:
@@ -117,7 +135,8 @@ async def init_awx_token(request: Request):
         # ── Step 1: verify container is running ───────────────────────────
         chk = subprocess.run(
             ["docker", "inspect", "--format", "{{.State.Status}}", "autoflow_awx_web"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         container_status = chk.stdout.strip()
         yield _sse(f"Container autoflow_awx_web status: {container_status or '(not found)'}")
@@ -130,10 +149,20 @@ async def init_awx_token(request: Request):
         # Try 8052 first (default), fallback to 80
         for port in ("8052", "80"):
             probe = subprocess.run(
-                ["docker", "exec", "autoflow_awx_web",
-                 "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-                 f"http://localhost:{port}/api/v2/ping/"],
-                capture_output=True, text=True,
+                [
+                    "docker",
+                    "exec",
+                    "autoflow_awx_web",
+                    "curl",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    f"http://localhost:{port}/api/v2/ping/",
+                ],
+                capture_output=True,
+                text=True,
             )
             if probe.stdout.strip() in ("200", "401"):
                 awx_port = port
@@ -146,21 +175,32 @@ async def init_awx_token(request: Request):
 
         # ── Step 3: create token ──────────────────────────────────────────
         yield _sse("Creating API token…")
-        payload = _json.dumps({
-            "description": "Autoflow Event Engine",
-            "application": None,
-            "scope":       "write",
-        })
+        payload = _json.dumps(
+            {
+                "description": "Autoflow Event Engine",
+                "application": None,
+                "scope": "write",
+            }
+        )
         result = subprocess.run(
             [
-                "docker", "exec", "autoflow_awx_web",
-                "curl", "-s", "-X", "POST",
-                "-u", f"{awx_user}:{awx_password}",
-                "-H", "Content-Type: application/json",
-                "-d", payload,
+                "docker",
+                "exec",
+                "autoflow_awx_web",
+                "curl",
+                "-s",
+                "-X",
+                "POST",
+                "-u",
+                f"{awx_user}:{awx_password}",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                payload,
                 f"http://localhost:{awx_port}/api/v2/tokens/",
             ],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             yield _sse(f"[ERROR] docker exec failed: {result.stderr.strip()}")
@@ -187,13 +227,21 @@ async def init_awx_token(request: Request):
         current = _load_env()
         current["AWX_TOKEN"] = token
         from core.env import _write_env
+
         _write_env(current)
         yield _sse("AWX_TOKEN written to .env.")
 
         yield _sse("Restarting event_engine to pick up new token…")
         proc = await asyncio.create_subprocess_exec(
-            "docker", "compose", "--env-file", str(ENV_FILE), "restart", "event_engine",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, cwd=str(ROOT),
+            "docker",
+            "compose",
+            "--env-file",
+            str(ENV_FILE),
+            "restart",
+            "event_engine",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(ROOT),
         )
         async for line in proc.stdout:
             yield _sse(line.decode().rstrip())
@@ -201,11 +249,15 @@ async def init_awx_token(request: Request):
         yield _sse("[SUCCESS] AWX token configured and event_engine restarted.")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Gitea Actions Runner ──────────────────────────────────────────────────────
+
 
 @router.get("/api/runner/status")
 def runner_status():
@@ -216,40 +268,44 @@ def runner_status():
       1. GITEA_RUNNER_TOKEN is set in .env  (token was obtained)
       2. act_runner container is running and not spamming "token is empty"
     """
-    env   = _load_env()
+    env = _load_env()
     token = env.get("GITEA_RUNNER_TOKEN", "").strip()
     has_token = bool(token)
 
     # Check container state via docker inspect (direct, no compose overhead)
-    container_up   = False
-    token_error    = False
+    container_up = False
+    token_error = False
     registered_log = False
     try:
         inspect = subprocess.run(
             ["docker", "inspect", "--format", "{{.State.Status}}", "autoflow_act_runner"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         container_up = inspect.stdout.strip() == "running"
 
         # docker logs writes to stderr; capture both streams
         logs = subprocess.run(
             ["docker", "logs", "--tail", "30", "autoflow_act_runner"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         combined = (logs.stdout + logs.stderr).lower()
-        token_error    = "token is empty" in combined
+        token_error = "token is empty" in combined
         registered_log = "runner registered successfully" in combined
     except Exception:
         pass
 
     registered = has_token and container_up and registered_log and not token_error
     return {
-        "registered":    registered,
-        "runner_count":  1 if registered else 0,
-        "has_token":     has_token,
-        "container_up":  container_up,
+        "registered": registered,
+        "runner_count": 1 if registered else 0,
+        "has_token": has_token,
+        "container_up": container_up,
         "registered_log": registered_log,
-        "token_error":   token_error,
+        "token_error": token_error,
     }
 
 
@@ -267,16 +323,24 @@ async def runner_register():
         yield _sse("Lancement de gitea-init-runner.sh…")
 
         proc = await asyncio.create_subprocess_exec(
-            "bash", str(script),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-            env=env_vars, cwd=str(ROOT),
+            "bash",
+            str(script),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env_vars,
+            cwd=str(ROOT),
         )
         async for raw in proc.stdout:
             line = raw.decode().rstrip()
             if not line:
                 continue
-            cls = "[ERROR]" if "✖" in line or "ERROR" in line else \
-                  "[SUCCESS]" if "✔" in line or "Runner" in line and "registered" in line else ""
+            cls = (
+                "[ERROR]"
+                if "✖" in line or "ERROR" in line
+                else "[SUCCESS]"
+                if "✔" in line or "Runner" in line and "registered" in line
+                else ""
+            )
             yield _sse(f"{cls} {line}".strip() if cls else line)
         rc = await proc.wait()
         if rc == 0:
@@ -285,19 +349,27 @@ async def runner_register():
             yield _sse(f"[ERROR] gitea-init-runner.sh failed (code {rc})")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Grafana dashboard export ──────────────────────────────────────────────────
 
+
 @router.get("/api/grafana/export-status")
 def grafana_export_status():
     """Return the mtime of the newest dashboard file and whether Grafana is running."""
-    running = subprocess.run(
-        ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_grafana"],
-        capture_output=True, text=True,
-    ).stdout.strip() == "true"
+    running = (
+        subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_grafana"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == "true"
+    )
 
     files = list(GRAFANA_DASHBOARDS_DIR.glob("*.json")) if GRAFANA_DASHBOARDS_DIR.exists() else []
     last_export: str | None = None
@@ -305,12 +377,13 @@ def grafana_export_status():
         newest = max(files, key=lambda p: p.stat().st_mtime)
         last_export = newest.stat().st_mtime.__class__  # just need the value
         import datetime
+
         ts = datetime.datetime.fromtimestamp(newest.stat().st_mtime)
         last_export = ts.strftime("%Y-%m-%d %H:%M")
 
     return {
-        "running":     running,
-        "file_count":  len(files),
+        "running": running,
+        "file_count": len(files),
         "last_export": last_export,
     }
 
@@ -325,8 +398,8 @@ async def grafana_export():
 
         import httpx as _httpx
 
-        config   = _load_env()
-        user     = config.get("GRAFANA_ADMIN_USER", "admin")
+        config = _load_env()
+        user = config.get("GRAFANA_ADMIN_USER", "admin")
         password = config.get("GRAFANA_ADMIN_PASSWORD", "")
 
         if not password:
@@ -337,7 +410,8 @@ async def grafana_export():
         # Verify container is running
         chk = subprocess.run(
             ["docker", "inspect", "--format", "{{.State.Running}}", "autoflow_grafana"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if chk.stdout.strip() != "true":
             yield _sse("[ERROR] Container 'autoflow_grafana' is not running — deploy the stack first.")
@@ -350,7 +424,6 @@ async def grafana_export():
         GRAFANA_DASHBOARDS_DIR.mkdir(parents=True, exist_ok=True)
 
         async with _httpx.AsyncClient(verify=False, auth=(user, password), timeout=20) as c:
-
             # ── List all dashboards ───────────────────────────────────────────
             try:
                 r = await c.get(f"{grafana_url}/api/search", params={"type": "dash-db", "limit": 500})
@@ -374,7 +447,7 @@ async def grafana_export():
 
             saved, skipped = 0, 0
             for item in items:
-                uid   = item["uid"]
+                uid = item["uid"]
                 title = item.get("title", uid)
 
                 dr = await c.get(f"{grafana_url}/api/dashboards/uid/{uid}")
@@ -384,11 +457,11 @@ async def grafana_export():
                     continue
 
                 dashboard = dr.json().get("dashboard", {})
-                dashboard.pop("id", None)   # strip DB-internal ID; UID is preserved
+                dashboard.pop("id", None)  # strip DB-internal ID; UID is preserved
 
                 slug = re.sub(r"[^\w\-]", "_", title.lower()).strip("_")
                 slug = re.sub(r"_+", "_", slug)[:60]
-                out  = GRAFANA_DASHBOARDS_DIR / f"{slug}.json"
+                out = GRAFANA_DASHBOARDS_DIR / f"{slug}.json"
 
                 out.write_text(_j.dumps(dashboard, indent=2, ensure_ascii=False) + "\n")
                 yield _sse(f"  [{saved + 1}/{len(items)}] {title}  →  {out.name}")
@@ -401,5 +474,8 @@ async def grafana_export():
         yield _sse("Commit these files to preserve dashboard changes across fresh deploys.")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

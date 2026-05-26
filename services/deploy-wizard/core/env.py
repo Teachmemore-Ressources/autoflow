@@ -1,6 +1,7 @@
 """
 core/env.py — Path constants, .env helpers, and shared globals for the Deploy Wizard.
 """
+
 from __future__ import annotations
 
 import os
@@ -13,30 +14,29 @@ from schema import FIELDS, SECTIONS  # noqa: F401 — re-exported for convenienc
 WIZARD_VERSION = "1.0.0"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ROOT              = Path(os.environ.get("AUTOFLOW_ROOT", Path(__file__).parent.parent.parent.parent))
-ENV_FILE          = ROOT / ".env"
-ENV_ENC_FILE      = ROOT / ".env.enc"
-ENV_EXAMPLE_FILE  = ROOT / ".env.example"
-MONITORING_USERS        = ROOT / "traefik/dynamic/monitoring_users"
+ROOT = Path(os.environ.get("AUTOFLOW_ROOT", Path(__file__).parent.parent.parent.parent))
+ENV_FILE = ROOT / ".env"
+ENV_ENC_FILE = ROOT / ".env.enc"
+ENV_EXAMPLE_FILE = ROOT / ".env.example"
+MONITORING_USERS = ROOT / "traefik/dynamic/monitoring_users"
 GITEA_BEARER_TOKEN_FILE = ROOT / "monitoring/prometheus/secrets/gitea_bearer_token"
-TLS_YML           = ROOT / "traefik/dynamic/tls.yml"
-CERTS_DIR         = ROOT / "traefik/certs"
-AWX_DOCKERFILE    = ROOT / "awx/Dockerfile.patched"
+TLS_YML = ROOT / "traefik/dynamic/tls.yml"
+CERTS_DIR = ROOT / "traefik/certs"
+AWX_DOCKERFILE = ROOT / "awx/Dockerfile.patched"
 SOPS_AGE_KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
-AUDIT_LOG  = ROOT / "wizard-audit.log"
+AUDIT_LOG = ROOT / "wizard-audit.log"
 
 # ── UI-only fields (heading + info banners) — never written to .env ───────────
-_HEADING_KEYS: frozenset[str] = frozenset(
-    f["key"] for f in FIELDS if f.get("type") in ("heading", "info")
-)
+_HEADING_KEYS: frozenset[str] = frozenset(f["key"] for f in FIELDS if f.get("type") in ("heading", "info"))
 
 # ── Shell-unsafe characters for .env quoting ─────────────────────────────────
-_SHELL_UNSAFE = set(' \t*?[]{}()<>|&;!\\$`\'"')
+_SHELL_UNSAFE = set(" \t*?[]{}()<>|&;!\\$`'\"")
 
 
 # ── .env helpers ──────────────────────────────────────────────────────────────
+
 
 def _load_env() -> dict[str, str]:
     """Load current .env values, falling back to .env.example defaults."""

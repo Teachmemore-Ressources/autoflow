@@ -1,6 +1,7 @@
 """
 routers/ee.py — AWX image build, Execution Environments, Docker CA trust, Gitea network init.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,6 +50,7 @@ EE_DEFINITIONS = [
 def _find_ansible_builder() -> str | None:
     """Locate the ansible-builder binary (PATH → ~/.local/bin → pipx venv)."""
     import shutil
+
     found = shutil.which("ansible-builder")
     if found:
         return found
@@ -63,6 +65,7 @@ def _find_ansible_builder() -> str | None:
 
 # ── AWX custom image build ─────────────────────────────────────────────────────
 
+
 @router.get("/api/build-awx")
 async def build_awx(request: Request):
     """Build the custom AWX patched image (SSE stream)."""
@@ -75,10 +78,14 @@ async def build_awx(request: Request):
         yield _sse("This may take 5–15 minutes depending on your connection…")
 
         proc = await asyncio.create_subprocess_exec(
-            "docker", "build",
-            "-f", str(AWX_DOCKERFILE),
-            "--build-arg", f"AWX_VERSION={awx_version}",
-            "-t", tag,
+            "docker",
+            "build",
+            "-f",
+            str(AWX_DOCKERFILE),
+            "--build-arg",
+            f"AWX_VERSION={awx_version}",
+            "-t",
+            tag,
             str(ROOT / "awx"),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -94,8 +101,11 @@ async def build_awx(request: Request):
             yield _sse(f"[ERROR] docker build exited with code {proc.returncode}")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/awx-image-status")
@@ -104,18 +114,20 @@ def awx_image_status():
     tag = f"autoflow/awx-patched:{version}"
     r = subprocess.run(
         ["docker", "image", "inspect", tag, "--format", "{{.Id}}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return {"tag": tag, "exists": r.returncode == 0}
 
 
 # ── Execution Environments ────────────────────────────────────────────────────
 
+
 @router.get("/api/ee/status")
 def ee_status():
-    config     = _load_env()
-    domain     = config.get("DOMAIN", "localhost")
-    registry   = f"git.{domain}"
+    config = _load_env()
+    domain = config.get("DOMAIN", "localhost")
+    registry = f"git.{domain}"
     gitea_user = config.get("GITEA_ADMIN_USER", "admin")
 
     ab = _find_ansible_builder()
@@ -127,21 +139,22 @@ def ee_status():
     ee_images = []
     for ee in EE_DEFINITIONS:
         tag = f"{registry}/{gitea_user}/ee-{ee['id']}:{ee['version']}"
-        r   = subprocess.run(
+        r = subprocess.run(
             ["docker", "image", "inspect", tag, "--format", "{{.Id}}"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         ee_images.append({**ee, "tag": tag, "built": r.returncode == 0})
 
-    cert_dir      = Path(f"/etc/docker/certs.d/{registry}")
+    cert_dir = Path(f"/etc/docker/certs.d/{registry}")
     docker_trusted = (cert_dir / "ca.crt").exists()
 
     return {
-        "ansible_builder":         ab,
+        "ansible_builder": ab,
         "ansible_builder_version": ab_version,
-        "registry":                registry,
-        "docker_trusted":          docker_trusted,
-        "ees":                     ee_images,
+        "registry": registry,
+        "docker_trusted": docker_trusted,
+        "ees": ee_images,
     }
 
 
@@ -162,7 +175,9 @@ async def ee_install_deps():
         if pipx_check.returncode == 0:
             yield _sse("Installation via pipx...")
             proc = await asyncio.create_subprocess_exec(
-                "pipx", "install", "ansible-builder",
+                "pipx",
+                "install",
+                "ansible-builder",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -178,7 +193,11 @@ async def ee_install_deps():
         # Priority 2: pip --break-system-packages (Debian/Ubuntu 22+)
         yield _sse("Installation via pip3 --break-system-packages...")
         proc = await asyncio.create_subprocess_exec(
-            "pip3", "install", "--user", "--break-system-packages", "ansible-builder",
+            "pip3",
+            "install",
+            "--user",
+            "--break-system-packages",
+            "ansible-builder",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -193,8 +212,11 @@ async def ee_install_deps():
             yield _sse("Run manually in a terminal: pipx install ansible-builder")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/ee/build")
@@ -202,10 +224,10 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
     """SSE: ansible-builder build + docker push for a single EE."""
 
     async def stream():
-        config     = _load_env()
-        domain     = config.get("DOMAIN", "localhost")
+        config = _load_env()
+        domain = config.get("DOMAIN", "localhost")
         gitea_user = config.get("GITEA_ADMIN_USER", "admin")
-        registry   = f"git.{domain}"
+        registry = f"git.{domain}"
 
         ee_file = ROOT / "execution-environments" / ee / "execution-environment.yml"
         if not ee_file.exists():
@@ -219,7 +241,7 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
             yield _sse("[DONE]")
             return
 
-        tag     = f"{registry}/{gitea_user}/ee-{ee}:{version}"
+        tag = f"{registry}/{gitea_user}/ee-{ee}:{version}"
         ctx_dir = f"/tmp/ee-build-{ee}"
 
         yield _sse(f"▶  Build EE '{ee}' → {tag}")
@@ -233,7 +255,9 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
             yield _sse(f"docker login {registry}...")
             login = subprocess.run(
                 ["docker", "login", registry, "-u", gitea_user, "--password-stdin"],
-                input=token, capture_output=True, text=True,
+                input=token,
+                capture_output=True,
+                text=True,
             )
             if login.returncode == 0:
                 yield _sse("docker login OK ✔")
@@ -243,12 +267,18 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
         # ansible-builder build
         yield _sse("ansible-builder build...")
         build_proc = await asyncio.create_subprocess_exec(
-            ab, "build",
-            "--file",      str(ee_file),
-            "--tag",       tag,
-            "--context",   ctx_dir,
-            "--build-arg", "PYCMD=/usr/bin/python3.12",
-            "--verbosity", "1",
+            ab,
+            "build",
+            "--file",
+            str(ee_file),
+            "--tag",
+            tag,
+            "--context",
+            ctx_dir,
+            "--build-arg",
+            "PYCMD=/usr/bin/python3.12",
+            "--verbosity",
+            "1",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -266,7 +296,9 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
         push_rc = -1
         push_lines: list[str] = []
         push_proc = await asyncio.create_subprocess_exec(
-            "docker", "push", tag,
+            "docker",
+            "push",
+            tag,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -281,17 +313,22 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
             # Push immutable dated tag for rollback capability
             from datetime import datetime as _dt
             from datetime import timezone as _tz
+
             dated_tag = _dt.now(_tz.utc).strftime("%Y%m%d-%H%M%S")
             dated_image = f"{registry}/{gitea_user}/ee-{ee}:{dated_tag}"
             yield _sse(f"Pushing dated tag {dated_tag} for rollback…")
             tag_r = subprocess.run(
                 ["docker", "tag", tag, dated_image],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if tag_r.returncode == 0:
                 dt_push = await asyncio.create_subprocess_exec(
-                    "docker", "push", dated_image,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                    "docker",
+                    "push",
+                    dated_image,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
                 )
                 await dt_push.wait()
                 if dt_push.returncode == 0:
@@ -310,15 +347,20 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
                     _ca_pem = _ca_file.read_text()
                     _sys_ca = "/usr/local/share/ca-certificates/autoflow-registry-ca.crt"
                     import tempfile as _t2
+
                     with _t2.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as _tf2:
                         _tf2.write(_ca_pem)
                         _tp2 = _tf2.name
                     _sr = _sudo_run(
-                        ["bash", "-c",
-                         f"cp '{_tp2}' '{_sys_ca}' && chmod 644 '{_sys_ca}'"
-                         f" && update-ca-certificates --fresh 2>&1 | tail -3"
-                         f" && systemctl restart docker"],
-                        capture_output=True, text=True,
+                        [
+                            "bash",
+                            "-c",
+                            f"cp '{_tp2}' '{_sys_ca}' && chmod 644 '{_sys_ca}'"
+                            f" && update-ca-certificates --fresh 2>&1 | tail -3"
+                            f" && systemctl restart docker",
+                        ],
+                        capture_output=True,
+                        text=True,
                     )
                     Path(_tp2).unlink(missing_ok=True)
                     if _sr.returncode == 0:
@@ -334,8 +376,11 @@ async def ee_build(ee: str = "base", version: str = "1.0.0"):
                 yield _sse("[WARN] Check: 1) 'Configure Docker CA' 2) GITEA_REGISTRY_TOKEN in .env")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/ee/versions/{ee}")
@@ -345,12 +390,13 @@ def ee_versions(ee: str):
     import json as _j
     import urllib.error
     import urllib.request
-    config     = _load_env()
-    domain     = config.get("DOMAIN", "localhost")
+
+    config = _load_env()
+    domain = config.get("DOMAIN", "localhost")
     gitea_user = config.get("GITEA_ADMIN_USER", "admin")
-    registry   = f"git.{domain}"
-    token      = config.get("GITEA_REGISTRY_TOKEN", "") or config.get("GITEA_ADMIN_PASSWORD", "")
-    creds      = base64.b64encode(f"{gitea_user}:{token}".encode()).decode()
+    registry = f"git.{domain}"
+    token = config.get("GITEA_REGISTRY_TOKEN", "") or config.get("GITEA_ADMIN_PASSWORD", "")
+    creds = base64.b64encode(f"{gitea_user}:{token}".encode()).decode()
 
     # Use Docker Registry v2 API on the intra-stack hostname (no TLS needed)
     # Fallback to the external hostname if intra-stack is not available
@@ -361,25 +407,31 @@ def ee_versions(ee: str):
             ctx = None
             if base.startswith("https"):
                 import ssl
+
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
-                ctx.verify_mode    = ssl.CERT_NONE
+                ctx.verify_mode = ssl.CERT_NONE
             with urllib.request.urlopen(req, timeout=6, context=ctx) as resp:
-                data  = _j.loads(resp.read())
-                tags  = data.get("tags") or []
+                data = _j.loads(resp.read())
+                tags = data.get("tags") or []
                 dated = sorted([t for t in tags if len(t) == 15 and t[8] == "-"], reverse=True)
                 other = [t for t in tags if t not in dated]
                 return {
-                    "ee":         ee,
+                    "ee": ee,
                     "image_base": f"{registry}/{gitea_user}/ee-{ee}",
                     "dated_tags": dated,
                     "other_tags": other,
-                    "total":      len(tags),
+                    "total": len(tags),
                 }
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                return {"ee": ee, "image_base": f"{registry}/{gitea_user}/ee-{ee}",
-                        "dated_tags": [], "other_tags": [], "total": 0}
+                return {
+                    "ee": ee,
+                    "image_base": f"{registry}/{gitea_user}/ee-{ee}",
+                    "dated_tags": [],
+                    "other_tags": [],
+                    "total": 0,
+                }
         except Exception:
             continue
 
@@ -391,11 +443,11 @@ async def ee_rollback(ee: str, version: str):
     """SSE: roll back an EE image by re-tagging a dated version as 'latest' and pushing."""
 
     async def stream():
-        config     = _load_env()
-        domain     = config.get("DOMAIN", "localhost")
+        config = _load_env()
+        domain = config.get("DOMAIN", "localhost")
         gitea_user = config.get("GITEA_ADMIN_USER", "admin")
-        registry   = f"git.{domain}"
-        default_v  = config.get("EE_DEFAULT_VERSION", "latest")
+        registry = f"git.{domain}"
+        default_v = config.get("EE_DEFAULT_VERSION", "latest")
 
         source = f"{registry}/{gitea_user}/ee-{ee}:{version}"
         target = f"{registry}/{gitea_user}/ee-{ee}:{default_v}"
@@ -408,8 +460,11 @@ async def ee_rollback(ee: str, version: str):
         # Step 1: pull the dated image
         yield _sse(f"[1/3] docker pull {source}…")
         pull_proc = await asyncio.create_subprocess_exec(
-            "docker", "pull", source,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            "docker",
+            "pull",
+            source,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
         async for raw in pull_proc.stdout:
             ln = raw.decode().rstrip()
@@ -434,8 +489,11 @@ async def ee_rollback(ee: str, version: str):
         # Step 3: push floating tag
         yield _sse(f"[3/3] docker push {target}…")
         push_proc = await asyncio.create_subprocess_exec(
-            "docker", "push", target,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            "docker",
+            "push",
+            target,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
         async for raw in push_proc.stdout:
             ln = raw.decode().rstrip()
@@ -452,8 +510,11 @@ async def ee_rollback(ee: str, version: str):
         yield _sse("AWX will use the rolled-back image on next job run.")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/docker/trust-ca")
@@ -465,8 +526,8 @@ async def docker_trust_ca():
 
         import httpx as _httpx
 
-        config   = _load_env()
-        domain   = config.get("DOMAIN", "localhost")
+        config = _load_env()
+        domain = config.get("DOMAIN", "localhost")
         registry = f"git.{domain}"
 
         yield _sse(f"Configuration du CA Docker pour le registry {registry}...")
@@ -479,8 +540,11 @@ async def docker_trust_ca():
                 r = await c.get(f"{PKI_URL}/api/ca/list", timeout=4)
                 if r.status_code == 200:
                     cas = r.json()
-                    ca_name = (cas[0].get("name") if isinstance(cas, list) and cas
-                               else cas.get("cas", [{}])[0].get("name", ""))
+                    ca_name = (
+                        cas[0].get("name")
+                        if isinstance(cas, list) and cas
+                        else cas.get("cas", [{}])[0].get("name", "")
+                    )
                     if ca_name:
                         rc = await c.get(f"{PKI_URL}/api/ca/{ca_name}/cert.pem", timeout=4)
                         if rc.status_code == 200 and "BEGIN CERTIFICATE" in rc.text:
@@ -515,14 +579,19 @@ async def docker_trust_ca():
         except PermissionError:
             yield _sse("Permission denied — retrying via sudo…")
             import tempfile
+
             with tempfile.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as tmp:
                 tmp.write(ca_pem)
                 tmp_path = tmp.name
             r = _sudo_run(
-                ["bash", "-c",
-                 f"mkdir -p '{cert_dir}' && cp '{tmp_path}' '{cert_dir}/ca.crt' "
-                 f"&& chmod 644 '{cert_dir}/ca.crt'"],
-                capture_output=True, text=True,
+                [
+                    "bash",
+                    "-c",
+                    f"mkdir -p '{cert_dir}' && cp '{tmp_path}' '{cert_dir}/ca.crt' "
+                    f"&& chmod 644 '{cert_dir}/ca.crt'",
+                ],
+                capture_output=True,
+                text=True,
             )
             Path(tmp_path).unlink(missing_ok=True)
             if r.returncode != 0:
@@ -535,15 +604,20 @@ async def docker_trust_ca():
         # Install CA in the system trust store so the docker credential helper trusts it
         # (the credential helper uses system TLS, NOT /etc/docker/certs.d/)
         import tempfile as _tempfile_sys
+
         with _tempfile_sys.NamedTemporaryFile(mode="w", suffix=".crt", delete=False) as _sf:
             _sf.write(ca_pem)
             _sys_tmp = _sf.name
         _sys_ca_dst = "/usr/local/share/ca-certificates/autoflow-registry-ca.crt"
         _sys_r = _sudo_run(
-            ["bash", "-c",
-             f"cp '{_sys_tmp}' '{_sys_ca_dst}' && chmod 644 '{_sys_ca_dst}' "
-             f"&& update-ca-certificates --fresh 2>&1 | tail -3"],
-            capture_output=True, text=True,
+            [
+                "bash",
+                "-c",
+                f"cp '{_sys_tmp}' '{_sys_ca_dst}' && chmod 644 '{_sys_ca_dst}' "
+                f"&& update-ca-certificates --fresh 2>&1 | tail -3",
+            ],
+            capture_output=True,
+            text=True,
         )
         Path(_sys_tmp).unlink(missing_ok=True)
         if _sys_r.returncode == 0:
@@ -556,6 +630,7 @@ async def docker_trust_ca():
         # Also add to insecure-registries in daemon.json so docker push bypasses
         # TLS verification for this local registry (belt + suspenders approach)
         import json as _json_mod
+
         daemon_json = Path("/etc/docker/daemon.json")
         try:
             existing_cfg = _json_mod.loads(daemon_json.read_text()) if daemon_json.exists() else {}
@@ -567,13 +642,18 @@ async def docker_trust_ca():
             existing_cfg["insecure-registries"] = insecure
             daemon_content = _json_mod.dumps(existing_cfg, indent=2)
             import tempfile as _tmp_mod
+
             with _tmp_mod.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
                 tf.write(daemon_content)
                 tf_path = tf.name
             ir = _sudo_run(
-                ["bash", "-c",
-                 f"cp '{tf_path}' /etc/docker/daemon.json && chmod 644 /etc/docker/daemon.json"],
-                capture_output=True, text=True,
+                [
+                    "bash",
+                    "-c",
+                    f"cp '{tf_path}' /etc/docker/daemon.json && chmod 644 /etc/docker/daemon.json",
+                ],
+                capture_output=True,
+                text=True,
             )
             Path(tf_path).unlink(missing_ok=True)
             if ir.returncode == 0:
@@ -614,6 +694,7 @@ async def docker_trust_ca():
 
         # Ensure registry hostname resolves (add to /etc/hosts if needed)
         import socket as _socket
+
         try:
             _socket.getaddrinfo(registry, 443)
         except _socket.gaierror:
@@ -624,25 +705,30 @@ async def docker_trust_ca():
                 # Use shlex.quote to prevent shell injection via a crafted DOMAIN value.
                 add = _sudo_run(
                     ["bash", "-c", f"printf '%s\\n' {shlex.quote(hosts_line)} >> /etc/hosts"],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 if add.returncode == 0:
                     yield _sse(f"Entry added to /etc/hosts: {hosts_line} ✔")
                 else:
                     yield _sse(f"[WARN] Cannot write to /etc/hosts: {add.stderr.strip()}")
-                    yield _sse(f"[WARN] Add manually: echo {shlex.quote(hosts_line)} | sudo tee -a /etc/hosts")  # noqa: E501
+                    yield _sse(
+                        f"[WARN] Add manually: echo {shlex.quote(hosts_line)} | sudo tee -a /etc/hosts"
+                    )  # noqa: E501
             else:
                 yield _sse(f"Entry already present in /etc/hosts for {registry}.")
 
         # Test docker login — auto-generate registry token if needed
-        user     = config.get("GITEA_ADMIN_USER", "admin")
+        user = config.get("GITEA_ADMIN_USER", "admin")
         password = config.get("GITEA_ADMIN_PASSWORD", "")
         reg_token = config.get("GITEA_REGISTRY_TOKEN", "")
 
         def _try_docker_login(secret: str) -> bool:
             r = subprocess.run(
                 ["docker", "login", registry, "-u", user, "--password-stdin"],
-                input=secret, capture_output=True, text=True,
+                input=secret,
+                capture_output=True,
+                text=True,
             )
             return r.returncode == 0
 
@@ -665,7 +751,8 @@ async def docker_trust_ca():
                     # Delete existing token with same name (ignore errors)
                     await c.delete(
                         f"{gitea_api}/users/{user}/tokens/autoflow-registry",
-                        auth=(user, password), timeout=5,
+                        auth=(user, password),
+                        timeout=5,
                     )
                     # Create new token with package scope
                     resp = await c.post(
@@ -689,11 +776,23 @@ async def docker_trust_ca():
                 email = config.get("GITEA_ADMIN_EMAIL", f"{user}@localhost")
                 yield _sse(f"Creating Gitea admin account '{user}'…")
                 init_proc = await asyncio.create_subprocess_exec(
-                    "docker", "exec", "autoflow_gitea",
-                    "gitea", "admin", "user", "create",
-                    "--username", user, "--password", password,
-                    "--email", email, "--admin", "--must-change-password=false",
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                    "docker",
+                    "exec",
+                    "autoflow_gitea",
+                    "gitea",
+                    "admin",
+                    "user",
+                    "create",
+                    "--username",
+                    user,
+                    "--password",
+                    password,
+                    "--email",
+                    email,
+                    "--admin",
+                    "--must-change-password=false",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
                 )
                 async for line in init_proc.stdout:
                     yield _sse(line.decode().rstrip())
@@ -706,11 +805,22 @@ async def docker_trust_ca():
 
                 # Generate token directly via Gitea CLI (no HTTP dependency)
                 tok_proc = await asyncio.create_subprocess_exec(
-                    "docker", "exec", "autoflow_gitea",
-                    "gitea", "admin", "user", "generate-access-token",
-                    "--username", user, "--token-name", "autoflow-registry",
-                    "--scopes", "read:package,write:package", "--raw",
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    "docker",
+                    "exec",
+                    "autoflow_gitea",
+                    "gitea",
+                    "admin",
+                    "user",
+                    "generate-access-token",
+                    "--username",
+                    user,
+                    "--token-name",
+                    "autoflow-registry",
+                    "--scopes",
+                    "read:package,write:package",
+                    "--raw",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 tok_stdout, tok_stderr = await tok_proc.communicate()
                 if tok_proc.returncode == 0:
@@ -722,6 +832,7 @@ async def docker_trust_ca():
             if new_token:
                 yield _sse("Token generated — writing to .env (GITEA_REGISTRY_TOKEN)…")
                 from core.env import _write_env as _we
+
                 current = _load_env()
                 current["GITEA_REGISTRY_TOKEN"] = new_token
                 _we(current)
@@ -734,7 +845,10 @@ async def docker_trust_ca():
                 # Last resort: try with admin password directly
                 if password and _try_docker_login(password):
                     yield _sse("[SUCCESS] docker login with admin password → OK ✔")
-                    yield _sse("[WARN] Using admin password — generate a dedicated token in Gitea > Settings > Applications")  # noqa: E501
+                    yield _sse(
+                        "[WARN] Using admin password — generate a dedicated token"  # noqa: E501
+                        " in Gitea > Settings > Applications"
+                    )
                 else:
                     yield _sse("[WARN] docker login failed — is Gitea running and reachable?")
                     yield _sse(
@@ -744,8 +858,11 @@ async def docker_trust_ca():
                     yield _sse("[WARN] Then set in .env: GITEA_REGISTRY_TOKEN=<token>")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/gitea/init-network")
@@ -760,18 +877,19 @@ async def gitea_init_network():
             return
 
         config = _load_env()
-        env    = {
+        env = {
             **os.environ,
-            "GITEA_ROOT_URL":       config.get("GITEA_ROOT_URL", ""),
-            "GITEA_ADMIN_USER":     config.get("GITEA_ADMIN_USER", "admin"),
+            "GITEA_ROOT_URL": config.get("GITEA_ROOT_URL", ""),
+            "GITEA_ADMIN_USER": config.get("GITEA_ADMIN_USER", "admin"),
             "GITEA_ADMIN_PASSWORD": config.get("GITEA_ADMIN_PASSWORD", ""),
-            "AUTOFLOW_ROOT":        str(ROOT),
+            "AUTOFLOW_ROOT": str(ROOT),
         }
 
         yield _sse("Initialisation du repo Gitea 'network-playbooks'...")
 
         proc = await asyncio.create_subprocess_exec(
-            "bash", str(script),
+            "bash",
+            str(script),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
@@ -781,12 +899,15 @@ async def gitea_init_network():
         await proc.wait()
 
         if proc.returncode == 0:
-            gitea_url  = config.get("GITEA_ROOT_URL", "")
+            gitea_url = config.get("GITEA_ROOT_URL", "")
             gitea_user = config.get("GITEA_ADMIN_USER", "admin")
             yield _sse(f"[SUCCESS] Repo available at {gitea_url}/{gitea_user}/network-playbooks ✔")
         else:
             yield _sse(f"[ERROR] Initialization failed (code {proc.returncode})")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

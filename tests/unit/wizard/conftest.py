@@ -7,6 +7,7 @@ sys.modules["main"] when the full test suite runs together.
 
 WIZARD_TOKEN is expected to be set by the root conftest before this file runs.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -15,9 +16,7 @@ from pathlib import Path
 
 import pytest
 
-_WIZARD_DIR = (
-    Path(__file__).parent.parent.parent.parent / "services" / "deploy-wizard"
-)
+_WIZARD_DIR = Path(__file__).parent.parent.parent.parent / "services" / "deploy-wizard"
 
 
 def _load_wizard_main():
@@ -32,12 +31,10 @@ def _load_wizard_main():
     if str(_WIZARD_DIR) not in sys.path:
         sys.path.append(str(_WIZARD_DIR))
 
-    spec = importlib.util.spec_from_file_location(
-        alias, str(_WIZARD_DIR / "main.py")
-    )
-    mod = importlib.util.module_from_spec(spec)       # type: ignore[arg-type]
+    spec = importlib.util.spec_from_file_location(alias, str(_WIZARD_DIR / "main.py"))
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     sys.modules[alias] = mod
-    spec.loader.exec_module(mod)                      # type: ignore[union-attr]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
 
@@ -46,6 +43,7 @@ _load_wizard_main()
 
 
 # ── Shared fixture: redirect wizard file paths to a temp directory ────────────
+
 
 @pytest.fixture
 def wizard_env_paths(tmp_path, monkeypatch):
@@ -59,23 +57,23 @@ def wizard_env_paths(tmp_path, monkeypatch):
     import core.env as core_env
     import wizard_main as wm
 
-    env_file    = tmp_path / ".env"
+    env_file = tmp_path / ".env"
     env_example = tmp_path / ".env.example"
-    audit_log   = tmp_path / "audit.log"
+    audit_log = tmp_path / "audit.log"
 
     # Patch wizard_main re-exports (backward compat)
-    monkeypatch.setattr(wm, "ENV_FILE",         env_file)
+    monkeypatch.setattr(wm, "ENV_FILE", env_file)
     monkeypatch.setattr(wm, "ENV_EXAMPLE_FILE", env_example)
-    monkeypatch.setattr(wm, "AUDIT_LOG",        audit_log)
+    monkeypatch.setattr(wm, "AUDIT_LOG", audit_log)
 
     # Patch core.env where the functions actually live
-    monkeypatch.setattr(core_env, "ENV_FILE",         env_file)
+    monkeypatch.setattr(core_env, "ENV_FILE", env_file)
     monkeypatch.setattr(core_env, "ENV_EXAMPLE_FILE", env_example)
-    monkeypatch.setattr(core_env, "AUDIT_LOG",        audit_log)
+    monkeypatch.setattr(core_env, "AUDIT_LOG", audit_log)
 
     return {
-        "env":     env_file,
+        "env": env_file,
         "example": env_example,
-        "audit":   audit_log,
-        "tmp":     tmp_path,
+        "audit": audit_log,
+        "tmp": tmp_path,
     }

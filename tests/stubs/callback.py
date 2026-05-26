@@ -11,6 +11,7 @@ Endpoints:
 Usage as standalone server:
   python callback.py     — listens on 0.0.0.0:9999
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
@@ -50,4 +51,5 @@ async def reset():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=9999, log_level="warning")

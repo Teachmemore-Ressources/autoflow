@@ -19,6 +19,7 @@ Example schedules.yml::
 The dispatch_fn must be an async callable:
     async def dispatch(source: str, action: str, data: dict) -> None
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,10 +38,10 @@ class EventScheduler:
     """APScheduler wrapper with YAML-based cron configuration."""
 
     def __init__(self, schedules_file: str, dispatch_fn: DispatchFn) -> None:
-        self._file      = schedules_file
-        self._dispatch  = dispatch_fn
+        self._file = schedules_file
+        self._dispatch = dispatch_fn
         self._scheduler = AsyncIOScheduler(timezone="UTC")
-        self._count     = 0
+        self._count = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -68,8 +69,8 @@ class EventScheduler:
     def jobs(self) -> list[dict]:
         return [
             {
-                "id":       j.id,
-                "name":     j.name,
+                "id": j.id,
+                "name": j.name,
                 "next_run": j.next_run_time.isoformat() if j.next_run_time else None,
             }
             for j in self._scheduler.get_jobs()
@@ -86,9 +87,7 @@ class EventScheduler:
             with open(self._file) as fh:
                 config = yaml.safe_load(fh) or {}
         except FileNotFoundError:
-            logger.warning(
-                "Schedules file not found: %s  (scheduler will be idle)", self._file
-            )
+            logger.warning("Schedules file not found: %s  (scheduler will be idle)", self._file)
             return 0
         except yaml.YAMLError as exc:
             logger.error("Invalid YAML in schedules file: %s", exc)
@@ -96,11 +95,11 @@ class EventScheduler:
 
         count = 0
         for entry in config.get("schedules", []):
-            name   = entry.get("name", f"schedule-{count}")
-            cron   = entry.get("cron", "").strip()
+            name = entry.get("name", f"schedule-{count}")
+            cron = entry.get("cron", "").strip()
             source = entry.get("source", "scheduler")
             action = entry.get("action", "scheduled")
-            data   = entry.get("data", {})
+            data = entry.get("data", {})
 
             if not cron:
                 logger.warning("Schedule '%s' has no cron expression — skipped", name)
@@ -109,9 +108,7 @@ class EventScheduler:
             try:
                 trigger = CronTrigger.from_crontab(cron, timezone="UTC")
             except ValueError as exc:
-                logger.warning(
-                    "Invalid cron '%s' for schedule '%s': %s — skipped", cron, name, exc
-                )
+                logger.warning("Invalid cron '%s' for schedule '%s': %s — skipped", cron, name, exc)
                 continue
 
             self._scheduler.add_job(

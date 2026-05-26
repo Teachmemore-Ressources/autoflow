@@ -7,6 +7,7 @@ Usage in main.py:
     ...
     instrument_app(app, "autoflow-<service>")    # after app creation
 """
+
 from __future__ import annotations
 
 import logging

@@ -3,6 +3,7 @@ core/auth.py — HTTP Basic Auth guard and audit-log helper for the Deploy Wizar
 
 Importing this module triggers the WIZARD_TOKEN sys.exit guard immediately.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,7 @@ if not _WIZARD_TOKEN:
     print(
         "\n  ERROR: WIZARD_TOKEN environment variable is not set.\n"
         "  Generate a token and export it before starting the wizard:\n\n"
-        "    export WIZARD_TOKEN=$(python3 -c \"import secrets; print(secrets.token_urlsafe(32))\")\n"
+        '    export WIZARD_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")\n'
         "    make wizard\n",
         file=sys.stderr,
     )
@@ -48,11 +49,12 @@ def _require_auth(creds: HTTPBasicCredentials = Depends(_http_basic)) -> str:
 
 # ── Audit log ─────────────────────────────────────────────────────────────────
 
+
 def _audit(request: Request, action: str, **extra) -> None:
     """Append a JSON line to wizard-audit.log — values are never logged."""
     entry = {
-        "ts":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "ip":     request.client.host if request.client else "unknown",
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ip": request.client.host if request.client else "unknown",
         "action": action,
         **extra,
     }

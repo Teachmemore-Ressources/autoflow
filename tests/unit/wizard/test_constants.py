@@ -8,14 +8,17 @@ Covered:
   - WIZARD_VERSION    : semver-formatted string
   - generate_secret() : correct lengths and character sets
 """
+
 from __future__ import annotations
 
 import re
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _wm():
     import wizard_main as wm
+
     return wm
 
 
@@ -23,21 +26,25 @@ def _wm():
 # FIRST_START_ONLY
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestFirstStartOnly:
 
+class TestFirstStartOnly:
     def test_is_frozenset(self):
         assert isinstance(_wm().FIRST_START_ONLY, frozenset)
 
     def test_contains_awx_admin_keys(self):
         fso = _wm().FIRST_START_ONLY
-        for key in ("AWX_ADMIN_USER", "AWX_ADMIN_PASSWORD", "AWX_ADMIN_EMAIL",
-                    "AWX_SECRET_KEY"):
+        for key in ("AWX_ADMIN_USER", "AWX_ADMIN_PASSWORD", "AWX_ADMIN_EMAIL", "AWX_SECRET_KEY"):
             assert key in fso, f"Expected {key!r} in FIRST_START_ONLY"
 
     def test_contains_gitea_admin_keys(self):
         fso = _wm().FIRST_START_ONLY
-        for key in ("GITEA_ADMIN_USER", "GITEA_ADMIN_PASSWORD", "GITEA_ADMIN_EMAIL",
-                    "GITEA_SECRET_KEY", "GITEA_INTERNAL_TOKEN"):
+        for key in (
+            "GITEA_ADMIN_USER",
+            "GITEA_ADMIN_PASSWORD",
+            "GITEA_ADMIN_EMAIL",
+            "GITEA_SECRET_KEY",
+            "GITEA_INTERNAL_TOKEN",
+        ):
             assert key in fso, f"Expected {key!r} in FIRST_START_ONLY"
 
     def test_contains_postgres_init_keys(self):
@@ -48,7 +55,7 @@ class TestFirstStartOnly:
     def test_contains_grafana_and_pki_keys(self):
         fso = _wm().FIRST_START_ONLY
         assert "GRAFANA_ADMIN_USER" in fso
-        assert "PKI_JWT_SECRET"     in fso
+        assert "PKI_JWT_SECRET" in fso
 
     def test_contains_minio_loki_keys(self):
         fso = _wm().FIRST_START_ONLY
@@ -64,16 +71,16 @@ class TestFirstStartOnly:
 # NEEDS_RECREATE
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestNeedsRecreate:
 
+class TestNeedsRecreate:
     def test_is_frozenset(self):
         assert isinstance(_wm().NEEDS_RECREATE, frozenset)
 
     def test_contains_port_keys(self):
         nr = _wm().NEEDS_RECREATE
-        assert "TRAEFIK_HTTP_PORT"  in nr
+        assert "TRAEFIK_HTTP_PORT" in nr
         assert "TRAEFIK_HTTPS_PORT" in nr
-        assert "GITEA_SSH_PORT"     in nr
+        assert "GITEA_SSH_PORT" in nr
 
     def test_contains_docker_gid(self):
         assert "DOCKER_GID" in _wm().NEEDS_RECREATE
@@ -91,8 +98,8 @@ class TestNeedsRecreate:
 # KEY_TO_SERVICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestKeyToServices:
 
+class TestKeyToServices:
     def test_is_dict(self):
         assert isinstance(_wm().KEY_TO_SERVICES, dict)
 
@@ -114,24 +121,22 @@ class TestKeyToServices:
 
     def test_traefik_port_keys_present(self):
         k2s = _wm().KEY_TO_SERVICES
-        assert "TRAEFIK_HTTP_PORT"  in k2s
+        assert "TRAEFIK_HTTP_PORT" in k2s
         assert "TRAEFIK_HTTPS_PORT" in k2s
 
     def test_all_values_are_lists_of_strings(self):
         for key, svcs in _wm().KEY_TO_SERVICES.items():
             assert isinstance(svcs, list), f"KEY_TO_SERVICES[{key!r}] is not a list"
             for svc in svcs:
-                assert isinstance(svc, str), (
-                    f"KEY_TO_SERVICES[{key!r}] has non-string entry: {svc!r}"
-                )
+                assert isinstance(svc, str), f"KEY_TO_SERVICES[{key!r}] has non-string entry: {svc!r}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WIZARD_VERSION
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestWizardVersion:
 
+class TestWizardVersion:
     def test_is_string(self):
         assert isinstance(_wm().WIZARD_VERSION, str)
 
@@ -149,31 +154,37 @@ class TestWizardVersion:
 # generate_secret (pure logic, tested at Python level)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestGenerateSecretLogic:
     """Test the token generation functions in isolation (no HTTP)."""
 
     def test_token_hex_32_is_64_chars(self):
         import secrets
+
         value = secrets.token_hex(32)
         assert len(value) == 64
 
     def test_token_hex_64_is_128_chars(self):
         import secrets
+
         value = secrets.token_hex(64)
         assert len(value) == 128
 
     def test_token_hex_only_hex_chars(self):
         import secrets
+
         value = secrets.token_hex(32)
         assert all(c in "0123456789abcdef" for c in value)
 
     def test_token_urlsafe_not_empty(self):
         import secrets
+
         value = secrets.token_urlsafe(32)
         assert len(value) > 0
 
     def test_two_consecutive_tokens_differ(self):
         import secrets
+
         v1 = secrets.token_hex(32)
         v2 = secrets.token_hex(32)
         assert v1 != v2

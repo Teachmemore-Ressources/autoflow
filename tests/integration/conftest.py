@@ -16,6 +16,7 @@ The ``sys.path`` is still extended (so transitive ``import`` statements inside
 service modules resolve), but the *alias* trick prevents cross-service shadowing
 of top-level module names.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -28,11 +29,11 @@ from httpx import ASGITransport, AsyncClient
 
 # ── Repo paths ────────────────────────────────────────────────────────────────
 
-_REPO   = Path(__file__).parent.parent.parent
-_EE     = _REPO / "services" / "event-engine"
-_API    = _REPO / "services" / "api"
+_REPO = Path(__file__).parent.parent.parent
+_EE = _REPO / "services" / "event-engine"
+_API = _REPO / "services" / "api"
 _SHARED = _REPO / "services" / "shared"
-_STUBS  = _REPO / "tests" / "stubs"
+_STUBS = _REPO / "tests" / "stubs"
 
 # Shared modules (security_headers, etc.) must be importable from service modules
 if str(_SHARED) not in sys.path:
@@ -51,14 +52,14 @@ def _load_module(alias: str, file_path: Path, prepend_paths: list[Path] | None =
     if alias in sys.modules:
         return sys.modules[alias]
 
-    for p in (prepend_paths or []):
+    for p in prepend_paths or []:
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
 
     spec = importlib.util.spec_from_file_location(alias, str(file_path))
-    mod  = importlib.util.module_from_spec(spec)        # type: ignore[arg-type]
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     sys.modules[alias] = mod
-    spec.loader.exec_module(mod)                        # type: ignore[union-attr]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
 
@@ -69,14 +70,25 @@ def _load_module(alias: str, file_path: Path, prepend_paths: list[Path] | None =
 # is added to sys.path once here; it will never shadow api/main.py because
 # the API modules are loaded via importlib aliases.
 
+
 def _ensure_ee_loaded():
     """Load event-engine modules into sys.modules under their canonical names."""
     if str(_EE) not in sys.path:
         sys.path.insert(0, str(_EE))
 
     # Order matters — dependencies before dependants
-    for name in ("settings", "tracing", "dedup", "rules", "parsers",
-                 "awx_client", "event_store", "retry_worker", "scheduler", "main"):
+    for name in (
+        "settings",
+        "tracing",
+        "dedup",
+        "rules",
+        "parsers",
+        "awx_client",
+        "event_store",
+        "retry_worker",
+        "scheduler",
+        "main",
+    ):
         if name not in sys.modules:
             _load_module(name, _EE / f"{name}.py", prepend_paths=[_EE])
 
@@ -125,6 +137,7 @@ def _ensure_api_loaded():
 
 # ── AWX stub ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def awx_stub_app():
     """AWX stub FastAPI app (shared across all integration tests)."""
@@ -145,6 +158,7 @@ async def awx_stub(awx_stub_app):
 
 # ── Callback stub ─────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def callback_stub_app():
     """Notification callback stub FastAPI app."""
@@ -164,6 +178,7 @@ async def callback_stub(callback_stub_app):
 
 
 # ── Event engine fixture ──────────────────────────────────────────────────────
+
 
 @pytest.fixture
 async def ee_client(awx_stub_app, awx_stub):
@@ -189,12 +204,10 @@ async def ee_client(awx_stub_app, awx_stub):
         timeout=30.0,
     )
 
-    app.state.awx          = AWXClient(awx_http, settings.awx_job_template_id)
-    app.state.rules        = RuleEngine(
-        settings.rules_file or None, settings.awx_job_template_id
-    )
-    app.state.dedup        = DedupStore(ttl_seconds=settings.dedup_ttl)
-    app.state.event_store  = None
+    app.state.awx = AWXClient(awx_http, settings.awx_job_template_id)
+    app.state.rules = RuleEngine(settings.rules_file or None, settings.awx_job_template_id)
+    app.state.dedup = DedupStore(ttl_seconds=settings.dedup_ttl)
+    app.state.event_store = None
     app.state.retry_worker = None
 
     sched = MagicMock()
@@ -213,6 +226,7 @@ async def ee_client(awx_stub_app, awx_stub):
 
 
 # ── Notification module fixture ───────────────────────────────────────────────
+
 
 @pytest.fixture(scope="session")
 def api_notifications():

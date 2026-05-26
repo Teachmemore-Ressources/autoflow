@@ -1,6 +1,7 @@
 """
 routers/preflight.py — System pre-flight checks: Docker, RAM, disk, DNS, NTP/time.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,9 +21,11 @@ router = APIRouter()
 
 # ── DNS helpers ───────────────────────────────────────────────────────────────
 
+
 def _dns_candidates() -> list[str]:
     """Read non-loopback nameservers from resolv.conf files, append public fallbacks."""
     import ipaddress
+
     candidates: list[str] = []
     for path in ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"]:
         try:
@@ -47,21 +50,20 @@ def _dns_candidates() -> list[str]:
 
 # ── NTP helpers ───────────────────────────────────────────────────────────────
 
+
 def _detect_ntp_service() -> str:
     """Return 'chrony', 'timesyncd', or 'none'."""
     import shutil
+
     if shutil.which("chronyc"):
-        r = subprocess.run(["systemctl", "is-active", "chrony"],
-                           capture_output=True, text=True)
+        r = subprocess.run(["systemctl", "is-active", "chrony"], capture_output=True, text=True)
         if r.stdout.strip() in ("active", "activating"):
             return "chrony"
         # Debian/Ubuntu package name
-        r2 = subprocess.run(["systemctl", "is-active", "chronyd"],
-                            capture_output=True, text=True)
+        r2 = subprocess.run(["systemctl", "is-active", "chronyd"], capture_output=True, text=True)
         if r2.stdout.strip() in ("active", "activating"):
             return "chrony"
-    r = subprocess.run(["systemctl", "is-active", "systemd-timesyncd"],
-                       capture_output=True, text=True)
+    r = subprocess.run(["systemctl", "is-active", "systemd-timesyncd"], capture_output=True, text=True)
     if r.stdout.strip() == "active":
         return "timesyncd"
     return "none"
@@ -93,13 +95,15 @@ def _chrony_sources() -> list[dict]:
         parts = line.split()
         if len(parts) >= 7:
             try:
-                sources.append({
-                    "mode":       parts[0],
-                    "name":       parts[1],
-                    "stratum":    parts[2],
-                    "offset_ms":  parts[6],
-                    "reachable":  parts[0] in ("^*", "^+", "=*", "=+"),
-                })
+                sources.append(
+                    {
+                        "mode": parts[0],
+                        "name": parts[1],
+                        "stratum": parts[2],
+                        "offset_ms": parts[6],
+                        "reachable": parts[0] in ("^*", "^+", "=*", "=+"),
+                    }
+                )
             except Exception:
                 pass
     return sources
@@ -128,12 +132,15 @@ def _container_time_drift(container: str) -> str | None:
     """Return ISO timestamp from a running container, or None."""
     r = subprocess.run(
         ["docker", "exec", container, "date", "-u", "+%Y-%m-%dT%H:%M:%S"],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     )
     return r.stdout.strip() if r.returncode == 0 else None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/system/preflight")
 def system_preflight():
@@ -150,17 +157,21 @@ def system_preflight():
         if m:
             major, minor = int(m.group(1)), int(m.group(2))
             ok = major >= 24
-            checks.append({
-                "id": "docker", "label": "Docker ≥ 24",
-                "ok": ok,
-                "detail": f"Docker {major}.{minor}" + ("" if ok else " — need ≥ 24, upgrade: https://docs.docker.com/engine/install/"),
-            })
+            checks.append(
+                {
+                    "id": "docker",
+                    "label": "Docker ≥ 24",
+                    "ok": ok,
+                    "detail": f"Docker {major}.{minor}"
+                    + ("" if ok else " — need ≥ 24, upgrade: https://docs.docker.com/engine/install/"),
+                }
+            )
         else:
-            checks.append({"id": "docker", "label": "Docker ≥ 24", "ok": False,
-                        "detail": r.stdout.strip()})
+            checks.append({"id": "docker", "label": "Docker ≥ 24", "ok": False, "detail": r.stdout.strip()})
     else:
-        checks.append({"id": "docker", "label": "Docker ≥ 24", "ok": False,
-                        "detail": "docker not found in PATH"})
+        checks.append(
+            {"id": "docker", "label": "Docker ≥ 24", "ok": False, "detail": "docker not found in PATH"}
+        )
 
     # ── Docker Compose plugin ─────────────────────────────────────────────────
     rc = subprocess.run(["docker", "compose", "version"], capture_output=True, text=True)
@@ -168,10 +179,14 @@ def system_preflight():
         version_line = rc.stdout.strip().split("\n")[0]
         checks.append({"id": "compose", "label": "Docker Compose plugin", "ok": True, "detail": version_line})
     else:
-        checks.append({
-            "id": "compose", "label": "Docker Compose plugin", "ok": False,
-            "detail": "docker compose plugin not found — install: sudo apt install docker-compose-plugin",
-        })
+        checks.append(
+            {
+                "id": "compose",
+                "label": "Docker Compose plugin",
+                "ok": False,
+                "detail": "docker compose plugin not found — install: sudo apt install docker-compose-plugin",
+            }
+        )
 
     # ── RAM ≥ 4 GB ────────────────────────────────────────────────────────────
     try:
@@ -181,34 +196,46 @@ def system_preflight():
                     kb = int(line.split()[1])
                     gb = kb / 1024 / 1024
                     ok = gb >= 4.0
-                    checks.append({
-                        "id": "ram", "label": "RAM ≥ 4 GB",
-                        "ok": ok,
-                        "detail": f"{gb:.1f} GB available" + ("" if ok else " — AWX alone needs ≥ 4 GB"),
-                    })
+                    checks.append(
+                        {
+                            "id": "ram",
+                            "label": "RAM ≥ 4 GB",
+                            "ok": ok,
+                            "detail": f"{gb:.1f} GB available" + ("" if ok else " — AWX alone needs ≥ 4 GB"),
+                        }
+                    )
                     break
     except Exception as exc:
-        checks.append({"id": "ram", "label": "RAM ≥ 4 GB", "ok": False,
-                        "detail": f"could not read /proc/meminfo: {exc}"})
+        checks.append(
+            {
+                "id": "ram",
+                "label": "RAM ≥ 4 GB",
+                "ok": False,
+                "detail": f"could not read /proc/meminfo: {exc}",
+            }
+        )
 
     # ── Disk ≥ 20 GB free ─────────────────────────────────────────────────────
     try:
-        usage  = _sh.disk_usage(str(ROOT))
-        free   = usage.free  / 1024 ** 3
-        total  = usage.total / 1024 ** 3
-        ok     = free >= 20.0
-        checks.append({
-            "id": "disk", "label": "Disk ≥ 20 GB free",
-            "ok": ok,
-            "detail": f"{free:.1f} GB free / {total:.1f} GB total"
-                      + ("" if ok else " — AWX images + DB need ≥ 20 GB"),
-        })
+        usage = _sh.disk_usage(str(ROOT))
+        free = usage.free / 1024**3
+        total = usage.total / 1024**3
+        ok = free >= 20.0
+        checks.append(
+            {
+                "id": "disk",
+                "label": "Disk ≥ 20 GB free",
+                "ok": ok,
+                "detail": f"{free:.1f} GB free / {total:.1f} GB total"
+                + ("" if ok else " — AWX images + DB need ≥ 20 GB"),
+            }
+        )
     except Exception as exc:
         checks.append({"id": "disk", "label": "Disk ≥ 20 GB free", "ok": False, "detail": str(exc)})
 
     # ── DNS resolution ────────────────────────────────────────────────────────
     dns_hosts = ["github.com", "registry-1.docker.io"]
-    dns_ok    = True
+    dns_ok = True
     dns_parts: list[str] = []
     prev_timeout = socket.getdefaulttimeout()
     socket.setdefaulttimeout(3)
@@ -223,12 +250,15 @@ def system_preflight():
     finally:
         socket.setdefaulttimeout(prev_timeout)
 
-    checks.append({
-        "id": "dns", "label": "DNS resolution",
-        "ok": dns_ok,
-        "detail": "  |  ".join(dns_parts)
-                  + ("" if dns_ok else " — check /etc/resolv.conf and network connectivity"),
-    })
+    checks.append(
+        {
+            "id": "dns",
+            "label": "DNS resolution",
+            "ok": dns_ok,
+            "detail": "  |  ".join(dns_parts)
+            + ("" if dns_ok else " — check /etc/resolv.conf and network connectivity"),
+        }
+    )
 
     return {"checks": checks, "all_ok": all(c["ok"] for c in checks)}
 
@@ -264,6 +294,7 @@ def preflight_ee_dns_stream():
     Each event is a plain-text log line.  The last event starts with RESULT:
     and contains the JSON summary the UI needs to update the status card.
     """
+
     def generate():
         def sse(line: str) -> str:
             return f"data: {line}\n\n"
@@ -288,20 +319,27 @@ def preflight_ee_dns_stream():
         # Ensure alpine image is available locally
         check_img = subprocess.run(
             ["docker", "image", "inspect", "alpine", "--format", "ok"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if check_img.stdout.strip() != "ok":
             yield sse("⬇️  Alpine image not in local cache — pulling…")
             pull = subprocess.run(
                 ["docker", "pull", "alpine"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if pull.returncode != 0:
                 yield sse(f"❌ docker pull alpine failed: {pull.stderr.strip()}")
-                result_data = json.dumps({
-                    'candidates': candidates, 'results': [], 'working': None,
-                    'current': _load_env().get('EE_DNS_SERVER', '').strip(),
-                })
+                result_data = json.dumps(
+                    {
+                        "candidates": candidates,
+                        "results": [],
+                        "working": None,
+                        "current": _load_env().get("EE_DNS_SERVER", "").strip(),
+                    }
+                )
                 yield f"data: RESULT:{result_data}\n\n"
                 return
             yield sse("   ✅ alpine pulled")
@@ -319,7 +357,7 @@ def preflight_ee_dns_stream():
         for ip in candidates:
             # busybox nslookup does not support -timeout; wrap with timeout(1)
             test_lines.append(
-                f'if timeout 3 nslookup galaxy.ansible.com {ip} >/dev/null 2>&1; '
+                f"if timeout 3 nslookup galaxy.ansible.com {ip} >/dev/null 2>&1; "
                 f'then echo "OK:{ip}"; else echo "FAIL:{ip}"; fi'
             )
         test_script = "\n".join(test_lines)
@@ -329,9 +367,10 @@ def preflight_ee_dns_stream():
 
         try:
             r = subprocess.run(
-                ["docker", "run", "--rm", "--network", "bridge", "alpine",
-                 "sh", "-c", test_script],
-                capture_output=True, text=True, timeout=len(candidates) * 5 + 15,
+                ["docker", "run", "--rm", "--network", "bridge", "alpine", "sh", "-c", test_script],
+                capture_output=True,
+                text=True,
+                timeout=len(candidates) * 5 + 15,
             )
             for line in r.stdout.splitlines():
                 if line.startswith("OK:"):
@@ -395,6 +434,7 @@ def preflight_apply_dns(data: dict):
     current = _load_env()
     current["EE_DNS_SERVER"] = value
     from core.env import _write_env
+
     _write_env(current)
     return {"ok": True, "value": value}
 
@@ -405,13 +445,13 @@ def preflight_time():
     import datetime
 
     host_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ntp_svc  = _detect_ntp_service()
+    ntp_svc = _detect_ntp_service()
 
     # ── Sync state ────────────────────────────────────────────────────────────
-    synced     = False
-    drift_ms   = None   # float ms
+    synced = False
+    drift_ms = None  # float ms
     ntp_servers: list[str] = []
-    detail     = {}
+    detail = {}
 
     if ntp_svc == "chrony":
         tracking = _chrony_tracking()
@@ -446,8 +486,9 @@ def preflight_time():
         synced = synced_val.lower() in ("yes", "true", "1")
 
     # ── Timezone ──────────────────────────────────────────────────────────────
-    tz_r = subprocess.run(["timedatectl", "show", "--property=Timezone", "--value"],
-                          capture_output=True, text=True)
+    tz_r = subprocess.run(
+        ["timedatectl", "show", "--property=Timezone", "--value"], capture_output=True, text=True
+    )
     timezone = tz_r.stdout.strip() if tz_r.returncode == 0 else "unknown"
     if not timezone:
         tz_r2 = subprocess.run(["cat", "/etc/timezone"], capture_output=True, text=True)
@@ -457,6 +498,7 @@ def preflight_time():
     containers_to_check = ["autoflow_grafana", "autoflow_loki", "autoflow_awx_web"]
     container_clocks: list[dict] = []
     import datetime as _dt
+
     host_ts = _dt.datetime.now(_dt.timezone.utc)
     for cname in containers_to_check:
         ct = _container_time_drift(cname)
@@ -464,12 +506,14 @@ def preflight_time():
             try:
                 ct_ts = _dt.datetime.fromisoformat(ct).replace(tzinfo=_dt.timezone.utc)
                 delta_ms = abs((host_ts - ct_ts).total_seconds() * 1000)
-                container_clocks.append({
-                    "container": cname,
-                    "time":      ct,
-                    "delta_ms":  round(delta_ms, 1),
-                    "ok":        delta_ms < 2000,
-                })
+                container_clocks.append(
+                    {
+                        "container": cname,
+                        "time": ct,
+                        "delta_ms": round(delta_ms, 1),
+                        "ok": delta_ms < 2000,
+                    }
+                )
             except Exception:
                 pass
 
@@ -479,30 +523,30 @@ def preflight_time():
         severity = "warn"
     if drift_ms is not None:
         if drift_ms > 5000:
-            severity = "critical"    # TLS / JWT at risk
+            severity = "critical"  # TLS / JWT at risk
         elif drift_ms > 1000:
             severity = "warn"
         elif drift_ms > 100:
             severity = "info"
 
     return {
-        "host_utc":         host_utc,
-        "timezone":         timezone,
-        "ntp_service":      ntp_svc,
-        "synced":           synced,
-        "drift_ms":         round(drift_ms, 3) if drift_ms is not None else None,
-        "severity":         severity,
-        "ntp_servers":      ntp_servers,
+        "host_utc": host_utc,
+        "timezone": timezone,
+        "ntp_service": ntp_svc,
+        "synced": synced,
+        "drift_ms": round(drift_ms, 3) if drift_ms is not None else None,
+        "severity": severity,
+        "ntp_servers": ntp_servers,
         "container_clocks": container_clocks,
-        "detail":           detail,
+        "detail": detail,
     }
 
 
 @router.get("/api/system/ntp")
 async def configure_ntp(
     request: Request,
-    servers:  str  = "",        # comma-separated NTP server list
-    timezone: str  = "UTC",
+    servers: str = "",  # comma-separated NTP server list
+    timezone: str = "UTC",
     force_sync: bool = True,
 ):
     """SSE: configure NTP servers (Chrony or timesyncd), set timezone, force sync."""
@@ -548,14 +592,17 @@ async def configure_ntp(
                 # Build new chrony.conf — keep existing file, replace pool/server lines
                 read_r = _sudo_run(
                     ["cat", "/etc/chrony/chrony.conf"],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 existing = read_r.stdout if read_r.returncode == 0 else ""
 
                 # Filter out existing pool/server lines
-                kept = [ln for ln in existing.splitlines()
-                        if not ln.strip().startswith(("pool ", "server "))
-                        and ln.strip() != ""]
+                kept = [
+                    ln
+                    for ln in existing.splitlines()
+                    if not ln.strip().startswith(("pool ", "server ")) and ln.strip() != ""
+                ]
                 new_servers = [f"server {s} iburst" for s in server_list]
                 # Add pool.ntp.org as fallback if not already in list
                 if not any("ntp.org" in s for s in server_list):
@@ -563,14 +610,19 @@ async def configure_ntp(
                 new_conf = "\n".join(new_servers + [""] + kept) + "\n"
 
                 import tempfile
+
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tf:
                     tf.write(new_conf)
                     tf_path = tf.name
 
                 wr = _sudo_run(
-                    ["bash", "-c",
-                     f"cp '{tf_path}' /etc/chrony/chrony.conf && chmod 644 /etc/chrony/chrony.conf"],
-                    capture_output=True, text=True,
+                    [
+                        "bash",
+                        "-c",
+                        f"cp '{tf_path}' /etc/chrony/chrony.conf && chmod 644 /etc/chrony/chrony.conf",
+                    ],
+                    capture_output=True,
+                    text=True,
                 )
                 Path(tf_path).unlink(missing_ok=True)
                 if wr.returncode == 0:
@@ -581,20 +633,25 @@ async def configure_ntp(
             else:  # timesyncd
                 yield _sse("[2/4] Configuring NTP servers in systemd-timesyncd…")
                 ntp_line = f"NTP={' '.join(server_list)}"
-                fallback  = "FallbackNTP=pool.ntp.org"
+                fallback = "FallbackNTP=pool.ntp.org"
                 conf = f"[Time]\n{ntp_line}\n{fallback}\n"
 
                 import tempfile
+
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tf:
                     tf.write(conf)
                     tf_path = tf.name
 
                 wr = _sudo_run(
-                    ["bash", "-c",
-                     f"mkdir -p /etc/systemd/timesyncd.conf.d && "
-                     f"cp '{tf_path}' /etc/systemd/timesyncd.conf.d/autoflow.conf && "
-                     f"chmod 644 /etc/systemd/timesyncd.conf.d/autoflow.conf"],
-                    capture_output=True, text=True,
+                    [
+                        "bash",
+                        "-c",
+                        f"mkdir -p /etc/systemd/timesyncd.conf.d && "
+                        f"cp '{tf_path}' /etc/systemd/timesyncd.conf.d/autoflow.conf && "
+                        f"chmod 644 /etc/systemd/timesyncd.conf.d/autoflow.conf",
+                    ],
+                    capture_output=True,
+                    text=True,
                 )
                 Path(tf_path).unlink(missing_ok=True)
                 if wr.returncode == 0:
@@ -608,7 +665,8 @@ async def configure_ntp(
         yield _sse(f"[3/4] Setting timezone → {timezone}…")
         tz_r = _sudo_run(
             ["timedatectl", "set-timezone", timezone],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if tz_r.returncode == 0:
             yield _sse(f"  Timezone set to {timezone} ✔")
@@ -617,7 +675,8 @@ async def configure_ntp(
             # Fallback: symlink /etc/localtime
             link_r = _sudo_run(
                 ["ln", "-sf", f"/usr/share/zoneinfo/{timezone}", "/etc/localtime"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if link_r.returncode == 0:
                 yield _sse(f"  /etc/localtime → {timezone} (fallback) ✔")
@@ -631,12 +690,14 @@ async def configure_ntp(
         # Some distros use chronyd
         restart = _sudo_run(
             ["systemctl", "restart", svc_name],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if restart.returncode != 0 and svc == "chrony":
             restart = _sudo_run(
                 ["systemctl", "restart", "chronyd"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
         if restart.returncode == 0:
             yield _sse(f"  {svc_name} restarted ✔")
@@ -647,7 +708,8 @@ async def configure_ntp(
             await asyncio.sleep(2)  # let chrony connect to servers
             step_r = _sudo_run(
                 ["chronyc", "makestep"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if step_r.returncode == 0:
                 yield _sse("  chronyc makestep → immediate sync ✔")
@@ -657,6 +719,7 @@ async def configure_ntp(
         # ── Final status ──────────────────────────────────────────────────
         await asyncio.sleep(2)
         import datetime as _dt
+
         host_utc = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         yield _sse("─" * 50)
         yield _sse(f"Current UTC time   : {host_utc}")
@@ -674,5 +737,8 @@ async def configure_ntp(
         yield _sse("[SUCCESS] NTP configuration complete ✔")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

@@ -1,6 +1,7 @@
 """
 routers/backup.py — Disaster Recovery / Backup: Restic integration and cron management.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,9 +22,11 @@ BACKUP_SCRIPT = ROOT / "scripts" / "backup.sh"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _restic_env(config: dict) -> dict | None:
     """Build env vars for Restic commands. Returns None if not configured."""
     import shutil
+
     password = config.get("BACKUP_RESTIC_PASSWORD", "")
     if not password or not shutil.which("restic"):
         return None
@@ -38,8 +41,8 @@ def _restic_env(config: dict) -> dict | None:
         env["RESTIC_REPOSITORY"] = path if path.startswith("sftp:") else f"sftp:{path}"
     elif backend == "s3":
         endpoint = config.get("BACKUP_S3_ENDPOINT", "").rstrip("/")
-        bucket   = config.get("BACKUP_S3_BUCKET", "autoflow-backup")
-        env["AWS_ACCESS_KEY_ID"]     = config.get("BACKUP_S3_ACCESS_KEY", "")
+        bucket = config.get("BACKUP_S3_BUCKET", "autoflow-backup")
+        env["AWS_ACCESS_KEY_ID"] = config.get("BACKUP_S3_ACCESS_KEY", "")
         env["AWS_SECRET_ACCESS_KEY"] = config.get("BACKUP_S3_SECRET_KEY", "")
         if endpoint:
             env["RESTIC_REPOSITORY"] = f"s3:{endpoint}/{bucket}"
@@ -47,7 +50,7 @@ def _restic_env(config: dict) -> dict | None:
             env["RESTIC_REPOSITORY"] = f"s3:s3.amazonaws.com/{bucket}"
     elif backend == "b2":
         bucket = config.get("BACKUP_S3_BUCKET", "autoflow-backup")
-        env["B2_ACCOUNT_ID"]  = config.get("BACKUP_S3_ACCESS_KEY", "")
+        env["B2_ACCOUNT_ID"] = config.get("BACKUP_S3_ACCESS_KEY", "")
         env["B2_ACCOUNT_KEY"] = config.get("BACKUP_S3_SECRET_KEY", "")
         env["RESTIC_REPOSITORY"] = f"b2:{bucket}:restic"
 
@@ -56,20 +59,22 @@ def _restic_env(config: dict) -> dict | None:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/backup/status")
 def backup_status():
     import json as _j
     import shutil
+
     config = _load_env()
 
     restic_path = shutil.which("restic")
     result: dict = {
-        "configured":       bool(config.get("BACKUP_RESTIC_PASSWORD", "")),
+        "configured": bool(config.get("BACKUP_RESTIC_PASSWORD", "")),
         "restic_installed": bool(restic_path),
-        "backend":          config.get("BACKUP_BACKEND", "local"),
-        "rto":              config.get("BACKUP_RTO_HOURS", "4"),
-        "rpo":              config.get("BACKUP_RPO_HOURS", "24"),
-        "cron_schedule":    config.get("BACKUP_CRON", "0 2 * * *"),
+        "backend": config.get("BACKUP_BACKEND", "local"),
+        "rto": config.get("BACKUP_RTO_HOURS", "4"),
+        "rpo": config.get("BACKUP_RPO_HOURS", "24"),
+        "cron_schedule": config.get("BACKUP_CRON", "0 2 * * *"),
     }
 
     if not result["configured"] or not restic_path:
@@ -84,7 +89,9 @@ def backup_status():
     # Check last snapshot
     r = subprocess.run(
         ["restic", "snapshots", "--json", "--last", "--no-lock"],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
     if r.returncode == 0:
         try:
@@ -93,8 +100,8 @@ def backup_status():
             if snaps:
                 last = snaps[-1]
                 result["last_snapshot"] = {
-                    "id":       last.get("id", "")[:8],
-                    "time":     last.get("time", "")[:19].replace("T", " "),
+                    "id": last.get("id", "")[:8],
+                    "time": last.get("time", "")[:19].replace("T", " "),
                     "hostname": last.get("hostname", ""),
                 }
         except Exception:
@@ -105,9 +112,7 @@ def backup_status():
 
     # Check cron
     cron_r = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-    result["cron_installed"] = (
-        "backup.sh" in cron_r.stdout if cron_r.returncode == 0 else False
-    )
+    result["cron_installed"] = "backup.sh" in cron_r.stdout if cron_r.returncode == 0 else False
 
     return result
 
@@ -131,7 +136,8 @@ async def backup_run():
         env = {**os.environ, **{k: v for k, v in config.items() if v}}
 
         proc = await asyncio.create_subprocess_exec(
-            "bash", str(BACKUP_SCRIPT),
+            "bash",
+            str(BACKUP_SCRIPT),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
@@ -153,8 +159,11 @@ async def backup_run():
             yield _sse(f"[ERROR] Backup script exited with code {proc.returncode}")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/backup/restore-test")
@@ -165,6 +174,7 @@ async def backup_restore_test():
         import json as _j
         import shutil
         import tempfile
+
         config = _load_env()
 
         if not config.get("BACKUP_RESTIC_PASSWORD", ""):
@@ -199,7 +209,10 @@ async def backup_restore_test():
         # ── Step 2: list snapshots ────────────────────────────────────────────
         yield _sse("Step 2/3: Listing recent snapshots…")
         r2 = subprocess.run(
-            ["restic", "snapshots", "--json", "--no-lock"], capture_output=True, text=True, env=env,
+            ["restic", "snapshots", "--json", "--no-lock"],
+            capture_output=True,
+            text=True,
+            env=env,
         )
         if r2.returncode != 0:
             yield _sse(f"[ERROR] Could not list snapshots: {r2.stderr.strip()[:200]}")
@@ -213,7 +226,7 @@ async def backup_restore_test():
                 return
             yield _sse(f"  Found {len(snaps)} snapshot(s) — last 5:")
             for s in snaps[-5:]:
-                sid   = s.get("id", "")[:8]
+                sid = s.get("id", "")[:8]
                 stime = s.get("time", "")[:19].replace("T", " ")
                 shost = s.get("hostname", "")
                 yield _sse(f"  [{sid}] {stime} @ {shost}")
@@ -226,7 +239,9 @@ async def backup_restore_test():
         with tempfile.TemporaryDirectory() as tmpdir:
             r3 = subprocess.run(
                 ["restic", "restore", "latest", "--target", tmpdir, "--dry-run", "--no-lock"],
-                capture_output=True, text=True, env=env,
+                capture_output=True,
+                text=True,
+                env=env,
             )
             for ln in (r3.stdout + r3.stderr).splitlines():
                 if ln.strip():
@@ -240,31 +255,29 @@ async def backup_restore_test():
         yield _sse("[SUCCESS] Smoke test PASSED — backup is readable and restorable.")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/api/backup/cron/install")
 def backup_cron_install():
     """Install (or update) the automatic backup cron job."""
-    config   = _load_env()
+    config = _load_env()
     schedule = config.get("BACKUP_CRON", "0 2 * * *").strip() or "0 2 * * *"
 
     if not BACKUP_SCRIPT.exists():
         raise HTTPException(400, "backup.sh not found")
 
     r = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-    lines = [ln for ln in (r.stdout if r.returncode == 0 else "").splitlines()
-             if "backup.sh" not in ln]
+    lines = [ln for ln in (r.stdout if r.returncode == 0 else "").splitlines() if "backup.sh" not in ln]
 
-    cron_line = (
-        f"{schedule}  bash {BACKUP_SCRIPT} "
-        f">> /var/log/autoflow-backup.log 2>&1  # autoflow-dr"
-    )
+    cron_line = f"{schedule}  bash {BACKUP_SCRIPT} >> /var/log/autoflow-backup.log 2>&1  # autoflow-dr"
     lines.append(cron_line)
 
-    r2 = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n",
-                        capture_output=True, text=True)
+    r2 = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", capture_output=True, text=True)
     if r2.returncode != 0:
         raise HTTPException(500, f"crontab update failed: {r2.stderr.strip()}")
 
@@ -279,8 +292,7 @@ def backup_cron_uninstall():
         return {"status": "not_installed"}
 
     lines = [ln for ln in r.stdout.splitlines() if "backup.sh" not in ln]
-    r2 = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n",
-                        capture_output=True, text=True)
+    r2 = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", capture_output=True, text=True)
     if r2.returncode != 0:
         raise HTTPException(500, f"crontab update failed: {r2.stderr.strip()}")
 

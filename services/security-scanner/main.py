@@ -9,6 +9,7 @@ Background tasks
 - scanner.scan_loop  : Trivy CVE scan cycle (SCAN_INTERVAL seconds)
 - version_check loop : GitHub/DockerHub version check (VERSION_CHECK_INTERVAL seconds)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,6 +49,7 @@ limiter = Limiter(
 )
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -112,6 +114,7 @@ instrument_app(app, "autoflow-security-scanner")
 
 # ── Bearer auth dependency ────────────────────────────────────────────────────
 
+
 def _require_token(request: Request) -> None:
     expected = settings.compliance_admin_token
     if not expected:
@@ -127,6 +130,7 @@ _compliance_running = False
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @app.get("/health", tags=["Health"])
 async def health():

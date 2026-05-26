@@ -6,6 +6,7 @@ Tests ``parse_cors_origins()`` from services/shared/security_headers.py and
 the CORS-related fields of each service's Settings class.
 No external services or Docker containers required.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,6 +15,7 @@ import pytest
 from security_headers import parse_cors_origins
 
 # ── parse_cors_origins — validation logic ─────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_wildcard_raises_in_production():
@@ -63,6 +65,7 @@ def test_wildcard_logs_warning(caplog):
 
 # ── parse_cors_origins — parsing ──────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_single_origin():
     """Single origin is returned as a one-element list."""
@@ -108,6 +111,7 @@ def test_duplicate_commas_are_ignored():
 #
 # We test each service's Settings in isolation by instantiating it with
 # explicit kwargs (which have higher priority than env vars in pydantic-settings).
+
 
 @pytest.mark.unit
 def test_api_settings_cors_defaults():
@@ -179,6 +183,7 @@ def test_event_engine_settings_cors_fields():
 #
 # These tests verify that the CORSMiddleware + parse_cors_origins combination
 # correctly accepts allowed origins and rejects disallowed ones.
+
 
 @pytest.mark.unit
 async def test_cors_allowed_origin_returns_header():

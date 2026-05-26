@@ -17,6 +17,7 @@ Failure policy
   attempt 4  → retry in  600 s
   attempt 5  → dead-letter queue (no more retries)
 """
+
 from __future__ import annotations
 
 import json
@@ -29,24 +30,24 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ── Redis key constants ────────────────────────────────────────────────────────
-_PFX        = "ee:"
-_EVENT_KEY  = _PFX + "event:{}"
-_PENDING_Q  = _PFX + "queue:pending"
-_RETRY_Q    = _PFX + "queue:retry"
-_DLQ        = _PFX + "dlq"
-_DEDUP_KEY  = _PFX + "dedup:{}"
+_PFX = "ee:"
+_EVENT_KEY = _PFX + "event:{}"
+_PENDING_Q = _PFX + "queue:pending"
+_RETRY_Q = _PFX + "queue:retry"
+_DLQ = _PFX + "dlq"
+_DEDUP_KEY = _PFX + "dedup:{}"
 
 # ── Retry schedule ─────────────────────────────────────────────────────────────
-_MAX_ATTEMPTS   = 5
-_RETRY_DELAYS   = [30, 120, 300, 600, 1200]   # seconds, indexed by attempt-1
-_TTL_COMPLETED  = 86_400        # 24 h  — keep completed events for audit
-_TTL_DEAD       = 86_400 * 7   # 7 days — DLQ events stay longer
+_MAX_ATTEMPTS = 5
+_RETRY_DELAYS = [30, 120, 300, 600, 1200]  # seconds, indexed by attempt-1
+_TTL_COMPLETED = 86_400  # 24 h  — keep completed events for audit
+_TTL_DEAD = 86_400 * 7  # 7 days — DLQ events stay longer
 
 # ── Worker tuning ──────────────────────────────────────────────────────────────
-POLL_INTERVAL    = 1.0    # seconds between queue polls
-MAX_CONCURRENT   = 10     # max simultaneous dispatches
-PENDING_BATCH    = 20     # events popped per poll cycle
-RETRY_BATCH      = 20
+POLL_INTERVAL = 1.0  # seconds between queue polls
+MAX_CONCURRENT = 10  # max simultaneous dispatches
+PENDING_BATCH = 20  # events popped per poll cycle
+RETRY_BATCH = 20
 
 
 class EventStore:
@@ -73,17 +74,17 @@ class EventStore:
         Returns the generated event_id (UUID4).
         """
         event_id = str(uuid.uuid4())
-        now_iso  = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         event: dict[str, Any] = {
-            "id":            event_id,
-            "source":        source,
-            "action":        action,
-            "data":          data,
-            "received_at":   now_iso,
-            "status":        "pending",
-            "attempts":      0,
-            "last_error":    None,
+            "id": event_id,
+            "source": source,
+            "action": action,
+            "data": data,
+            "received_at": now_iso,
+            "status": "pending",
+            "attempts": 0,
+            "last_error": None,
             "next_retry_at": None,
         }
 
@@ -99,14 +100,11 @@ class EventStore:
     async def pop_pending(self, limit: int = PENDING_BATCH) -> list[str]:
         """FIFO-pop up to `limit` events from the pending queue."""
         items = await self._r.zpopmin(_PENDING_Q, limit)
-        return [
-            (i[0].decode() if isinstance(i[0], bytes) else i[0])
-            for i in items
-        ]
+        return [(i[0].decode() if isinstance(i[0], bytes) else i[0]) for i in items]
 
     async def pop_due_retries(self, limit: int = RETRY_BATCH) -> list[str]:
         """Pop events from the retry queue whose scheduled time has arrived."""
-        now   = time.time()
+        now = time.time()
         items = await self._r.zrangebyscore(_RETRY_Q, 0, now, start=0, num=limit)
         if not items:
             return []
@@ -114,10 +112,7 @@ class EventStore:
             for item in items:
                 pipe.zrem(_RETRY_Q, item)
             await pipe.execute()
-        return [
-            (i.decode() if isinstance(i, bytes) else i)
-            for i in items
-        ]
+        return [(i.decode() if isinstance(i, bytes) else i) for i in items]
 
     # ── State transitions ──────────────────────────────────────────────────────
 
@@ -149,9 +144,9 @@ class EventStore:
         - schedule the next retry (exponential backoff), or
         - move the event to the dead-letter queue.
         """
-        event    = await self.get_event(event_id) or {}
+        event = await self.get_event(event_id) or {}
         attempts = event.get("attempts", 0) + 1
-        event["attempts"]   = attempts
+        event["attempts"] = attempts
         event["last_error"] = error
 
         if attempts >= _MAX_ATTEMPTS:
@@ -162,15 +157,15 @@ class EventStore:
                 await pipe.execute()
             logger.error(
                 "Event %s moved to DLQ after %d attempts. Last error: %s",
-                event_id, attempts, error,
+                event_id,
+                attempts,
+                error,
             )
         else:
-            delay    = _RETRY_DELAYS[attempts - 1]
+            delay = _RETRY_DELAYS[attempts - 1]
             retry_at = time.time() + delay
-            event["status"]        = "pending_retry"
-            event["next_retry_at"] = datetime.fromtimestamp(
-                retry_at, tz=timezone.utc
-            ).isoformat()
+            event["status"] = "pending_retry"
+            event["next_retry_at"] = datetime.fromtimestamp(retry_at, tz=timezone.utc).isoformat()
 
             async with self._r.pipeline(transaction=True) as pipe:
                 pipe.set(_EVENT_KEY.format(event_id), json.dumps(event))
@@ -179,7 +174,10 @@ class EventStore:
 
             logger.warning(
                 "Event %s retry #%d scheduled in %ds (error: %s)",
-                event_id, attempts, delay, error,
+                event_id,
+                attempts,
+                delay,
+                error,
             )
 
     # ── Dead-letter queue management ───────────────────────────────────────────
@@ -188,7 +186,7 @@ class EventStore:
         ids = await self._r.lrange(_DLQ, offset, offset + limit - 1)
         events = []
         for raw_id in ids:
-            eid   = raw_id.decode() if isinstance(raw_id, bytes) else raw_id
+            eid = raw_id.decode() if isinstance(raw_id, bytes) else raw_id
             event = await self.get_event(eid)
             if event:
                 events.append(event)
@@ -206,9 +204,9 @@ class EventStore:
         if not event:
             return False
 
-        event["attempts"]      = 0
-        event["status"]        = "pending"
-        event["last_error"]    = None
+        event["attempts"] = 0
+        event["status"] = "pending"
+        event["last_error"] = None
         event["next_retry_at"] = None
 
         async with self._r.pipeline(transaction=True) as pipe:
@@ -250,4 +248,4 @@ class EventStore:
             ex=ttl_seconds,
             nx=True,
         )
-        return result is None   # None = NX condition not met = key already existed
+        return result is None  # None = NX condition not met = key already existed

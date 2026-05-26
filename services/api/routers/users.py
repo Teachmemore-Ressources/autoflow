@@ -10,6 +10,7 @@ DELETE /users/{username}            — Delete a user
 PUT    /users/{username}/role       — Change a user's role
 PUT    /users/{username}/password   — Change a user's password
 """
+
 from __future__ import annotations
 
 import user_store
@@ -23,10 +24,11 @@ router = APIRouter(prefix="/users", tags=["User Management"])
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class CreateUserRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_\-\.]+$")
     password: str = Field(..., min_length=8)
-    role: str     = Field(..., description="One of: admin, operator, viewer")
+    role: str = Field(..., description="One of: admin, operator, viewer")
 
 
 class UpdateRoleRequest(BaseModel):
@@ -38,6 +40,7 @@ class UpdatePasswordRequest(BaseModel):
 
 
 # ── Admin guard ───────────────────────────────────────────────────────────────
+
 
 async def require_admin(username: str = Depends(require_auth)) -> str:
     """Raise 403 unless the caller has the admin role."""
@@ -52,6 +55,7 @@ async def require_admin(username: str = Depends(require_auth)) -> str:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", summary="List all users")
 async def list_users(caller: str = Depends(require_admin)):
@@ -94,11 +98,7 @@ async def delete_user(username: str, caller: str = Depends(require_admin)):
         user_store.delete_user(username)
     except ValueError as exc:
         detail = str(exc)
-        code = (
-            status.HTTP_409_CONFLICT
-            if "last admin" in detail
-            else status.HTTP_404_NOT_FOUND
-        )
+        code = status.HTTP_409_CONFLICT if "last admin" in detail else status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=code, detail=detail)
     return {"status": "deleted", "username": username}
 
@@ -116,11 +116,7 @@ async def update_role(
         user_store.update_role(username, body.role)  # type: ignore[arg-type]
     except ValueError as exc:
         detail = str(exc)
-        code = (
-            status.HTTP_404_NOT_FOUND
-            if "not found" in detail
-            else status.HTTP_422_UNPROCESSABLE_ENTITY
-        )
+        code = status.HTTP_404_NOT_FOUND if "not found" in detail else status.HTTP_422_UNPROCESSABLE_ENTITY
         raise HTTPException(status_code=code, detail=detail)
     return {"status": "updated", "username": username, "role": body.role}
 

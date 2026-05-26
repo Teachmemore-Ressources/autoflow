@@ -12,6 +12,7 @@ Run them with:
 Or via the Makefile:
     make test-e2e
 """
+
 from __future__ import annotations
 
 import os
@@ -29,6 +30,7 @@ def _require_env(name: str) -> str:
 
 # ── Base URL fixtures ─────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def ee_url() -> str:
     return _require_env("EE_URL")
@@ -45,6 +47,7 @@ def callback_url() -> str:
 
 
 # ── HTTP clients ──────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 async def ee(ee_url):

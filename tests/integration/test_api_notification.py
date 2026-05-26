@@ -11,12 +11,14 @@ All service modules are obtained through fixtures defined in conftest.py
 so that there are no module-level sys.path changes here (avoiding collision
 with event-engine modules that share the same file names).
 """
+
 from __future__ import annotations
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def _clear_watched(api_notifications):
@@ -27,6 +29,7 @@ def _clear_watched(api_notifications):
 
 
 # ── Tests — notifications.register ───────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_register_adds_job_to_watch_store(api_notifications, callback_stub):
@@ -44,20 +47,21 @@ async def test_no_register_without_targets(api_notifications):
     """register() is a no-op when no notification targets are configured."""
     # Temporarily clear all notification targets on the module's settings
     api_settings = api_notifications.settings
-    original_webhook  = api_settings.notification_webhook_url
-    original_slack    = api_settings.notification_slack_webhook
+    original_webhook = api_settings.notification_webhook_url
+    original_slack = api_settings.notification_slack_webhook
 
-    object.__setattr__(api_settings, "notification_webhook_url",  "")
+    object.__setattr__(api_settings, "notification_webhook_url", "")
     object.__setattr__(api_settings, "notification_slack_webhook", "")
     try:
         api_notifications.register(job_id=99)  # no callback_url, no global targets
         assert api_notifications.watched_count() == 0
     finally:
-        object.__setattr__(api_settings, "notification_webhook_url",  original_webhook)
+        object.__setattr__(api_settings, "notification_webhook_url", original_webhook)
         object.__setattr__(api_settings, "notification_slack_webhook", original_slack)
 
 
 # ── Tests — notifications._poll ──────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_poll_fires_callback_when_job_completed(
@@ -115,9 +119,7 @@ async def test_poll_fires_callback_when_job_completed(
 
 
 @pytest.mark.integration
-async def test_poll_removes_job_after_terminal_status(
-    api_notifications, awx_stub_app, awx_stub
-):
+async def test_poll_removes_job_after_terminal_status(api_notifications, awx_stub_app, awx_stub):
     """After a job reaches terminal status, it is removed from the watch store."""
     launch_resp = await awx_stub.post(
         "/api/v2/job_templates/1/launch/",
@@ -149,9 +151,7 @@ async def test_poll_removes_job_after_terminal_status(
 
 
 @pytest.mark.integration
-async def test_poll_keeps_running_job_in_watch_store(
-    api_notifications, awx_stub_app, awx_stub
-):
+async def test_poll_keeps_running_job_in_watch_store(api_notifications, awx_stub_app, awx_stub):
     """Jobs still in 'running' state are NOT removed from the watch store."""
     launch_resp = await awx_stub.post(
         "/api/v2/job_templates/1/launch/",
@@ -173,9 +173,7 @@ async def test_poll_keeps_running_job_in_watch_store(
 
 
 @pytest.mark.integration
-async def test_poll_handles_missing_job_gracefully(
-    api_notifications, awx_stub_app, awx_stub
-):
+async def test_poll_handles_missing_job_gracefully(api_notifications, awx_stub_app, awx_stub):
     """If AWX returns 404 for a watched job, the poll does not raise."""
     # Register a job that doesn't exist in the stub
     api_notifications.register(job_id=9999, callback_url="http://irrelevant/cb")

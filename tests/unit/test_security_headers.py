@@ -6,6 +6,7 @@ Tests the shared middleware (services/shared/security_headers.py) in
 isolation using a minimal FastAPI test application.
 No external services or Docker containers required.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,6 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from security_headers import SecurityHeadersMiddleware
 
 # ── Minimal test apps ─────────────────────────────────────────────────────────
+
 
 def _make_app(enabled: bool = True) -> FastAPI:
     """Return a minimal FastAPI app with (or without) the security middleware."""
@@ -84,6 +86,7 @@ async def disabled_client():
 
 # ── Standard header presence ──────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 async def test_x_content_type_options_present(http_client):
     """X-Content-Type-Options: nosniff must be set on every response."""
@@ -133,6 +136,7 @@ async def test_content_security_policy_present(http_client):
 
 # ── HSTS — conditional on HTTPS scheme ───────────────────────────────────────
 
+
 @pytest.mark.unit
 async def test_hsts_absent_on_http(http_client):
     """Strict-Transport-Security must NOT be injected on plain HTTP requests."""
@@ -150,6 +154,7 @@ async def test_hsts_present_on_https(https_client):
 
 
 # ── Cache-Control — auth routes only ─────────────────────────────────────────
+
 
 @pytest.mark.unit
 async def test_cache_control_no_store_on_auth_token(http_client):
@@ -195,6 +200,7 @@ async def test_cache_control_absent_on_regular_route(http_client):
 
 # ── Middleware disabled ───────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 async def test_headers_absent_when_middleware_disabled(disabled_client):
     """When the middleware is NOT added, no security headers must be present."""
@@ -209,6 +215,7 @@ async def test_headers_absent_when_middleware_disabled(disabled_client):
 
 
 # ── All headers on a single response ─────────────────────────────────────────
+
 
 @pytest.mark.unit
 async def test_all_security_headers_present_on_https(https_client):

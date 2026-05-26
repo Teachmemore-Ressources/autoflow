@@ -20,6 +20,7 @@ Both backends expose the same ``is_duplicate()`` interface; the only
 difference is that the Redis path is async while the in-memory path is
 synchronous — callers must ``await`` either way.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -44,9 +45,9 @@ class DedupStore:
     """
 
     def __init__(self, ttl_seconds: int = 60) -> None:
-        self._ttl    = ttl_seconds
-        self._redis  = None
-        self._mem: dict[str, float] = {}   # fingerprint → expiry (monotonic)
+        self._ttl = ttl_seconds
+        self._redis = None
+        self._mem: dict[str, float] = {}  # fingerprint → expiry (monotonic)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ class DedupStore:
                 ex=self._ttl,
                 nx=True,
             )
-            return result is None   # None = NX not satisfied = key existed
+            return result is None  # None = NX not satisfied = key existed
         except Exception as exc:
             # Degrade gracefully to in-memory on Redis error
             logger.warning("DedupStore Redis error, falling back to in-memory: %s", exc)
@@ -117,7 +118,7 @@ class DedupStore:
         return False
 
     def _evict(self) -> None:
-        now     = time.monotonic()
+        now = time.monotonic()
         expired = [k for k, exp in self._mem.items() if exp <= now]
         for k in expired:
             del self._mem[k]

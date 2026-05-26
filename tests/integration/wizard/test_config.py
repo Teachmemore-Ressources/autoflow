@@ -12,6 +12,7 @@ Covered:
   - Backup file preserves the previous .env content
   - Response always contains status/changed/affected_services/needs_recreate/warnings
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,11 +50,11 @@ async def test_post_config_returns_200(client, wizard_paths):
 @pytest.mark.integration
 async def test_post_config_response_structure(client, wizard_paths):
     body = (await client.post("/api/config", json={"DOMAIN": "x.local"})).json()
-    assert "status"            in body
-    assert "changed"           in body
+    assert "status" in body
+    assert "changed" in body
     assert "affected_services" in body
-    assert "needs_recreate"    in body
-    assert "warnings"          in body
+    assert "needs_recreate" in body
+    assert "warnings" in body
 
 
 @pytest.mark.integration
@@ -71,6 +72,7 @@ async def test_post_config_writes_env_file(client, wizard_paths):
 @pytest.mark.integration
 async def test_post_config_env_file_permissions(client, wizard_paths):
     import stat
+
     await client.post("/api/config", json={"DOMAIN": "perm.local"})
     mode = wizard_paths["env"].stat().st_mode
     assert stat.S_IMODE(mode) == 0o600, ".env file should be mode 0600"
@@ -114,63 +116,58 @@ async def test_post_config_changed_list(client, wizard_paths):
 
 @pytest.mark.integration
 async def test_post_config_affected_services_for_postgres(client, wizard_paths):
-    body = (await client.post(
-        "/api/config", json={"POSTGRES_PASSWORD": "new_pass"}
-    )).json()
+    body = (await client.post("/api/config", json={"POSTGRES_PASSWORD": "new_pass"})).json()
     services = body["affected_services"]
     assert "postgres" in services
-    assert "awx"      in services
+    assert "awx" in services
 
 
 @pytest.mark.integration
 async def test_post_config_affected_services_for_redis(client, wizard_paths):
-    body = (await client.post(
-        "/api/config", json={"REDIS_PASSWORD": "r3d1s_pass"}
-    )).json()
+    body = (await client.post("/api/config", json={"REDIS_PASSWORD": "r3d1s_pass"})).json()
     services = body["affected_services"]
     assert "redis" in services
-    assert "awx"   in services
+    assert "awx" in services
 
 
 # ── First-start-only warnings ─────────────────────────────────────────────────
 
+
 @pytest.mark.integration
-async def test_post_config_fso_warning_when_awx_admin_password_changes(
-    client, wizard_paths
-):
-    body = (await client.post(
-        "/api/config", json={"AWX_ADMIN_PASSWORD": "new_awx_pass"}
-    )).json()
+async def test_post_config_fso_warning_when_awx_admin_password_changes(client, wizard_paths):
+    body = (await client.post("/api/config", json={"AWX_ADMIN_PASSWORD": "new_awx_pass"})).json()
     fso_warnings = [w for w in body["warnings"] if w["type"] == "first_start_only"]
     assert len(fso_warnings) == 1
     assert "AWX_ADMIN_PASSWORD" in fso_warnings[0]["message"]
 
 
 @pytest.mark.integration
-async def test_post_config_fso_warning_mentions_all_changed_fso_keys(
-    client, wizard_paths
-):
-    body = (await client.post("/api/config", json={
-        "AWX_ADMIN_PASSWORD": "p1",
-        "GITEA_ADMIN_PASSWORD": "p2",
-    })).json()
+async def test_post_config_fso_warning_mentions_all_changed_fso_keys(client, wizard_paths):
+    body = (
+        await client.post(
+            "/api/config",
+            json={
+                "AWX_ADMIN_PASSWORD": "p1",
+                "GITEA_ADMIN_PASSWORD": "p2",
+            },
+        )
+    ).json()
     fso_warnings = [w for w in body["warnings"] if w["type"] == "first_start_only"]
     assert len(fso_warnings) == 1
     msg = fso_warnings[0]["message"]
-    assert "AWX_ADMIN_PASSWORD"   in msg
+    assert "AWX_ADMIN_PASSWORD" in msg
     assert "GITEA_ADMIN_PASSWORD" in msg
 
 
 @pytest.mark.integration
 async def test_post_config_no_fso_warning_for_non_fso_key(client, wizard_paths):
-    body = (await client.post(
-        "/api/config", json={"POSTGRES_PASSWORD": "safe_change"}
-    )).json()
+    body = (await client.post("/api/config", json={"POSTGRES_PASSWORD": "safe_change"})).json()
     fso_warnings = [w for w in body["warnings"] if w["type"] == "first_start_only"]
     assert len(fso_warnings) == 0
 
 
 # ── needs_recreate warnings ───────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_post_config_needs_recreate_true_for_docker_gid(client, wizard_paths):
@@ -193,13 +190,12 @@ async def test_post_config_needs_recreate_false_for_normal_key(client, wizard_pa
 
 @pytest.mark.integration
 async def test_post_config_needs_recreate_for_traefik_http_port(client, wizard_paths):
-    body = (await client.post(
-        "/api/config", json={"TRAEFIK_HTTP_PORT": "8080"}
-    )).json()
+    body = (await client.post("/api/config", json={"TRAEFIK_HTTP_PORT": "8080"})).json()
     assert body["needs_recreate"] is True
 
 
 # ── domain_changed warning ────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_post_config_domain_changed_warning(client, wizard_paths):
@@ -209,6 +205,7 @@ async def test_post_config_domain_changed_warning(client, wizard_paths):
 
 
 # ── Backup behaviour ──────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_post_config_no_backup_on_first_save(client, wizard_paths):
@@ -251,6 +248,7 @@ async def test_post_config_backup_is_in_same_dir_as_env(client, wizard_paths):
 
 
 # ── GET /api/config reflects saved values ────────────────────────────────────
+
 
 @pytest.mark.integration
 async def test_get_config_reflects_saved_domain(client, wizard_paths):

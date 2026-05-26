@@ -5,6 +5,7 @@ Unit tests for the user store (services/api/user_store.py).
 All tests use a temporary directory for the store file to avoid any
 interaction with the real /etc/autoflow/users.json.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -40,6 +41,7 @@ def _load_us(tmp_path: Path):
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_bootstrap_creates_admin(tmp_path):
@@ -79,6 +81,7 @@ def test_bootstrap_not_repeated(tmp_path):
 
 # ── authenticate ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_authenticate_valid(tmp_path):
     """Valid credentials return the user's role."""
@@ -108,6 +111,7 @@ def test_authenticate_unknown_user(tmp_path):
 
 
 # ── create_user ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_create_user_success(tmp_path):
@@ -142,6 +146,7 @@ def test_create_user_invalid_role(tmp_path):
 
 # ── delete_user ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_delete_user_success(tmp_path):
     """A non-admin (or extra admin) user can be deleted."""
@@ -175,6 +180,7 @@ def test_delete_nonexistent_raises(tmp_path):
 
 # ── update_role ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_update_role_success(tmp_path):
     """update_role changes the role and persists it."""
@@ -198,6 +204,7 @@ def test_update_role_invalid(tmp_path):
 
 # ── update_password ───────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_update_password(tmp_path):
     """After update_password, the new password authenticates correctly."""
@@ -210,6 +217,7 @@ def test_update_password(tmp_path):
 
 
 # ── list_users ────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_list_users_no_passwords(tmp_path):
@@ -226,6 +234,7 @@ def test_list_users_no_passwords(tmp_path):
 
 
 # ── persistence ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_persistence_survives_reload(tmp_path):

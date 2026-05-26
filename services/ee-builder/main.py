@@ -19,6 +19,7 @@ POST /rollback/{ee}/{version} — Re-tag a dated version as "latest" and push (S
 GET  /healthz                — Health check
 GET  /metrics                — Prometheus metrics
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -38,16 +39,16 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_late
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-WEBHOOK_SECRET  = os.getenv("GITEA_WEBHOOK_SECRET", "")
-EE_BASE_DIR     = os.getenv("EE_BASE_DIR", "/execution-environments")
-REGISTRY        = os.getenv("REGISTRY", "gitea:3001")           # intra-stack DNS
-GITEA_USER      = os.getenv("GITEA_USER", "admin")
-GITEA_TOKEN     = os.getenv("GITEA_REGISTRY_TOKEN", "")
-LOG_LEVEL       = os.getenv("LOG_LEVEL", "info").upper()
-BUILD_PYCMD     = os.getenv("BUILD_PYCMD", "/usr/bin/python3.12")
+WEBHOOK_SECRET = os.getenv("GITEA_WEBHOOK_SECRET", "")
+EE_BASE_DIR = os.getenv("EE_BASE_DIR", "/execution-environments")
+REGISTRY = os.getenv("REGISTRY", "gitea:3001")  # intra-stack DNS
+GITEA_USER = os.getenv("GITEA_USER", "admin")
+GITEA_TOKEN = os.getenv("GITEA_REGISTRY_TOKEN", "")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "info").upper()
+BUILD_PYCMD = os.getenv("BUILD_PYCMD", "/usr/bin/python3.12")
 DEFAULT_VERSION = os.getenv("EE_DEFAULT_VERSION", "latest")
-HISTORY_FILE    = Path(os.getenv("EE_HISTORY_FILE", "/var/lib/ee-builder/history.json"))
-HISTORY_MAX     = 200   # records kept on disk
+HISTORY_FILE = Path(os.getenv("EE_HISTORY_FILE", "/var/lib/ee-builder/history.json"))
+HISTORY_MAX = 200  # records kept on disk
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 log = logging.getLogger("ee-builder")
@@ -58,10 +59,11 @@ setup_tracing("autoflow-ee-builder")
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
-builds_total   = Counter("ee_builder_builds_total",   "Total EE build attempts", ["ee", "status"])
-builds_running = Gauge("ee_builder_builds_running",   "Currently running builds")
+builds_total = Counter("ee_builder_builds_total", "Total EE build attempts", ["ee", "status"])
+builds_running = Gauge("ee_builder_builds_running", "Currently running builds")
 
 # ── Persistent history ────────────────────────────────────────────────────────
+
 
 def _load_history() -> deque[dict]:
     if HISTORY_FILE.exists():
@@ -85,7 +87,7 @@ def _save_history() -> None:
 # ── State ─────────────────────────────────────────────────────────────────────
 
 build_history: deque[dict] = _load_history()
-_build_lock = asyncio.Semaphore(2)   # max 2 concurrent builds
+_build_lock = asyncio.Semaphore(2)  # max 2 concurrent builds
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -95,13 +97,12 @@ instrument_app(app, "autoflow-ee-builder")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _validate_signature(payload: bytes, header: str) -> bool:
     """Validate X-Gitea-Signature (HMAC-SHA256)."""
     if not WEBHOOK_SECRET:
         return True
-    expected = "sha256=" + hmac.new(
-        WEBHOOK_SECRET.encode(), payload, hashlib.sha256
-    ).hexdigest()
+    expected = "sha256=" + hmac.new(WEBHOOK_SECRET.encode(), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, header)
 
 
@@ -109,11 +110,7 @@ def _detect_changed_ees(commits: list[dict]) -> set[str]:
     """Return set of EE names (subdirs of execution-environments/) that changed."""
     changed: set[str] = set()
     for commit in commits:
-        all_files = (
-            commit.get("added", [])
-            + commit.get("modified", [])
-            + commit.get("removed", [])
-        )
+        all_files = commit.get("added", []) + commit.get("modified", []) + commit.get("removed", [])
         for path in all_files:
             parts = path.split("/")
             # execution-environments/<ee-name>/...
@@ -152,13 +149,16 @@ async def _push_tag(src_image: str, dst_image: str) -> str:
     """Tag *src_image* as *dst_image* and push it. Returns combined output."""
     tag_r = subprocess.run(
         ["docker", "tag", src_image, dst_image],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if tag_r.returncode != 0:
         raise RuntimeError(f"docker tag failed: {tag_r.stderr.strip()}")
 
     push_proc = await asyncio.create_subprocess_exec(
-        "docker", "push", dst_image,
+        "docker",
+        "push",
+        dst_image,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
@@ -170,6 +170,7 @@ async def _push_tag(src_image: str, dst_image: str) -> str:
 
 # ── Build task ────────────────────────────────────────────────────────────────
 
+
 async def _build_ee(ee_name: str, version: str = DEFAULT_VERSION) -> None:
     """Build and push a single EE image (runs in background).
 
@@ -177,21 +178,21 @@ async def _build_ee(ee_name: str, version: str = DEFAULT_VERSION) -> None:
       • {version}  — the floating tag (e.g. "latest") used by AWX
       • {dated}    — an immutable dated tag for rollback
     """
-    dated     = _dated_tag()
-    image     = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{version}"
-    image_dt  = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{dated}"
-    ee_file   = f"{EE_BASE_DIR}/{ee_name}/execution-environment.yml"
-    ctx_dir   = f"/tmp/ee-build-{ee_name}"
+    dated = _dated_tag()
+    image = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{version}"
+    image_dt = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{dated}"
+    ee_file = f"{EE_BASE_DIR}/{ee_name}/execution-environment.yml"
+    ctx_dir = f"/tmp/ee-build-{ee_name}"
     record: dict = {
-        "ee":          ee_name,
-        "image":       image,
+        "ee": ee_name,
+        "image": image,
         "image_dated": image_dt,
-        "version":     version,
-        "dated_tag":   dated,
-        "started":     datetime.now(timezone.utc).isoformat(),
-        "status":      "running",
-        "log":         "",
-        "trigger":     "webhook",
+        "version": version,
+        "dated_tag": dated,
+        "started": datetime.now(timezone.utc).isoformat(),
+        "status": "running",
+        "log": "",
+        "trigger": "webhook",
     }
     build_history.appendleft(record)
     builds_running.inc()
@@ -203,12 +204,18 @@ async def _build_ee(ee_name: str, version: str = DEFAULT_VERSION) -> None:
 
             # ansible-builder build (produces the floating tag)
             build_cmd = [
-                "ansible-builder", "build",
-                "--file",      ee_file,
-                "--tag",       image,
-                "--context",   ctx_dir,
-                "--build-arg", f"PYCMD={BUILD_PYCMD}",
-                "--verbosity", "1",
+                "ansible-builder",
+                "build",
+                "--file",
+                ee_file,
+                "--tag",
+                image,
+                "--context",
+                ctx_dir,
+                "--build-arg",
+                f"PYCMD={BUILD_PYCMD}",
+                "--verbosity",
+                "1",
             ]
             proc = await asyncio.create_subprocess_exec(
                 *build_cmd,
@@ -225,7 +232,9 @@ async def _build_ee(ee_name: str, version: str = DEFAULT_VERSION) -> None:
 
             # Push floating tag (e.g. latest)
             push_proc = await asyncio.create_subprocess_exec(
-                "docker", "push", image,
+                "docker",
+                "push",
+                image,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -243,19 +252,20 @@ async def _build_ee(ee_name: str, version: str = DEFAULT_VERSION) -> None:
 
         except Exception as exc:
             record["status"] = "failed"
-            record["error"]  = str(exc)
+            record["error"] = str(exc)
             builds_total.labels(ee=ee_name, status="failed").inc()
             log.error("EE build failed for %s: %s", ee_name, exc)
             build_log += f"\n\nERROR: {exc}"
 
         finally:
             record["finished"] = datetime.now(timezone.utc).isoformat()
-            record["log"]      = build_log[-4096:]   # keep last 4 KB
+            record["log"] = build_log[-4096:]  # keep last 4 KB
             builds_running.dec()
             _save_history()
 
 
 # ── Registry helpers ──────────────────────────────────────────────────────────
+
 
 def _registry_tags(ee_name: str) -> list[str]:
     """
@@ -266,8 +276,8 @@ def _registry_tags(ee_name: str) -> list[str]:
     import urllib.error
     import urllib.request
 
-    repo  = f"{GITEA_USER}/ee-{ee_name}"
-    url   = f"http://{REGISTRY}/v2/{repo}/tags/list"
+    repo = f"{GITEA_USER}/ee-{ee_name}"
+    url = f"http://{REGISTRY}/v2/{repo}/tags/list"
     creds = base64.b64encode(f"{GITEA_USER}:{GITEA_TOKEN}".encode()).decode()
 
     req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}"})
@@ -290,6 +300,7 @@ def _registry_tags(ee_name: str) -> list[str]:
 
 # ── Startup: docker login ─────────────────────────────────────────────────────
 
+
 @app.on_event("startup")
 def _startup() -> None:
     _docker_login()
@@ -298,10 +309,11 @@ def _startup() -> None:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @app.post("/webhook/gitea", status_code=202)
 async def gitea_webhook(request: Request, bg: BackgroundTasks) -> dict:
     payload = await request.body()
-    sig     = request.headers.get("X-Gitea-Signature", "")
+    sig = request.headers.get("X-Gitea-Signature", "")
 
     if not _validate_signature(payload, sig):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
@@ -311,8 +323,8 @@ async def gitea_webhook(request: Request, bg: BackgroundTasks) -> dict:
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    commits      = data.get("commits", [])
-    changed_ees  = _detect_changed_ees(commits)
+    commits = data.get("commits", [])
+    changed_ees = _detect_changed_ees(commits)
 
     if not changed_ees:
         log.debug("Gitea push — no EE changes detected")
@@ -345,11 +357,11 @@ def list_versions(ee_name: str) -> dict:
     dated = [t for t in tags if len(t) == 15 and t[8] == "-"]
     other = [t for t in tags if t not in dated]
     return {
-        "ee":          ee_name,
-        "image_base":  f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}",
-        "dated_tags":  dated,
-        "other_tags":  other,
-        "total":       len(tags),
+        "ee": ee_name,
+        "image_base": f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}",
+        "dated_tags": dated,
+        "other_tags": other,
+        "total": len(tags),
     }
 
 
@@ -359,20 +371,21 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
     SSE: re-tag an existing dated version as DEFAULT_VERSION (usually "latest")
     and push it to the registry.  Creates a build history record tagged "rollback".
     """
+
     async def _stream():
         target = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{DEFAULT_VERSION}"
         source = f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{version}"
-        dated  = _dated_tag()
+        dated = _dated_tag()
         record: dict = {
-            "ee":          ee_name,
-            "image":       target,
+            "ee": ee_name,
+            "image": target,
             "image_dated": f"{REGISTRY}/{GITEA_USER}/ee-{ee_name}:{dated}",
-            "version":     DEFAULT_VERSION,
-            "dated_tag":   dated,
-            "started":     datetime.now(timezone.utc).isoformat(),
-            "status":      "running",
-            "log":         "",
-            "trigger":     f"rollback:{version}",
+            "version": DEFAULT_VERSION,
+            "dated_tag": dated,
+            "started": datetime.now(timezone.utc).isoformat(),
+            "status": "running",
+            "log": "",
+            "trigger": f"rollback:{version}",
         }
         build_history.appendleft(record)
         rollback_log = ""
@@ -389,7 +402,9 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
             # Step 1: pull the dated image
             yield _emit(f"[1/3] docker pull {source}…")
             pull_proc = await asyncio.create_subprocess_exec(
-                "docker", "pull", source,
+                "docker",
+                "pull",
+                source,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -407,7 +422,8 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
             yield _emit(f"[2/3] docker tag → {target}…")
             tag_r = subprocess.run(
                 ["docker", "tag", source, target],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             rollback_log += tag_r.stdout + tag_r.stderr
             if tag_r.returncode != 0:
@@ -417,7 +433,9 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
             # Step 3: push as floating tag
             yield _emit(f"[3/3] docker push {target}…")
             push_proc = await asyncio.create_subprocess_exec(
-                "docker", "push", target,
+                "docker",
+                "push",
+                target,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -438,7 +456,7 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
 
         except Exception as exc:
             record["status"] = "failed"
-            record["error"]  = str(exc)
+            record["error"] = str(exc)
             builds_total.labels(ee=ee_name, status="failed").inc()
             log.error("Rollback failed for %s ← %s: %s", ee_name, version, exc)
             rollback_log += f"\n\nERROR: {exc}"
@@ -446,12 +464,15 @@ async def rollback_ee(ee_name: str, version: str) -> StreamingResponse:
 
         finally:
             record["finished"] = datetime.now(timezone.utc).isoformat()
-            record["log"]      = rollback_log[-4096:]
+            record["log"] = rollback_log[-4096:]
             _save_history()
             yield _emit("[DONE]")
 
-    return StreamingResponse(_stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/healthz")

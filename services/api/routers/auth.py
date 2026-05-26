@@ -15,6 +15,7 @@ POST /api/v1/auth/logout stores the jti in Redis with TTL = remaining
 lifetime, making the token permanently invalid.  Without Redis the logout
 endpoint still returns 200 but revocation is client-side only.
 """
+
 import hmac
 import logging
 import uuid
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # ── Security scheme objects ───────────────────────────────────────────────────
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-_oauth2_scheme  = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
+_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 
 
 # ── Redis revocation blacklist ────────────────────────────────────────────────
@@ -55,6 +56,7 @@ def _redis() -> "aioredis.Redis | None":
         return None
     if _redis_client is None:
         import redis.asyncio as aioredis  # noqa: PLC0415
+
         _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
     return _redis_client
 
@@ -72,8 +74,8 @@ async def _revoke(jti: str, ttl_seconds: int) -> None:
     client = _redis()
     if client is None:
         _log.warning(
-            "JWT revocation requested but REDIS_URL is not set — "
-            "token jti=%s will expire naturally", jti,
+            "JWT revocation requested but REDIS_URL is not set — token jti=%s will expire naturally",
+            jti,
         )
         return
     await client.setex(f"{_REDIS_PREFIX}{jti}", ttl_seconds, "1")
@@ -82,17 +84,18 @@ async def _revoke(jti: str, ttl_seconds: int) -> None:
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
+
 def create_access_token(username: str, expires_minutes: int | None = None) -> str:
     """Mint a signed JWT with sub, exp, iat, and jti claims."""
     minutes = expires_minutes or settings.jwt_expire_minutes
-    now     = datetime.now(timezone.utc)
-    expire  = now + timedelta(minutes=minutes)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=minutes)
     return jwt.encode(
         {
             "sub": username,
             "exp": expire,
             "iat": now,
-            "jti": str(uuid.uuid4()),   # unique token ID for revocation
+            "jti": str(uuid.uuid4()),  # unique token ID for revocation
         },
         settings.effective_jwt_secret,
         algorithm=settings.jwt_algorithm,
@@ -136,9 +139,10 @@ async def _decode_token(token: str) -> str:
 
 # ── Auth dependency ───────────────────────────────────────────────────────────
 
+
 async def require_auth(
     api_key: str | None = Security(_api_key_header),
-    token:   str | None = Security(_oauth2_scheme),
+    token: str | None = Security(_oauth2_scheme),
 ) -> str:
     """
     Accepts either authentication mechanism:
@@ -174,6 +178,7 @@ require_api_key = require_auth
 
 # ── RBAC helpers ──────────────────────────────────────────────────────────────
 
+
 async def require_write_access(username: str = Depends(require_auth)) -> str:
     """
     Require at least **operator** role.
@@ -194,6 +199,7 @@ async def require_write_access(username: str = Depends(require_auth)) -> str:
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/token",
@@ -227,10 +233,10 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     token = create_access_token(form_data.username)
     return {
         "access_token": token,
-        "token_type":   "bearer",
-        "expires_in":   settings.jwt_expire_minutes * 60,
-        "username":     form_data.username,
-        "role":         role,
+        "token_type": "bearer",
+        "expires_in": settings.jwt_expire_minutes * 60,
+        "username": form_data.username,
+        "role": role,
     }
 
 
@@ -240,9 +246,9 @@ async def refresh_token(username: str = Depends(require_auth)):
     token = create_access_token(username)
     return {
         "access_token": token,
-        "token_type":   "bearer",
-        "expires_in":   settings.jwt_expire_minutes * 60,
-        "username":     username,
+        "token_type": "bearer",
+        "expires_in": settings.jwt_expire_minutes * 60,
+        "username": username,
     }
 
 
@@ -250,9 +256,9 @@ async def refresh_token(username: str = Depends(require_auth)):
 async def me(username: str = Depends(require_auth)):
     """Returns the identity and role of the currently authenticated caller."""
     return {
-        "username":           username,
-        "role":               user_store.get_role(username) or "admin",  # API-key callers
-        "jwt_algorithm":      settings.jwt_algorithm,
+        "username": username,
+        "role": user_store.get_role(username) or "admin",  # API-key callers
+        "jwt_algorithm": settings.jwt_algorithm,
         "jwt_expire_minutes": settings.jwt_expire_minutes,
     }
 
@@ -274,8 +280,8 @@ After a successful logout:
 """,
 )
 async def logout(
-    token:    str | None = Security(_oauth2_scheme),
-    username: str        = Depends(require_auth),
+    token: str | None = Security(_oauth2_scheme),
+    username: str = Depends(require_auth),
 ):
     """Blacklist the current token's jti so it cannot be reused."""
     if token:

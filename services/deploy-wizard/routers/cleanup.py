@@ -1,6 +1,7 @@
 """
 routers/cleanup.py — Docker environment cleanup and disk usage reporting.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,11 +40,13 @@ _EE_TMP_GLOB = "/tmp/ee-build-*"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _docker_df() -> dict:
     """Return parsed `docker system df --format json` output."""
     r = subprocess.run(
         ["docker", "system", "df", "--format", "{{json .}}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     result = {"images": "?", "containers": "?", "volumes": "?", "build_cache": "?"}
     if r.returncode != 0:
@@ -55,18 +58,16 @@ def _docker_df() -> dict:
             size = obj.get("Size", obj.get("TotalCount", "?"))
             reclaimable = obj.get("Reclaimable", "")
             if "Image" in t:
-                result["images"] = (
-                    f"{obj.get('Active', '?')} images, {size}"
-                    + (f" ({reclaimable} reclaimable)" if reclaimable else "")
+                result["images"] = f"{obj.get('Active', '?')} images, {size}" + (
+                    f" ({reclaimable} reclaimable)" if reclaimable else ""
                 )
             elif "Container" in t:
-                active = obj.get('Active', '?')
-                total_c = obj.get('TotalCount', '?')
+                active = obj.get("Active", "?")
+                total_c = obj.get("TotalCount", "?")
                 result["containers"] = f"{active} running / {total_c} total"
             elif "Volume" in t:
-                result["volumes"] = (
-                    f"{obj.get('TotalCount', '?')} volumes, {size}"
-                    + (f" ({reclaimable} reclaimable)" if reclaimable else "")
+                result["volumes"] = f"{obj.get('TotalCount', '?')} volumes, {size}" + (
+                    f" ({reclaimable} reclaimable)" if reclaimable else ""
                 )
             elif "Build" in t:
                 result["build_cache"] = f"{size}" + (f" ({reclaimable} reclaimable)" if reclaimable else "")
@@ -77,6 +78,7 @@ def _docker_df() -> dict:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/cleanup/status")
 def cleanup_status():
     """Return current disk usage and autoflow resource inventory."""
@@ -86,9 +88,9 @@ def cleanup_status():
 
     # Running containers
     containers_r = subprocess.run(
-        ["docker", "ps", "-a", "--filter", "name=autoflow_",
-         "--format", "{{.Names}}|{{.Status}}"],
-        capture_output=True, text=True,
+        ["docker", "ps", "-a", "--filter", "name=autoflow_", "--format", "{{.Names}}|{{.Status}}"],
+        capture_output=True,
+        text=True,
     )
     containers = []
     for line in containers_r.stdout.strip().splitlines():
@@ -99,14 +101,16 @@ def cleanup_status():
     # Volumes
     volumes_r = subprocess.run(
         ["docker", "volume", "ls", "--filter", "name=autoflow", "--format", "{{.Name}}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     existing_volumes = [v.strip() for v in volumes_r.stdout.strip().splitlines() if v.strip()]
 
     # Autoflow images
     images_r = subprocess.run(
         ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}|{{.Size}}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     images = []
     for line in images_r.stdout.strip().splitlines():
@@ -122,10 +126,10 @@ def cleanup_status():
     df = _docker_df()
 
     return {
-        "containers":      containers,
-        "volumes":         existing_volumes,
-        "images":          images,
-        "tmp_dirs":        tmp_dirs,
+        "containers": containers,
+        "volumes": existing_volumes,
+        "images": images,
+        "tmp_dirs": tmp_dirs,
         "disk": df,
     }
 
@@ -134,12 +138,12 @@ def cleanup_status():
 async def cleanup(
     request: Request,
     stop_containers: bool = True,
-    remove_volumes:  bool = False,
-    remove_images:   bool = False,
-    remove_ee:       bool = False,
-    prune_cache:     bool = False,
-    clean_tmp:       bool = False,
-    remove_env:      bool = False,
+    remove_volumes: bool = False,
+    remove_images: bool = False,
+    remove_ee: bool = False,
+    prune_cache: bool = False,
+    clean_tmp: bool = False,
+    remove_env: bool = False,
 ):
     """SSE: progressive Autoflow environment cleanup.
 
@@ -152,21 +156,24 @@ async def cleanup(
       clean_tmp        – delete /tmp/ee-build-* dirs (default: False)
       remove_env       – delete .env file (default: False, nuclear option)
     """
-    _audit(request, "cleanup.run",
-           stop_containers=stop_containers,
-           remove_volumes=remove_volumes,
-           remove_images=remove_images,
-           remove_ee=remove_ee,
-           prune_cache=prune_cache,
-           clean_tmp=clean_tmp,
-           remove_env=remove_env)
+    _audit(
+        request,
+        "cleanup.run",
+        stop_containers=stop_containers,
+        remove_volumes=remove_volumes,
+        remove_images=remove_images,
+        remove_ee=remove_ee,
+        prune_cache=prune_cache,
+        clean_tmp=clean_tmp,
+        remove_env=remove_env,
+    )
 
     async def stream():
-        config     = _load_env()
-        domain     = config.get("DOMAIN", "localhost")
+        config = _load_env()
+        domain = config.get("DOMAIN", "localhost")
         awx_version = config.get("AWX_VERSION", "24.6.1")
         gitea_user = config.get("GITEA_ADMIN_USER", "admin")
-        registry   = f"git.{domain}"
+        registry = f"git.{domain}"
 
         yield _sse("🧹 Starting Autoflow cleanup…")
         yield _sse("─" * 55)
@@ -176,8 +183,14 @@ async def cleanup(
         if stop_containers:
             yield _sse("[1/7] Stopping containers (docker compose down)…")
             proc = await asyncio.create_subprocess_exec(
-                "docker", "compose", "--env-file", str(ENV_FILE),
-                "down", "--remove-orphans", "--timeout", "30",
+                "docker",
+                "compose",
+                "--env-file",
+                str(ENV_FILE),
+                "down",
+                "--remove-orphans",
+                "--timeout",
+                "30",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(ROOT),
@@ -200,7 +213,8 @@ async def cleanup(
             yield _sse("[2/7] Removing Autoflow volumes…")
             vols_r = subprocess.run(
                 ["docker", "volume", "ls", "--filter", "name=autoflow", "--format", "{{.Name}}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             found_vols = [v.strip() for v in vols_r.stdout.strip().splitlines() if v.strip()]
             if not found_vols:
@@ -208,7 +222,8 @@ async def cleanup(
             for vol in found_vols:
                 r = subprocess.run(
                     ["docker", "volume", "rm", vol],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 if r.returncode == 0:
                     yield _sse(f"  ✔ volume removed: {vol}")
@@ -225,16 +240,24 @@ async def cleanup(
         if remove_images:
             yield _sse("[3/7] Removing custom AWX image…")
             images_r = subprocess.run(
-                ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}",
-                 "--filter", "reference=autoflow/awx-patched:*"],
-                capture_output=True, text=True,
+                [
+                    "docker",
+                    "images",
+                    "--format",
+                    "{{.Repository}}:{{.Tag}}",
+                    "--filter",
+                    "reference=autoflow/awx-patched:*",
+                ],
+                capture_output=True,
+                text=True,
             )
             awx_images = [t.strip() for t in images_r.stdout.strip().splitlines() if t.strip()]
             # Also check ghcr.io base image
             base_tag = f"ghcr.io/ansible/awx:{awx_version}"
             base_r = subprocess.run(
                 ["docker", "image", "inspect", base_tag, "--format", "{{.Id}}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if base_r.returncode == 0:
                 awx_images.append(base_tag)
@@ -256,19 +279,23 @@ async def cleanup(
             yield _sse("[4/7] Removing Execution Environment images…")
             all_images_r = subprocess.run(
                 ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             ee_images = [
-                t.strip() for t in all_images_r.stdout.strip().splitlines()
-                if t.strip() and (f"{registry}/{gitea_user}/ee-" in t or "/ee-" in t)
-                   and "autoflow" in t.lower()
+                t.strip()
+                for t in all_images_r.stdout.strip().splitlines()
+                if t.strip()
+                and (f"{registry}/{gitea_user}/ee-" in t or "/ee-" in t)
+                and "autoflow" in t.lower()
             ]
             # Also catch images without registry prefix (local builds)
             for ee in ["base", "security", "network"]:
                 for candidate in [f"ee-{ee}:latest", f"ee-{ee}:1.0.0"]:
                     cr = subprocess.run(
                         ["docker", "image", "inspect", candidate, "--format", "{{.Id}}"],
-                        capture_output=True, text=True,
+                        capture_output=True,
+                        text=True,
                     )
                     if cr.returncode == 0 and candidate not in ee_images:
                         ee_images.append(candidate)
@@ -290,7 +317,8 @@ async def cleanup(
             yield _sse("  Pruning dangling images…")
             r = subprocess.run(
                 ["docker", "image", "prune", "-f"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if r.returncode == 0:
                 out = r.stdout.strip()
@@ -302,7 +330,10 @@ async def cleanup(
         if prune_cache:
             yield _sse("[5/7] Purging Docker Buildx cache…")
             proc = await asyncio.create_subprocess_exec(
-                "docker", "builder", "prune", "-af",
+                "docker",
+                "builder",
+                "prune",
+                "-af",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -323,6 +354,7 @@ async def cleanup(
         if clean_tmp:
             yield _sse("[6/7] Removing temporary EE build directories…")
             import shutil
+
             tmp_dirs = glob.glob(_EE_TMP_GLOB)
             if not tmp_dirs:
                 yield _sse("  No /tmp/ee-build-* directories found.")
@@ -366,5 +398,8 @@ async def cleanup(
         yield _sse(f"  Build cache : {df['build_cache']}")
         yield _sse("[DONE]")
 
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

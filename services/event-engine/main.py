@@ -37,6 +37,7 @@ GET  /admin/dlq                    List dead-letter queue events
 POST /admin/dlq/{event_id}/requeue Re-queue a specific DLQ event
 DELETE /admin/dlq                  Clear the entire DLQ
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -105,13 +106,14 @@ def require_admin_token(
 
 # ── Core dispatch (shared by HTTP fallback, worker, and scheduler) ────────────
 
+
 async def _dispatch_core(
     dedup: DedupStore,
     rules: RuleEngine,
-    awx:   AWXClient,
+    awx: AWXClient,
     source: str,
     action: str,
-    data:   dict[str, Any],
+    data: dict[str, Any],
     event_id: str | None = None,
 ) -> dict:
     """
@@ -129,16 +131,17 @@ async def _dispatch_core(
     job = await awx.launch_job(extra_vars=extra_vars, template_id=template_id)
 
     return {
-        "status":      "accepted",
-        "job_id":      job.get("id"),
-        "job_url":     job.get("url"),
+        "status": "accepted",
+        "job_id": job.get("id"),
+        "job_url": job.get("url"),
         "template_id": template_id,
-        "source":      source,
-        "action":      action,
+        "source": source,
+        "action": action,
     }
 
 
 # ── Redis helpers ─────────────────────────────────────────────────────────────
+
 
 async def _try_connect_redis():
     """
@@ -149,6 +152,7 @@ async def _try_connect_redis():
         return None
     try:
         import redis.asyncio as aioredis
+
         client = aioredis.from_url(
             settings.redis_url,
             encoding="utf-8",
@@ -160,13 +164,12 @@ async def _try_connect_redis():
         logger.info("Redis connected — event persistence enabled (%s)", settings.redis_url)
         return client
     except Exception as exc:
-        logger.warning(
-            "Redis unavailable (%s) — falling back to fire-and-forget mode", exc
-        )
+        logger.warning("Redis unavailable (%s) — falling back to fire-and-forget mode", exc)
         return None
 
 
 # ── App lifespan ──────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -176,7 +179,7 @@ async def lifespan(app: FastAPI):
         headers={"Authorization": f"Bearer {settings.awx_token}"},
         timeout=30.0,
     )
-    app.state.awx   = AWXClient(http, settings.awx_job_template_id)
+    app.state.awx = AWXClient(http, settings.awx_job_template_id)
     app.state.rules = RuleEngine(settings.rules_file, settings.awx_job_template_id)
     app.state.dedup = DedupStore(ttl_seconds=settings.dedup_ttl)
 
@@ -198,7 +201,9 @@ async def lifespan(app: FastAPI):
                 app.state.dedup,
                 app.state.rules,
                 app.state.awx,
-                source, action, data,
+                source,
+                action,
+                data,
                 event_id=event_id,
             )
 
@@ -206,19 +211,26 @@ async def lifespan(app: FastAPI):
         worker.start()
         app.state.retry_worker = worker
     else:
-        app.state.event_store  = None
+        app.state.event_store = None
         app.state.retry_worker = None
 
     # ── Scheduler — fires cron events ────────────────────────────────────────
     async def _scheduled_dispatch(source: str, action: str, data: dict) -> None:
         try:
             result = await _dispatch_core(
-                app.state.dedup, app.state.rules, app.state.awx,
-                source, action, data,
+                app.state.dedup,
+                app.state.rules,
+                app.state.awx,
+                source,
+                action,
+                data,
             )
             logger.info(
                 "Scheduled dispatch: source=%s action=%s status=%s job_id=%s",
-                source, action, result.get("status"), result.get("job_id"),
+                source,
+                action,
+                result.get("status"),
+                result.get("job_id"),
             )
         except AWXError as exc:
             logger.error("Scheduled dispatch AWX error: %s", exc)
@@ -231,8 +243,7 @@ async def lifespan(app: FastAPI):
 
     mode = "persistent (Redis)" if redis_client else "fire-and-forget (no Redis)"
     logger.info(
-        "Event engine v2 started — default_template=%d  dedup_ttl=%ds  "
-        "schedules=%d  mode=%s",
+        "Event engine v2 started — default_template=%d  dedup_ttl=%ds  schedules=%d  mode=%s",
         settings.awx_job_template_id,
         settings.dedup_ttl,
         scheduler.loaded_count,
@@ -290,10 +301,11 @@ instrument_app(app, "autoflow-event-engine")
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class EventPayload(BaseModel):
     action: str
     source: str = "external"
-    data:   dict[str, Any] = {}
+    data: dict[str, Any] = {}
 
     @field_validator("action")
     @classmethod
@@ -305,6 +317,7 @@ class EventPayload(BaseModel):
 
 
 # ── HTTP dispatch ─────────────────────────────────────────────────────────────
+
 
 async def _dispatch(
     request: Request,
@@ -336,15 +349,17 @@ async def _dispatch(
         event_id = await store.enqueue(source, action, data)
         logger.info(
             "Event enqueued (source=%s action=%s event_id=%s)",
-            source, action, event_id,
+            source,
+            action,
+            event_id,
         )
         return JSONResponse(
             status_code=202,
             content={
-                "status":   "queued",
+                "status": "queued",
                 "event_id": event_id,
-                "source":   source,
-                "action":   action,
+                "source": source,
+                "action": action,
             },
         )
 
@@ -354,7 +369,9 @@ async def _dispatch(
             request.app.state.dedup,
             request.app.state.rules,
             request.app.state.awx,
-            source, action, data,
+            source,
+            action,
+            data,
         )
     except AWXError as exc:
         logger.error("AWX error: %s", exc)
@@ -369,13 +386,14 @@ async def _dispatch(
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/health", tags=["ops"])
 async def health(request: Request):
     store: EventStore | None = request.app.state.event_store
     info: dict[str, Any] = {
-        "status":      "ok",
-        "service":     "event-engine",
-        "version":     "2.0.0",
+        "status": "ok",
+        "service": "event-engine",
+        "version": "2.0.0",
         "persistence": store is not None,
     }
     if store:
@@ -387,6 +405,7 @@ async def health(request: Request):
 
 
 # ── Generic event ─────────────────────────────────────────────────────────────
+
 
 @app.post("/event", tags=["events"], status_code=202)
 @limiter.limit(settings.rate_limit_webhooks)
@@ -403,6 +422,7 @@ async def receive_event(event: EventPayload, request: Request):
 
 
 # ── GitHub webhook ────────────────────────────────────────────────────────────
+
 
 @app.post("/webhook/github", tags=["webhooks"])
 @limiter.limit(settings.rate_limit_webhooks)
@@ -425,11 +445,14 @@ async def webhook_github(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing X-Hub-Signature-256 header",
             )
-        expected = "sha256=" + hmac.new(
-            settings.github_webhook_secret.encode(),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
+        expected = (
+            "sha256="
+            + hmac.new(
+                settings.github_webhook_secret.encode(),
+                raw_body,
+                hashlib.sha256,
+            ).hexdigest()
+        )
         if not hmac.compare_digest(expected, x_hub_signature_256):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -444,13 +467,15 @@ async def webhook_github(
     source, action, data = parse_github(x_github_event, payload)
     logger.info(
         "GitHub webhook: event=%s action=%s repo=%s",
-        x_github_event, action,
+        x_github_event,
+        action,
         data.get("repository", {}).get("full_name", "?"),
     )
     return await _dispatch(request, source, action, data)
 
 
 # ── Alertmanager webhook ──────────────────────────────────────────────────────
+
 
 @app.post("/webhook/alertmanager", tags=["webhooks"])
 @limiter.limit(settings.rate_limit_webhooks)
@@ -473,25 +498,28 @@ async def webhook_alertmanager(request: Request):
     source, action, data = parse_alertmanager(payload)
     logger.info(
         "Alertmanager webhook: status=%s alertname=%s severity=%s",
-        data.get("status"), data.get("alertname"), data.get("severity"),
+        data.get("status"),
+        data.get("alertname"),
+        data.get("severity"),
     )
     return await _dispatch(request, source, action, data)
 
 
 # ── Admin — Rules ─────────────────────────────────────────────────────────────
 
+
 @app.get("/admin/rules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_rules(request: Request):
     engine: RuleEngine = request.app.state.rules
     return {
-        "count":               len(engine._rules),
+        "count": len(engine._rules),
         "default_template_id": engine._default_id,
         "rules": [
             {
-                "name":                 r.name,
-                "match":                r.match,
-                "job_template_id":      r.job_template_id,
-                "extra_vars":           r.extra_vars,
+                "name": r.name,
+                "match": r.match,
+                "job_template_id": r.job_template_id,
+                "extra_vars": r.extra_vars,
                 "extra_vars_from_data": r.extra_vars_from_data,
             }
             for r in engine._rules
@@ -508,13 +536,14 @@ async def reload_rules(request: Request):
 
 # ── Admin — Dedup ─────────────────────────────────────────────────────────────
 
+
 @app.get("/admin/dedup/stats", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def dedup_stats(request: Request):
     dedup: DedupStore = request.app.state.dedup
     return {
-        "enabled":        settings.dedup_ttl > 0,
-        "ttl_seconds":    settings.dedup_ttl,
-        "backend":        "redis" if dedup._redis is not None else "in-memory",
+        "enabled": settings.dedup_ttl > 0,
+        "ttl_seconds": settings.dedup_ttl,
+        "backend": "redis" if dedup._redis is not None else "in-memory",
         "cached_entries": dedup.size(),
     }
 
@@ -526,6 +555,7 @@ async def dedup_clear(request: Request):
 
 
 # ── Admin — Schedules ─────────────────────────────────────────────────────────
+
 
 @app.get("/admin/schedules", tags=["admin"], dependencies=[Depends(require_admin_token)])
 async def list_schedules(request: Request):
@@ -541,6 +571,7 @@ async def reload_schedules(request: Request):
 
 
 # ── Admin — Queue & DLQ (requires Redis) ──────────────────────────────────────
+
 
 def _require_store(request: Request) -> EventStore:
     store: EventStore | None = request.app.state.event_store
@@ -570,7 +601,7 @@ async def dlq_list(request: Request, offset: int = 0, limit: int = 50):
     """
     store = _require_store(request)
     events = await store.dlq_list(offset=offset, limit=limit)
-    total  = await store.dlq_count()
+    total = await store.dlq_count()
     return {"total": total, "offset": offset, "limit": limit, "events": events}
 
 
@@ -585,7 +616,7 @@ async def dlq_requeue(event_id: str, request: Request):
     Returns 404 if the event_id is not found.
     """
     store = _require_store(request)
-    ok    = await store.dlq_requeue(event_id)
+    ok = await store.dlq_requeue(event_id)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
     return {"status": "requeued", "event_id": event_id}
