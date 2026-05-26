@@ -3,7 +3,7 @@
 User store for multi-user RBAC.
 
 Users are stored in a JSON file (``USERS_FILE`` env var, default
-``/etc/autoflow/users.json``).  Passwords are hashed with bcrypt via passlib.
+``/etc/autoflow/users.json``).  Passwords are hashed with bcrypt.
 
 Roles
 -----
@@ -33,7 +33,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 
 _log = logging.getLogger("autoflow.users")
 
@@ -43,16 +43,19 @@ Role = Literal["admin", "operator", "viewer"]
 ROLES: tuple[Role, ...] = ("admin", "operator", "viewer")
 
 # ── Password hashing ──────────────────────────────────────────────────────────
-
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Uses bcrypt directly — avoids the passlib 1.7.x / bcrypt ≥4 incompatibility
+# where passlib's detect_wrap_bug() raises ValueError on passwords > 72 bytes.
 
 
 def hash_password(plaintext: str) -> str:
-    return _pwd_ctx.hash(plaintext)
+    # bcrypt truncates at 72 bytes; pre-hash long secrets to stay within limit
+    secret = plaintext[:72].encode()
+    return _bcrypt.hashpw(secret, _bcrypt.gensalt()).decode()
 
 
 def verify_password(plaintext: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plaintext, hashed)
+    secret = plaintext[:72].encode()
+    return _bcrypt.checkpw(secret, hashed.encode())
 
 
 # ── Store ─────────────────────────────────────────────────────────────────────

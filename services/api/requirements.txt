@@ -10,7 +10,7 @@ slowapi==0.1.9
 PyJWT==2.10.1
 python-multipart==0.0.20
 redis[asyncio]==5.2.1
-passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
 # ── OpenTelemetry distributed tracing ──
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
