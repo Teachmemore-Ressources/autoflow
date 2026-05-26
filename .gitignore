@@ -1,30 +1,54 @@
-# Environment – never commit the plaintext file
-# .env.enc (encrypted with SOPS+Age) is safe to commit
+# ── Secrets & configuration ───────────────────────────────────────────────────
+# Plaintext .env — NEVER commit (use .env.enc chiffré via SOPS+Age)
 .env
+# Backups automatiques créés par le wizard (contiennent les secrets en clair)
+.env.bak.*
+# .env du sous-projet community
+community/.env
 
-# Deploy wizard virtualenv
+# ── TLS / PKI ─────────────────────────────────────────────────────────────────
+# Clés privées
+traefik/certs/*.key
+traefik/certs/*.key.bak
+# Certificats générés par le wizard (spécifiques au domaine, recréés par pre-flight)
+traefik/certs/*.crt
+!traefik/certs/.gitkeep
+# Fichier d'authentification BasicAuth Traefik (mots de passe hachés)
+traefik/dynamic/monitoring_users
+
+# ── Monitoring secrets ────────────────────────────────────────────────────────
+monitoring/prometheus/secrets/*
+!monitoring/prometheus/secrets/.gitkeep
+
+# ── Logs & audits ─────────────────────────────────────────────────────────────
+*.log
+wizard-audit.log
+
+# ── Python — virtualenvs ──────────────────────────────────────────────────────
 .wizard-venv/
+.cli-venv/
+.venv/
+venv/
 
-# Python
+# ── Python — cache & build ────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
 dist/
 build/
 
-# Docker
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
-traefik/certs/*.key*
-traefik/dynamic/monitoring_users
-monitoring/prometheus/secrets/*
-!monitoring/prometheus/secrets/.gitkeep
+# ── Backups ───────────────────────────────────────────────────────────────────
 backups/
 
-# MkDocs — generated site (rebuilt by CI/CD)
+# ── Claude Code ───────────────────────────────────────────────────────────────
+# Paramètres locaux non partageables et worktrees temporaires
+.claude/settings.local.json
+.claude/worktrees/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── MkDocs — site généré (rebuild par CI/CD) ──────────────────────────────────
 site/
 .cache/
