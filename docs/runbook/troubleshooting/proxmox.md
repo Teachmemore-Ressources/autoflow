@@ -673,3 +673,90 @@ Si les UPID diffèrent → tâche périmée.
     Pour éviter les tâches périmées à l'avenir : supprimer les VMs laissées en état `stopped`
     après un run raté. Les tâches restent en base Proxmox même après suppression de la VM,
     mais elles n'apparaissent plus dans le filtre `vmid=` une fois la VM supprimée.
+
+---
+
+## Problème 12 — Timeout SSH après démarrage VM (`Timeout when waiting for X:22`) {#probleme-12}
+
+**Symptôme** : La dernière tâche du playbook échoue après 301 secondes :
+
+```
+TASK [Attendre que le port SSH soit disponible sur 192.168.1.80]
+fatal: [localhost]: FAILED! => {
+  "changed": false,
+  "elapsed": 301,
+  "msg": "Timeout when waiting for 192.168.1.80:22"
+}
+PLAY RECAP
+localhost : ok=14  changed=1  unreachable=0  failed=1  skipped=0
+```
+
+La VM est **running** (tâches 1-13 réussies, dont `GET /status/current` → `"running"`), et elle
+répond au ping, mais SSH ne répond pas.
+
+**Cause** : cloud-init doit réaliser plusieurs étapes après le premier boot avant que SSH soit
+utilisable :
+
+1. Initialiser les modules cloud-init
+2. Configurer le réseau statique (peut nécessiter un redémarrage de l'interface)
+3. Créer l'utilisateur (`ansible`) + répertoire `.ssh`
+4. Écrire les clés autorisées (`authorized_keys`)
+5. Démarrer `sshd`
+
+Sur des templates récents avec un disque cloud-init froid, ce processus prend typiquement
+**2 à 4 minutes** sur un lab nested. Le timeout par défaut (300s) avec un délai initial de 60s
+ne laisse que ~240s de polling effectif — insuffisant.
+
+**Diagnostic** : Avant de modifier les timeouts, vérifier que le problème est bien la durée et non
+un problème de réseau ou de cloud-init cassé :
+
+```yaml
+# Ajouter avant le wait_for pour confirmer que cloud-init a bien le bon ipconfig0
+- name: "Vérifier l'IP assignée avant d'attendre SSH"
+  ansible.builtin.uri:
+    url: "{{ _proxmox_base }}/qemu/{{ vm_id }}/config"
+    method: GET
+    headers:
+      Authorization: "{{ _proxmox_auth }}"
+    validate_certs: false
+  register: _pre_ssh_config
+
+- name: "Afficher l'IP configurée"
+  ansible.builtin.debug:
+    msg: "ipconfig0 : {{ _pre_ssh_config.json.data.ipconfig0 | default('NON DÉFINI') }}"
+```
+
+Si `ipconfig0` est absent → cloud-init config n'a pas été appliquée (voir [Problème 7](proxmox.md#probleme-7)).  
+Si `ipconfig0` est correct → c'est juste un problème de délai, augmenter les timeouts.
+
+**Correction** : Dans `01_clone_vm.yml`, augmenter `delay` et `timeout` du `wait_for` :
+
+```yaml
+- name: "Attendre que le port SSH soit disponible sur {{ vm_ip }}"
+  ansible.builtin.wait_for:
+    host: "{{ vm_ip }}"
+    port: 22
+    timeout: 600   # 10 min (était 300)
+    delay: 120     # attendre 2 min avant le premier check (était 60)
+    state: started
+  register: ssh_wait
+```
+
+!!! note "delay vs timeout"
+    `delay` = temps d'attente avant le **premier** test (laisse cloud-init démarrer).  
+    `timeout` = durée **totale** maximale incluant le delay.  
+    Avec `delay: 120` et `timeout: 600`, le module tente pendant 480s effectives après le delay.
+
+!!! tip "Si SSH reste inaccessible après 10 min"
+    1. Vérifier que le template a bien un serveur SSH installé (`openssh-server`)
+    2. Vérifier que l'EE AWX est sur un réseau qui peut joindre la VM (même VLAN / routage actif)
+    3. Se connecter à la console Proxmox (`noVNC`) pour voir l'état cloud-init en direct :
+       ```bash
+       # Depuis la console VM
+       cloud-init status --long
+       journalctl -u cloud-init --no-pager | tail -30
+       ```
+    4. Vérifier que `sshd` écoute :
+       ```bash
+       ss -tlnp | grep :22
+       ```
