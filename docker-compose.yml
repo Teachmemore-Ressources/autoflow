@@ -247,6 +247,9 @@ services:
       - awx_receptor:/var/lib/awx/receptor
       - ./awx/custom/index.html:/var/lib/awx/venv/awx/lib/python3.11/site-packages/awx/ui/build/index.html:ro
       - ./awx/custom:/var/lib/awx/public/static/custom:ro
+      # SSH keys — mounted so AWX's path validator (runs in awx_web) accepts
+      # the entry in AWX_ISOLATION_SHOW_PATHS. Read-only; no private key access needed.
+      - ${AWX_SSH_DIR:-./ssh}:/var/lib/awx/.ssh:ro
 
     labels:
       - "traefik.enable=true"
