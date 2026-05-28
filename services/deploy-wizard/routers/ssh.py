@@ -110,54 +110,40 @@ def _generate_key(comment: str = "awx-provisioning@autoflow") -> None:
         gitkeep.touch()
 
 
-async def _update_awx_credential(
+async def _patch_awx_credential(
     awx_url: str,
     awx_user: str,
     awx_password: str,
     credential_name: str,
     private_key_pem: str,
-    sse_fn=None,
-) -> bool:
+) -> tuple[bool, str]:
     """
     Update the AWX Machine credential private key via the AWX API.
-    Returns True on success.
+    Returns (success: bool, message: str).
     """
     import httpx as _httpx
 
     async with _httpx.AsyncClient(verify=False, auth=(awx_user, awx_password), timeout=20) as c:
-        # 1. Find credential by name
         r = await c.get(
             f"{awx_url}/api/v2/credentials/",
             params={"name": credential_name, "kind": "ssh"},
         )
         if r.status_code != 200:
-            if sse_fn:
-                yield _sse(f"[WARN] AWX credentials API returned {r.status_code} — skipping AWX sync.")
-            return False
+            return False, f"AWX credentials API returned {r.status_code}"
 
         results = r.json().get("results", [])
         if not results:
-            if sse_fn:
-                yield _sse(f"[WARN] AWX credential '{credential_name}' not found — skipping AWX sync.")
-            return False
+            return False, f"Credential '{credential_name}' not found"
 
         cred_id = results[0]["id"]
-        if sse_fn:
-            yield _sse(f"Found AWX credential '{credential_name}' (id={cred_id}) — updating private key…")
-
-        # 2. PATCH the credential inputs
         r = await c.patch(
             f"{awx_url}/api/v2/credentials/{cred_id}/",
             json={"inputs": {"ssh_key_data": private_key_pem}},
         )
         if r.status_code in (200, 204):
-            if sse_fn:
-                yield _sse(f"AWX credential '{credential_name}' updated ✔")
-            return True
+            return True, f"Credential '{credential_name}' (id={cred_id}) updated ✔"
         else:
-            if sse_fn:
-                yield _sse(f"[WARN] Could not update AWX credential (HTTP {r.status_code}): {r.text[:200]}")
-            return False
+            return False, f"PATCH failed (HTTP {r.status_code}): {r.text[:200]}"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
