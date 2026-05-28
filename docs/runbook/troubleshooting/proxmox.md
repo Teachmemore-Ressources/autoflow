@@ -259,9 +259,23 @@ egrep -c '(vmx|svm)' /proc/cpuinfo
 
     Dans `group_vars/all.yml` :
     ```yaml
-    vm_cpu_type: "kvm64"   # CPU standard émulé, ne requiert pas KVM hardware
-    vm_kvm: false           # Désactive l'accélération KVM pour la VM
+    vm_cpu_type: "x86-64-v2"  # Minimum requis pour Rocky9/Ubuntu22+ (SSE4.2, POPCNT)
+    vm_kvm: false              # Désactive l'accélération KVM hardware
     ```
+
+    !!! warning "kvm64 insuffisant pour les OS modernes"
+        `kvm64` ne fournit pas SSE4.2 ni POPCNT. **Rocky Linux 9 et Ubuntu 22.04+
+        requièrent `x86-64-v2` minimum** — avec `kvm64`, le kernel panic au démarrage :
+        ```
+        Kernel panic - not syncing: Attempted to kill init! exitcode=0x00007f00
+        ```
+        (exit code 127 = instruction CPU manquante → init/systemd ne peut pas s'exécuter)
+
+        | CPU type | SSE4.2 | POPCNT | Rocky9 | Ubuntu22 | Rocky8 | Ubuntu20 |
+        |---|---|---|---|---|---|---|
+        | `kvm64`     | ✗ | ✗ | ✗ PANIC | ✗ PANIC | ✓ | ✓ |
+        | `x86-64-v2` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+        | `x86-64-v3` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
     Dans `01_clone_vm.yml`, **utiliser l'API REST directement** — ne pas passer `kvm` au module `proxmox_kvm` :
 
