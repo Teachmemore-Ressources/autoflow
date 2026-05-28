@@ -193,11 +193,15 @@ curl -u admin:<PASS> "https://awx.<DOMAIN>/api/v2/projects/<ID>/project_updates/
 
 === "Erreur SSL/certificat"
 
+    Voir [Dépannage Certificats — Problème 6b](certificates.md#probleme-6b-error-setting-certificate-file-etcautoflowcacrt-lors-dun-git-sync-awx) pour la procédure complète.
+
     ```bash
-    # Dans le projet AWX, activer "Allow Branch Override" et tester
-    # Ou désactiver la vérification SSL (dev uniquement) :
-    # Settings → Jobs → Extra Environment Variables :
-    # {"GIT_SSL_NO_VERIFY": "true"}
+    # Vérifier que le cert CA existe bien sur l'hôte (et n'est pas un répertoire fantôme)
+    ls -la traefik/certs/ca.<DOMAIN>.crt
+    file traefik/certs/ca.<DOMAIN>.crt   # doit afficher "PEM certificate"
+
+    # Si le problème persiste : forcer la recréation des containers AWX
+    docker compose up -d --force-recreate awx_web awx_task
     ```
 
 === "Credentials Git incorrects"
@@ -403,3 +407,112 @@ curl -X POST -u admin:<PASS> \
 curl -u admin:<PASS> "https://awx.<DOMAIN>/api/v2/project_updates/?order_by=-id&page_size=1" \
   | python3 -m json.tool | grep "result_stdout" -A 20
 ```
+
+---
+
+## Problème 16 — Les fichiers YAML n'apparaissent pas dans le dropdown "Inventory file"
+
+**Symptôme** : Dans AWX UI → **Inventory Sources → Source from Project**, le champ **Inventory file** n'affiche que `/ (project root)` et ne propose aucun fichier `.yml`/`.yaml`, même si le projet Git en contient.
+
+**Cause** : AWX upstream (≤ 24.x) exclut délibérément tous les fichiers `.yml`/`.yaml` de la détection automatique d'inventaires (`could_be_inventory()` dans `awx/main/utils/ansible.py`).
+
+**Vérification** :
+```bash
+# Vérifier que le patch Autoflow est bien appliqué dans l'image
+docker exec autoflow_awx_task \
+  grep -n "Autoflow patch" \
+  /var/lib/awx/venv/awx/lib/python3.11/site-packages/awx/main/utils/ansible.py
+# → doit afficher la ligne du commentaire du patch
+```
+
+**Si le patch est absent (image non reconstruite)** :
+```bash
+# Reconstruire l'image avec le patch
+docker compose build --no-cache awx_migrate
+docker compose up -d --force-recreate awx_web awx_task awx_migrate
+```
+
+**Si le patch est présent mais le dropdown reste vide** :
+
+La base de données AWX met en cache la liste des fichiers d'inventaire au moment du dernier `project update`. Il faut déclencher une nouvelle synchronisation :
+
+```bash
+# Via l'UI AWX : Projects → ▶ (bouton Sync) sur le projet concerné
+
+# Ou via l'API
+curl -sf -X POST https://awx.<DOMAIN>/api/v2/projects/<ID>/update/ \
+  -u admin:<PASS> -H "Content-Type: application/json"
+```
+
+!!! info "Fichiers reconnus par le patch"
+    Le patch détecte les fichiers `.yml`/`.yaml` contenant en entête (15 premières lignes) :
+
+    - `plugin:` → inventaire dynamique (ex : `community.general.proxmox`, `amazon.aws.aws_ec2`)
+    - `all:` ou `ungrouped:` en début de clé → inventaire statique YAML
+
+    Un fichier `.yml` qui ne correspond à aucun de ces patterns ne sera **pas** proposé dans le dropdown (comportement intentionnel pour éviter les faux positifs).
+
+**Mettre à jour la liste en base manuellement** (si le sync automatique ne suffit pas) :
+```bash
+docker exec autoflow_awx_task awx-manage shell -c "
+from awx.main.models import Project
+p = Project.objects.get(id=<ID>)
+print('inventory_files avant:', p.inventory_files)
+# Déclencher la mise à jour
+pu = p.create_project_update(launch_type='manual')
+pu.save()
+print('ProjectUpdate créé :', pu.id)
+"
+```
+
+
+---
+
+## Problème 17 — Workflow affiché "successful" mais la VM a été détruite
+
+**Symptôme** : Un workflow de provisioning se termine avec le statut vert "successful" dans AWX, mais la VM n'existe plus sur Proxmox.
+
+**Cause** : AWX évalue le statut d'un workflow à partir du **dernier nœud exécuté**, pas de l'ensemble du chemin. Si le chemin emprunté est :
+
+```
+Clone VM → ÉCHEC → Cleanup VM → SUCCÈS
+```
+
+AWX affiche le workflow comme **"successful"** car le dernier job (Cleanup) a réussi.
+
+**Comment diagnostiquer le vrai chemin emprunté** :
+
+```bash
+# Récupérer l'ID du dernier workflow job
+WF_JOB=<id>
+
+# Voir quels nœuds ont réellement tourné vs été ignorés
+curl -sk --resolve "awx.<DOMAIN>:443:<IP>" \
+  -u "admin:<PASS>" \
+  "https://awx.<DOMAIN>/api/v2/workflow_jobs/$WF_JOB/workflow_nodes/" \
+  | python3 -c "
+import sys,json
+for n in json.load(sys.stdin)['results']:
+    name = n['summary_fields']['unified_job_template']['name']
+    job  = n.get('job')
+    skip = n.get('do_not_run')
+    print(f'{name}: job={job} skipped={skip}')
+"
+# Un nœud avec do_not_run=True n'a pas tourné (sa condition parent n'était pas remplie)
+# Un nœud avec job=None et do_not_run=False n'a pas encore tourné
+```
+
+**Vérifier quel job a échoué** :
+
+```bash
+# Voir le statut du job Clone VM (dans les résultats ci-dessus, récupérer son job ID)
+curl -sk --resolve "awx.<DOMAIN>:443:<IP>" \
+  -u "admin:<PASS>" \
+  "https://awx.<DOMAIN>/api/v2/jobs/<JOB_ID>/stdout/?format=txt" \
+  | grep -A3 "fatal\|FAILED"
+```
+
+**Prévention** : Ce comportement est normal dans AWX. Pour le rendre plus visible :
+
+- Consulter systématiquement la vue **"Nodes"** du workflow job (pas seulement le statut global)
+- Ou ajouter un nœud de notification (Slack, email) sur le chemin failure pour alerter explicitement

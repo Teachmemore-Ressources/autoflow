@@ -88,21 +88,32 @@ DEFAULT_CONTAINER_RUN_OPTIONS = [
     '--network', 'bridge',
 ]
 
+# ── Certificat CA auto-signé (optionnel) ──────────────────────────────────────
+# Si votre dépôt Git (Gitea, GitLab…) utilise un certificat auto-signé,
+# renseignez CA_CERT_PATH dans .env avec le chemin absolu vers le fichier CA
+# sur l'hôte (ex: CA_CERT_PATH=/home/user/certs/ca.crt).
+#
+# Le fichier sera monté en lecture seule dans chaque conteneur EE sous
+# /etc/autoflow/ca.crt, et git/curl l'utiliseront automatiquement.
+#
+# Laisser vide (CA_CERT_PATH=) si le certificat est signé par une CA publique.
+_ca_cert_path = os.environ.get('CA_CERT_PATH', '').strip()
+if _ca_cert_path:
+    DEFAULT_CONTAINER_RUN_OPTIONS += [
+        '--env', 'GIT_SSL_CAINFO=/etc/autoflow/ca.crt',
+        '--env', 'SSL_CERT_FILE=/etc/autoflow/ca.crt',
+    ]
+    AWX_ISOLATION_SHOW_PATHS = [f'{_ca_cert_path}:/etc/autoflow/ca.crt:ro']
+else:
+    # AWX production.py définit par défaut des chemins avec le mode ':O' (Podman overlay).
+    # Docker ne connaît pas ce mode → liste vide pour éviter l'erreur "invalid mode: O".
+    AWX_ISOLATION_SHOW_PATHS = []
+
 # Répertoire de base pour les private_data_dir des jobs ansible-runner.
 # Doit être un chemin accessible à la fois par awx_task et par le conteneur
 # Receptor/EE. '/tmp' est bind-monté depuis l'hôte dans les deux conteneurs,
 # ce qui garantit que les chemins sont identiques côté awx_task et côté EE.
 AWX_ISOLATION_BASE_PATH = os.environ.get('AWX_ISOLATION_BASE_PATH', '/tmp')
-
-# AWX production.py définit par défaut :
-#   AWX_ISOLATION_SHOW_PATHS = [
-#       '/etc/pki/ca-trust:/etc/pki/ca-trust:O',
-#       '/usr/share/pki:/usr/share/pki:O',
-#   ]
-# Le mode ':O' est une option Podman (overlay mount). Docker ne le connaît pas
-# et échoue avec : "Error response from daemon: invalid mode: O"
-# En Community on n'a pas de PKI interne → liste vide, aucun chemin supplémentaire.
-AWX_ISOLATION_SHOW_PATHS = []
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {

@@ -63,3 +63,11 @@ RUN $PIP install --no-cache-dir --upgrade \
     "aiohttp>=3.13.3"
 
 RUN /var/lib/awx/venv/awx/bin/python -c "import django, cryptography, urllib3, jose, jwt; print('Django:', django.__version__, '| cryptography:', cryptography.__version__, '| urllib3:', urllib3.__version__, '| jose:', jose.__version__, '| PyJWT:', jwt.__version__)"
+
+# ── Autoflow patches ──────────────────────────────────────────────────────────
+# inventory_yaml_detection: extend could_be_inventory() to support .yml/.yaml
+# files — AWX upstream ignores them, preventing inventory plugin files and
+# static YAML inventories from appearing in the "Inventory file" dropdown.
+COPY patches/inventory_yaml_detection.py /tmp/patches/
+RUN /var/lib/awx/venv/awx/bin/python /tmp/patches/inventory_yaml_detection.py && \
+    rm -rf /tmp/patches

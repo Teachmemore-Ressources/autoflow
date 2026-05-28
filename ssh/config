@@ -1,0 +1,8 @@
+Host *
+    # Pas de vérification stricte pour les VMs lab (IPs dynamiques)
+    StrictHostKeyChecking no
+    UserKnownHostsFile /var/lib/awx/.ssh/known_hosts
+    IdentityFile /var/lib/awx/.ssh/id_ed25519
+    ConnectTimeout 10
+    ServerAliveInterval 30
+    ServerAliveCountMax 3

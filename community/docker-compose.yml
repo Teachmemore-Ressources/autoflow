@@ -196,6 +196,7 @@ services:
         condition: service_completed_successfully
     environment:
       <<: *awx-env
+      CA_CERT_PATH: ${CA_CERT_PATH:-}
     ports:
       - "${AWX_HTTP_PORT:-8080}:80"
     volumes:
@@ -237,6 +238,7 @@ services:
     environment:
       <<: *awx-env
       AWX_TASK_HOSTNAME: awx
+      CA_CERT_PATH: ${CA_CERT_PATH:-}
     volumes:
       - ./config/awx/settings.py:/etc/tower/settings.py:ro
       - ./config/awx/launch_awx_task.sh:/etc/awx-init/launch_awx_task.sh:ro

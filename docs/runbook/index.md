@@ -20,6 +20,7 @@ Ce runbook couvre les procédures d'urgence, la récupération après incident, 
 | [Dépannage — Monitoring](troubleshooting/monitoring.md) | Prometheus, Grafana, alertes |
 | [Dépannage — Certificats](troubleshooting/certificates.md) | PKI, TLS, expirations |
 | [Dépannage — Réseau](troubleshooting/network.md) | DNS, routing, connectivité |
+| [Dépannage — Proxmox](troubleshooting/proxmox.md) | Permissions API, SDN, templates Cloud-Init |
 
 ---
 

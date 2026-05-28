@@ -1,9 +1,38 @@
-# Ne jamais versionner le .env — il contient des secrets
+# ── Secrets & configuration ───────────────────────────────────────────────────
+# Plaintext .env — NEVER commit (contient mots de passe, clés secrètes)
 .env
+# Backups automatiques du .env (contiennent les secrets en clair)
+.env.bak.*
 
-# Artefacts Docker
+# ── TLS / PKI ─────────────────────────────────────────────────────────────────
+# Certificats et clés privées (spécifiques au domaine, jamais publics)
+*.crt
+*.key
+*.pem
+certs/
+
+# ── Logs & audits ─────────────────────────────────────────────────────────────
+*.log
+
+# ── Python — virtualenvs ──────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ── Docker — artefacts ────────────────────────────────────────────────────────
 *.tar
 
-# Sauvegardes
+# ── Sauvegardes base de données ───────────────────────────────────────────────
 *.sql
 *.sql.gz
+backups/
+
+# ── Claude Code ───────────────────────────────────────────────────────────────
+.claude/settings.local.json
+.claude/worktrees/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

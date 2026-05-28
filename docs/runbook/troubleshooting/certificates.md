@@ -187,6 +187,82 @@ docker compose exec awx_task bash -c \
 
 ---
 
+## Problème 6b — `error setting certificate file: /etc/autoflow/ca.crt` lors d'un git sync AWX
+
+**Symptôme** : Un job de mise à jour de projet échoue avec :
+
+```
+fatal: unable to access 'https://git.<DOMAIN>/...': error setting certificate file: /etc/autoflow/ca.crt
+```
+
+**Cause A — Le fichier CA a été remplacé par un répertoire vide (ghost directory)**
+
+Lorsque Docker tente de bind-monter un fichier source inexistant, il crée un répertoire vide à la place.
+Ce répertoire bloque tous les lancements de jobs suivants même après restauration du fichier, car le container doit être recréé.
+
+**Diagnostic** :
+```bash
+# Sur l'hôte : vérifier que le fichier n'est pas un répertoire
+ls -la traefik/certs/ca.<DOMAIN>.crt
+# Si "drwxr-xr-x" → ghost directory → suivre la procédure ci-dessous
+```
+
+**Correction** :
+```bash
+# 1. Supprimer le ghost directory
+sudo rm -rf traefik/certs/ca.<DOMAIN>.crt
+
+# 2. Restaurer le cert CA depuis le volume PKI
+docker run --rm \
+  -v autoflow_pki_data:/data \
+  -v $(pwd)/traefik/certs:/out \
+  busybox cp /data/ca/autoflow-root_cert.pem /out/ca.<DOMAIN>.crt
+
+# 3. Vérifier que c'est bien un fichier PEM
+file traefik/certs/ca.<DOMAIN>.crt
+# → doit afficher "PEM certificate"
+
+# 4. Forcer la recréation des containers AWX (obligatoire — Docker ne remonte pas automatiquement)
+docker compose up -d --force-recreate awx_web awx_task
+```
+
+**Cause B — Le fichier CA a disparu après un `git pull`**
+
+Si le cert avait été tracké en git et qu'un commit de `git rm --cached` a été poussé, le `git pull` suivant le supprime physiquement du disque.
+
+```bash
+# Vérifier dans l'historique git si le cert a été supprimé
+git log --oneline --diff-filter=D -- 'traefik/certs/*.crt'
+
+# Restaurer depuis le volume PKI (même procédure que Cause A ci-dessus)
+# Puis s'assurer que traefik/certs/*.crt est bien dans .gitignore
+grep 'traefik/certs' .gitignore
+```
+
+!!! tip "Prévention"
+    Le container PKI (`autoflow_pki`) a un bind-mount sur `traefik/certs/`.
+    Si le cert disparaît à nouveau, un simple redémarrage du PKI suffit à le réexporter :
+    ```bash
+    docker compose restart pki
+    ls -la traefik/certs/ca.<DOMAIN>.crt  # doit réapparaître
+    docker compose up -d --force-recreate awx_web awx_task
+    ```
+
+**Vérification finale** :
+```bash
+# Simuler le bind-mount Docker comme le fait AWX_ISOLATION_SHOW_PATHS
+docker run --rm \
+  -v traefik/certs/ca.<DOMAIN>.crt:/etc/autoflow/ca.crt:ro \
+  busybox head -1 /etc/autoflow/ca.crt
+# → doit afficher "-----BEGIN CERTIFICATE-----"
+
+# Relancer un project update AWX pour confirmer
+curl -sf -X POST https://awx.<DOMAIN>/api/v2/projects/<ID>/update/ \
+  -u admin:<PASS> -H "Content-Type: application/json"
+```
+
+---
+
 ## Problème 6 — PKI inaccessible (impossible de renouveler)
 
 ```bash

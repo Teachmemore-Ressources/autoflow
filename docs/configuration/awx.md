@@ -352,6 +352,180 @@ make logs SERVICES=awx_web
 
 ---
 
+## Types de credentials personnalisés
+
+Les **Custom Credential Types** AWX permettent d'injecter des secrets métier (tokens API, accès cloud, etc.) dans les jobs sans les exposer en clair. Leur définition vit **uniquement en base de données AWX** — elle n'est pas versionnée dans le code source.
+
+!!! warning "Sauvegardez cette configuration"
+    Si la base de données AWX est perdue sans backup, ces types de credentials doivent être recréés manuellement. Cette section sert de référence.
+
+---
+
+### Proxmox API Token
+
+Credential type utilisé par la source d'inventaire dynamique Proxmox (`community.proxmox.proxmox`).
+
+**Pourquoi `env` et pas `extra_vars` ?**
+
+La collection `community.proxmox.proxmox` (FQCN depuis community.general ≥ 9.x) lit ses paramètres de connexion depuis des **variables d'environnement** nativement. Passer les credentials en `extra_vars` ne fonctionnerait pas car le plugin template ses champs de config dans un contexte où les extra_vars ne sont pas disponibles.
+
+#### Inputs (champs du formulaire AWX)
+
+| ID | Label | Type | Secret |
+|---|---|---|---|
+| `proxmox_api_host` | Proxmox API Host (IP) | string | non |
+| `proxmox_api_user` | Utilisateur API (ex: `ansible@pve`) | string | non |
+| `proxmox_api_token_id` | Token ID (ex: `awx`) | string | non |
+| `proxmox_api_token_secret` | Token Secret | string | **oui** |
+
+Tous les champs sont **requis**.
+
+#### Injectors
+
+```json
+{
+  "env": {
+    "PROXMOX_URL": "https://{{ proxmox_api_host }}:8006",
+    "PROXMOX_USER": "{{ proxmox_api_user }}",
+    "PROXMOX_TOKEN_ID": "{{ proxmox_api_token_id }}",
+    "PROXMOX_TOKEN_SECRET": "{{ proxmox_api_token_secret }}"
+  }
+}
+```
+
+Ces variables d'environnement sont injectées dans le container EE au moment de l'exécution du job (inventory update ou playbook).
+
+#### Recréer via l'interface AWX
+
+**Credentials → Credential Types → + Add**
+
+- **Name** : `Proxmox API Token`
+- **Kind** : Cloud
+- **Input Configuration** (YAML) :
+
+```yaml
+fields:
+  - id: proxmox_api_host
+    type: string
+    label: "Proxmox API Host (IP)"
+  - id: proxmox_api_user
+    type: string
+    label: "Utilisateur API (ex: ansible@pve)"
+  - id: proxmox_api_token_id
+    type: string
+    label: "Token ID (ex: awx)"
+  - id: proxmox_api_token_secret
+    type: string
+    label: "Token Secret"
+    secret: true
+required:
+  - proxmox_api_host
+  - proxmox_api_user
+  - proxmox_api_token_id
+  - proxmox_api_token_secret
+```
+
+- **Injector Configuration** (YAML) :
+
+```yaml
+env:
+  PROXMOX_URL: "https://{{ proxmox_api_host }}:8006"
+  PROXMOX_USER: "{{ proxmox_api_user }}"
+  PROXMOX_TOKEN_ID: "{{ proxmox_api_token_id }}"
+  PROXMOX_TOKEN_SECRET: "{{ proxmox_api_token_secret }}"
+```
+
+#### Recréer via l'API AWX
+
+```bash
+curl -sf -X POST https://awx.<DOMAIN>/api/v2/credential_types/ \
+  -u admin:<PASS> \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Proxmox API Token",
+    "kind": "cloud",
+    "inputs": {
+      "fields": [
+        {"id": "proxmox_api_host",        "type": "string", "label": "Proxmox API Host (IP)"},
+        {"id": "proxmox_api_user",        "type": "string", "label": "Utilisateur API (ex: ansible@pve)"},
+        {"id": "proxmox_api_token_id",    "type": "string", "label": "Token ID (ex: awx)"},
+        {"id": "proxmox_api_token_secret","type": "string", "label": "Token Secret", "secret": true}
+      ],
+      "required": ["proxmox_api_host","proxmox_api_user","proxmox_api_token_id","proxmox_api_token_secret"]
+    },
+    "injectors": {
+      "env": {
+        "PROXMOX_URL":          "https://{{ proxmox_api_host }}:8006",
+        "PROXMOX_USER":         "{{ proxmox_api_user }}",
+        "PROXMOX_TOKEN_ID":     "{{ proxmox_api_token_id }}",
+        "PROXMOX_TOKEN_SECRET": "{{ proxmox_api_token_secret }}"
+      }
+    }
+  }'
+```
+
+Après création du type, créer le credential instance :
+
+**Credentials → + Add** → choisir le type `Proxmox API Token` puis renseigner :
+
+| Champ | Valeur exemple |
+|---|---|
+| Name | `proxmox-api-token` |
+| Organization | *(votre org)* |
+| Proxmox API Host | `192.168.1.107` |
+| Utilisateur API | `ansible@pve` |
+| Token ID | `awx` |
+| Token Secret | *(valeur secrète)* |
+
+#### Créer le token Proxmox côté hyperviseur
+
+```bash
+# Sur le nœud Proxmox (en root)
+# 1. Créer l'utilisateur API
+pveum user add ansible@pve --comment "AWX automation"
+
+# 2. Assigner le rôle PVEAuditor (lecture seule pour l'inventaire)
+pveum acl modify / --users ansible@pve --roles PVEAuditor
+
+# 3. Créer le token API (le secret s'affiche UNE seule fois)
+pveum user token add ansible@pve awx --privsep 0
+# → copier le "value" affiché et le coller dans le credential AWX
+```
+
+#### Fichier d'inventaire associé
+
+Le fichier d'inventaire utilisant ce credential doit :
+
+1. **Être nommé** avec le suffixe `proxmox.yml` ou `proxmox.yaml` (contrainte du plugin)
+2. **Déclarer** `plugin: community.proxmox.proxmox` (FQCN, pas `community.general.proxmox`)
+3. **Ne pas** définir `url`/`user`/`token_id`/`token_secret` — ces valeurs viennent des variables d'environnement injectées
+
+```yaml
+# inventories/proxmox.yml
+---
+plugin: community.proxmox.proxmox
+
+validate_certs: false
+want_facts: true
+filters:
+  - status == "running"
+
+group_prefix: "proxmox_"
+
+compose:
+  ansible_host: proxmox_ipconfig0 | regex_search('ip=([^/,]+)') | replace('ip=', '')
+
+keyed_groups:
+  - prefix: tag
+    key: proxmox_tags_parsed
+  - prefix: node
+    key: proxmox_node
+  - prefix: os
+    key: proxmox_description
+```
+
+---
+
 ## Référence rapide — Commandes de diagnostic
 
 ```bash
