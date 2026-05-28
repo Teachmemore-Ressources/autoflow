@@ -6,6 +6,15 @@
 # .env du sous-projet community
 community/.env
 
+# ── SSH Keys ──────────────────────────────────────────────────────────────────
+# Clé privée JAMAIS commitée — la clé publique et le config sont versionables
+ssh/id_ed25519
+ssh/id_ed25519.bak
+ssh/id_ed25519.old
+# known_hosts : spécifique à l'environnement, géré dynamiquement
+ssh/known_hosts
+!ssh/.gitkeep
+
 # ── TLS / PKI ─────────────────────────────────────────────────────────────────
 # Clés privées
 traefik/certs/*.key

@@ -338,6 +338,9 @@ services:
       AWX_TASK_HOSTNAME: awx
       DOMAIN: ${DOMAIN:-localhost}
       TRAEFIK_CERTS_DIR: ${TRAEFIK_CERTS_DIR:-/home/vagrant/autoflow/traefik/certs}
+      # SSH keys directory — host absolute path, forwarded to AWX_ISOLATION_SHOW_PATHS
+      # so ansible-runner mounts it at /var/lib/awx/.ssh inside every EE container.
+      AWX_SSH_DIR: ${AWX_SSH_DIR:-/home/vagrant/autoflow/ssh}
       # Upstream DNS reachable from Docker bridge (not the 127.0.0.53 stub).
       # Set in .env. Leave empty in air-gapped production environments.
       EE_DNS_SERVER: ${EE_DNS_SERVER:-}
@@ -354,6 +357,9 @@ services:
       # Shared with receptor: private_data_dir paths must be the same on host
       # (only_transmit_kwargs=True passes the path, not the files, to receptor)
       - /tmp:/tmp
+      # SSH keys — mounted into awx_task so the awx user has access.
+      # EE containers get a separate bind-mount via AWX_ISOLATION_SHOW_PATHS.
+      - ${AWX_SSH_DIR:-./ssh}:/var/lib/awx/.ssh:ro
     group_add:
       - "${DOCKER_GID:-998}"
     networks:

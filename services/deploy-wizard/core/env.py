@@ -27,6 +27,7 @@ SOPS_AGE_KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 AUDIT_LOG = ROOT / "wizard-audit.log"
+SSH_DIR = Path(os.environ.get("AWX_SSH_DIR", str(ROOT / "ssh")))
 
 # ── UI-only fields (heading + info banners) — never written to .env ───────────
 _HEADING_KEYS: frozenset[str] = frozenset(f["key"] for f in FIELDS if f.get("type") in ("heading", "info"))

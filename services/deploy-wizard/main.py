@@ -49,6 +49,7 @@ from routers.deploy import router as deploy_router
 from routers.ee import router as ee_router
 from routers.preflight import router as preflight_router
 from routers.setup import router as setup_router
+from routers.ssh import router as ssh_router
 from routers.tls import router as tls_router
 
 app = FastAPI(
@@ -73,6 +74,7 @@ for _r in (
     config_router,
     deploy_router,
     tls_router,
+    ssh_router,
     ee_router,
     setup_router,
     preflight_router,

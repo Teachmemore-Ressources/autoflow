@@ -159,4 +159,10 @@ AWX_ISOLATION_SHOW_PATHS = [
     # (systemd-resolved stub) which is unreachable from inside Docker containers.
     # DNS is handled by DEFAULT_CONTAINER_RUN_OPTIONS --dns 10.0.2.3 instead.
     f"{os.environ.get('TRAEFIK_CERTS_DIR', '/home/vagrant/autoflow/traefik/certs')}/ca.{os.environ.get('DOMAIN', 'localhost')}.crt:/etc/autoflow/ca.crt:ro",
+    # SSH keys — bind-mounted read-only into EE containers.
+    # Provides id_ed25519, id_ed25519.pub, config, and known_hosts to every job.
+    # Public key is read by 01_clone_vm.yml via slurp (no static extra_vars needed).
+    # Private key is used by Ansible for remote SSH connections.
+    # AWX_SSH_DIR must point to the HOST path (not a container-internal path).
+    f"{os.environ.get('AWX_SSH_DIR', '/home/vagrant/autoflow/ssh')}:/var/lib/awx/.ssh:ro",
 ]
