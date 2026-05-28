@@ -48,3 +48,5 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 | `kvm=0` ignoré — `False` traité comme truthy par Proxmox | [Proxmox — Problème 9](proxmox.md#probleme-9) |
 | Tâche `qmstart` périmée — `failed_when` déclenché dès l'attempt 1 | [Proxmox — Problème 11](proxmox.md#probleme-11) |
 | Timeout SSH après démarrage VM (`Timeout when waiting for X:22`) | [Proxmox — Problème 12](proxmox.md#probleme-12) |
+| `Permission denied (publickey)` après démarrage VM | [Proxmox — Problème 13](proxmox.md#probleme-13) |
+| Architecture gestion clés SSH AWX (génération, rotation, montage EE) | [Proxmox — Problème 13 §Architecture](proxmox.md#ssh-architecture) |

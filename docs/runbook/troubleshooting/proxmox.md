@@ -774,3 +774,166 @@ Si `ipconfig0` est correct → c'est juste un problème de délai, augmenter les
        ```bash
        ss -tlnp | grep :22
        ```
+
+---
+
+## Problème 13 — `Permission denied (publickey)` lors de la connexion SSH aux VMs {#probleme-13}
+
+**Symptôme** : Le playbook `02_configure_vm.yml` échoue avec :
+
+```
+TASK [Gathering Facts]
+fatal: [192.168.1.80]: UNREACHABLE! => {
+    "msg": "Failed to connect to the host via ssh:
+    ansible@192.168.1.80: Permission denied (publickey)."
+}
+```
+
+Le port SSH est accessible (Problème 12 résolu) mais l'authentification échoue.
+
+### Causes possibles
+
+| # | Cause | Diagnostic |
+|---|---|---|
+| A | Clé publique cloud-init incorrecte (double encodage URL) | `cloud-init status` + voir authorized_keys dans la VM |
+| B | Clé privée AWX ne correspond pas à la clé publique cloud-init | Fingerprints divergents |
+| C | Clé publique tronquée ou corrompue dans Proxmox | Vérifier avec `GET /qemu/<id>/config` → `sshkeys` |
+
+### Cause A — Double encodage URL (la plus fréquente)
+
+**Mécanisme** : `body_format: form-urlencoded` applique `urllib.quote_plus()` sur les valeurs.
+Si la clé SSH avait déjà été encodée avec `| urlencode`, les `%` deviennent `%25` →
+`ssh-ed25519%20AAAA` stocké comme `ssh-ed25519%2520AAAA` dans `authorized_keys` → clé invalide.
+
+**Fix** : Utiliser `body_format: raw` + `Content-Type: application/x-www-form-urlencoded` manuel
+et encoder la valeur une seule fois avec `| urlencode | replace('/', '%2F')`.
+
+### Architecture SSH recommandée (solution pérenne) {#ssh-architecture}
+
+La solution définitive est de découpler la clé SSH de la configuration du Job Template
+en stockant les clés dans un répertoire dédié monté dans les EE containers.
+
+#### Structure
+
+```
+autoflow/
+└── ssh/
+    ├── id_ed25519        (600 — JAMAIS commité, exclu dans .gitignore)
+    ├── id_ed25519.pub    (644 — versionnable)
+    ├── config            (600 — SSH client config)
+    ├── known_hosts       (644 — spécifique à l'env, exclu dans .gitignore)
+    └── .gitkeep          (marqueur de répertoire)
+```
+
+#### Génération de la paire de clés
+
+Via le Deploy Wizard (recommandé) :
+```bash
+# SSE endpoint — génère la paire + backup de l'ancienne clé si présente
+curl -s -u admin:$WIZARD_PASS https://wizard.$DOMAIN/api/ssh/generate
+```
+
+Via la ligne de commande :
+```bash
+ssh-keygen -t ed25519 -C "awx-provisioning@autoflow" -f autoflow/ssh/id_ed25519 -N ""
+chmod 600 autoflow/ssh/id_ed25519
+chmod 644 autoflow/ssh/id_ed25519.pub
+```
+
+#### Montage dans les EE containers
+
+`awx/settings.py` :
+```python
+AWX_ISOLATION_SHOW_PATHS = [
+    f"...ca.crt...",
+    f"{os.environ.get('AWX_SSH_DIR', '/home/vagrant/autoflow/ssh')}:/var/lib/awx/.ssh:ro",
+]
+```
+
+`docker-compose.yml` (awx_task ET awx_web — requis pour la validation des chemins) :
+```yaml
+volumes:
+  - ${AWX_SSH_DIR:-./ssh}:/var/lib/awx/.ssh:ro
+```
+
+!!! warning "Double montage obligatoire"
+    AWX valide les chemins `AWX_ISOLATION_SHOW_PATHS` depuis `awx_web` (process Django).
+    Si `ssh/` n'est pas monté dans `awx_web`, AWX rejette silencieusement le chemin.
+    Le montage dans `awx_task` est nécessaire pour les jobs eux-mêmes.
+
+Après modification, mettre à jour le paramètre dans AWX via l'API :
+```bash
+AWX_PASS="$(grep AWX_ADMIN_PASSWORD .env | cut -d= -f2 | tr -d '\"')"
+DOMAIN="$(grep '^DOMAIN=' .env | cut -d= -f2)"
+curl -sk -u "admin:$AWX_PASS" -X PATCH \
+  "https://awx.$DOMAIN/api/v2/settings/jobs/" \
+  -H "Content-Type: application/json" \
+  -d "{\"AWX_ISOLATION_SHOW_PATHS\": [
+    \"/home/vagrant/autoflow/traefik/certs/ca.$DOMAIN.crt:/etc/autoflow/ca.crt:ro\",
+    \"/home/vagrant/autoflow/ssh:/var/lib/awx/.ssh:ro\"
+  ]}"
+```
+
+#### Lecture dynamique dans le playbook
+
+`01_clone_vm.yml` lit la clé publique depuis le fichier monté — plus besoin de `extra_vars` statique :
+
+```yaml
+- name: "Lire la clé publique SSH depuis le répertoire monté"
+  ansible.builtin.slurp:
+    src: "/var/lib/awx/.ssh/id_ed25519.pub"
+  register: _pubkey_file
+  failed_when: false   # fallback si fichier absent
+
+- name: "Définir cloudinit_ssh_pubkey depuis le fichier monté"
+  ansible.builtin.set_fact:
+    cloudinit_ssh_pubkey: "{{ _pubkey_file.content | b64decode | trim }}"
+  when:
+    - _pubkey_file.content is defined
+    - (_pubkey_file.content | b64decode | trim) | length > 10
+```
+
+#### Synchronisation du credential AWX
+
+La clé privée doit être synchronisée dans le Machine credential `lab-ssh-key` :
+
+```bash
+# Via le Deploy Wizard (recommandé)
+curl -s -u admin:$WIZARD_PASS https://wizard.$DOMAIN/api/ssh/sync-awx
+
+# Ou manuellement via l'API AWX
+PRIVATE_KEY=$(cat autoflow/ssh/id_ed25519)
+curl -sk -u "admin:$AWX_PASS" -X PATCH \
+  "https://awx.$DOMAIN/api/v2/credentials/4/" \
+  -H "Content-Type: application/json" \
+  -d "{\"inputs\": {\"ssh_key_data\": $(python3 -c "import json; print(json.dumps(open('autoflow/ssh/id_ed25519').read()))")}}"
+```
+
+### Rotation des clés
+
+En cas de compromission ou rotation périodique :
+```bash
+# Rotation complète via le wizard (backup + génération + sync AWX)
+curl -s -u admin:$WIZARD_PASS https://wizard.$DOMAIN/api/ssh/rotate
+```
+
+Pour les VMs déjà provisionnées avec l'ANCIENNE clé :
+```bash
+OLD_KEY=autoflow/ssh/id_ed25519.<timestamp>.bak
+NEW_PUBKEY=$(cat autoflow/ssh/id_ed25519.pub)
+# Ajouter la nouvelle clé publique aux VMs existantes (si encore accessibles)
+ansible all -i inventory/ --private-key=$OLD_KEY -m authorized_key \
+  -a "user=ansible state=present key='$NEW_PUBKEY'"
+```
+
+---
+
+## Endpoints Deploy Wizard — Gestion SSH
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/ssh/status` | État de la paire de clés (fingerprint, date de création) |
+| `GET /api/ssh/public-key` | Clé publique (texte brut) |
+| `GET /api/ssh/generate` | Générer / regénérer (SSE, backup automatique) |
+| `GET /api/ssh/sync-awx` | Synchroniser la clé privée → credential AWX (SSE) |
+| `GET /api/ssh/rotate` | Rotation complète en 3 étapes (SSE) |
