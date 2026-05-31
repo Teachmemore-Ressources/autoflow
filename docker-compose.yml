@@ -231,6 +231,12 @@ services:
     image: autoflow/awx-patched:${AWX_VERSION:-24.6.1}
     container_name: autoflow_awx_web
     restart: unless-stopped
+    # stop_grace_period: AWX runs dumb-init → supervisord → 40+ threads.
+    # Default 10 s is not enough for a graceful shutdown, causing SIGKILL to be
+    # sent while the process is CPU-throttled → signal delivery is deferred
+    # indefinitely → container appears immortal.  60 s gives supervisord time
+    # to stop uWSGI workers, Daphne and the callback-receiver cleanly.
+    stop_grace_period: 60s
     hostname: awxweb
     user: root
     command: /usr/bin/launch_awx_web.sh
@@ -332,6 +338,9 @@ services:
     image: autoflow/awx-patched:${AWX_VERSION:-24.6.1}
     container_name: autoflow_awx_task
     restart: unless-stopped
+    # stop_grace_period: same reasoning as awx_web — supervisord + dispatcher
+    # workers need time to drain in-flight jobs before the process exits.
+    stop_grace_period: 60s
     hostname: awx
     user: root
     # Custom launcher: provision_instance needs --hostname in non-k8s mode.
