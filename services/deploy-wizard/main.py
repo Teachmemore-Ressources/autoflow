@@ -4,6 +4,9 @@ Autoflow Deploy Wizard — Backend
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+
 # Core modules — importing core.auth triggers the WIZARD_TOKEN sys.exit guard
 from core.auth import (  # noqa: F401
     _audit,
@@ -50,13 +53,30 @@ from routers.ee import router as ee_router
 from routers.preflight import router as preflight_router
 from routers.setup import router as setup_router
 from routers.ssh import router as ssh_router
+from routers.ssh import run_cleanup_task
 from routers.tls import router as tls_router
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start background tasks on startup; cancel them cleanly on shutdown."""
+    cleanup = asyncio.create_task(run_cleanup_task(), name="ssh-pending-cleanup")
+    try:
+        yield
+    finally:
+        cleanup.cancel()
+        try:
+            await cleanup
+        except asyncio.CancelledError:
+            pass
+
 
 app = FastAPI(
     title="Autoflow Deploy Wizard",
     docs_url=None,
     redoc_url=None,
     dependencies=[Depends(_require_auth)],
+    lifespan=lifespan,
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
