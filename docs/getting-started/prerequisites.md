@@ -153,7 +153,52 @@ source .wizard-venv/bin/activate
 
 ---
 
-## 7. Vérification finale
+## 7. Désactiver le swap
+
+!!! danger "Requis en production"
+    Le swap doit être désactivé avant de lancer la stack. Voir [Pourquoi — Prérequis système](../overview/requirements.md#swap).
+
+```bash
+# Désactiver immédiatement
+sudo swapoff -a
+
+# Désactiver de façon permanente (supprimer les lignes swap de /etc/fstab)
+sudo sed -i '/swap/d' /etc/fstab
+
+# Vérifier
+free -h | grep Swap
+# Swap:          0B       0B       0B
+```
+
+---
+
+## 8. Paramètres kernel — `make host-setup`
+
+!!! warning "À faire avant `make start`"
+    Autoflow requiert plusieurs paramètres kernel ajustés sur le host. Cette commande est **idempotente** — elle peut être relancée à tout moment sans risque.
+
+```bash
+cd autoflow
+make host-setup
+```
+
+Paramètres appliqués et persistés dans `/etc/sysctl.d/10-autoflow.conf` :
+
+| Paramètre | Valeur | Raison |
+|---|---|---|
+| `vm.overcommit_memory` | `1` | Redis AOF — `bgsave` / réécriture sans fork failure |
+| `net.core.somaxconn` | `65535` | AWX callbacks + Prometheus scrape en burst |
+| `net.ipv4.tcp_max_syn_backlog` | `65535` | Idem |
+| `fs.inotify.max_user_watches` | `524288` | Gitea repos + Promtail log dirs |
+| `fs.inotify.max_user_instances` | `512` | Idem |
+| `vm.swappiness` | `10` | Empêche le swap des conteneurs |
+
+!!! info "Détail technique"
+    Sur un host avec peu de vCPUs (< 8), AWX peut être soumis à du CPU throttling. Si Docker envoie `SIGKILL` pendant une période de throttling, le signal est mis en queue mais jamais délivré — le conteneur devient impossible à arrêter. `make host-setup` ne corrige pas ce problème directement (c'est une contrainte matérielle), mais l'ensemble des `stop_grace_period` configurés dans `docker-compose.yml` évite que SIGKILL soit jamais envoyé en conditions normales. Voir [Prérequis système — Pourquoi 8 vCPUs](../overview/requirements.md#pourquoi-8-vcpus).
+
+---
+
+## 9. Vérification finale
 
 Vérifiez que tout est en place avant de lancer le wizard :
 
@@ -172,6 +217,16 @@ sops --version
 
 # Clé Age
 ls -la ~/.config/sops/age/keys.txt
+
+# Swap désactivé
+free -h | grep Swap  # doit afficher 0B / 0B / 0B
+
+# Paramètres kernel
+sysctl vm.overcommit_memory net.core.somaxconn fs.inotify.max_user_watches vm.swappiness
+# vm.overcommit_memory = 1
+# net.core.somaxconn = 65535
+# fs.inotify.max_user_watches = 524288
+# vm.swappiness = 10
 ```
 
 Sortie attendue (exemples) :

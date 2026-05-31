@@ -102,6 +102,19 @@ Cliquer **"Sauvegarder"** en bas de chaque section. La configuration est écrite
 
 ---
 
+## Étape 2.7 — Préparer le host (si pas encore fait)
+
+!!! warning "À faire avant le premier `make start`"
+    Si vous n'avez pas encore exécuté `make host-setup` sur ce serveur, faites-le maintenant. Cette commande est idempotente.
+
+```bash
+make host-setup
+```
+
+Elle configure les paramètres kernel requis (Redis AOF, inotify Gitea, réseau, swap) et les persiste dans `/etc/sysctl.d/10-autoflow.conf`. Voir [Prérequis — Paramètres kernel](prerequisites.md#8-parametres-kernel-make-host-setup) pour le détail.
+
+---
+
 ## Étape 3 — Déployer la stack
 
 Une fois la configuration sauvegardée :

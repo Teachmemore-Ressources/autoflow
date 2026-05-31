@@ -516,3 +516,125 @@ curl -sk --resolve "awx.<DOMAIN>:443:<IP>" \
 
 - Consulter systématiquement la vue **"Nodes"** du workflow job (pas seulement le statut global)
 - Ou ajouter un nœud de notification (Slack, email) sur le chemin failure pour alerter explicitement
+
+---
+
+## Problème 18 — Conteneur AWX impossible à arrêter (SIGKILL différé)
+
+**Symptôme** : `docker stop`, `docker rm -f` et même `docker compose down` échouent avec :
+
+```
+Error response from daemon: cannot stop container: autoflow_awx_task:
+tried to kill container, but did not receive an exit event
+```
+
+Le conteneur reste en statut `Up X hours (unhealthy)` même après plusieurs minutes.
+
+---
+
+### Cause racine
+
+Ce problème survient sur des hosts avec **peu de vCPUs** (≤ 4) où AWX est soumis à du **CPU throttling** :
+
+1. Le cgroup d'AWX (`cpu.max = 200000/100000` = limite 2 CPUs) suspend les threads d'AWX pendant les périodes de throttle
+2. Docker envoie `SIGTERM` → AWX met trop de temps à s'arrêter → délai `stop_grace_period` dépassé → Docker envoie `SIGKILL`
+3. Le SIGKILL arrive pendant une période de throttling → signal mis en queue (`SigPnd = 0x100`) mais **jamais délivré**
+4. Les processus sont bloqués dans l'état `Rs` (running + signal pending) et survivent à tout
+
+**Diagnostic rapide** :
+```bash
+# Récupérer le PID host du conteneur
+TASK_PID=$(docker inspect autoflow_awx_task --format '{{.State.Pid}}')
+
+# Vérifier SIGKILL pending
+cat /proc/$TASK_PID/status | grep SigPnd
+# SigPnd: 0000000000000100  ← bit 8 = SIGKILL pending, jamais délivré
+
+# Vérifier le throttling
+CGROUP=$(find /sys/fs/cgroup -name "docker-$(docker inspect autoflow_awx_task --format '{{.Id}}').scope" 2>/dev/null | head -1)
+cat $CGROUP/cpu.stat | grep nr_throttled
+# nr_throttled: 14343  ← élevé = problème confirmé
+```
+
+---
+
+### Procédure de récupération
+
+!!! danger "Impact"
+    Cette procédure force la mort du conteneur. Les jobs AWX en cours seront perdus. Les données PostgreSQL ne sont pas affectées (les volumes sont séparés).
+
+**Étape 1 — Supprimer le CPU cap pour débloquer le SIGKILL**
+
+```bash
+# Trouver le cgroup du conteneur
+CONTAINER_ID=$(docker inspect autoflow_awx_task --format '{{.Id}}')
+CGROUP="/sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope"
+
+# Supprimer la limite CPU (temporairement)
+echo "max 100000" | sudo tee $CGROUP/cpu.max
+
+# Faire pareil pour awx_web si lui aussi est bloqué
+WEB_ID=$(docker inspect autoflow_awx_web --format '{{.Id}}')
+WEB_CGROUP="/sys/fs/cgroup/system.slice/docker-${WEB_ID}.scope"
+echo "max 100000" | sudo tee $WEB_CGROUP/cpu.max
+```
+
+**Étape 2 — Envoyer SIGKILL maintenant que le processus peut tourner**
+
+```bash
+TASK_PID=$(docker inspect autoflow_awx_task --format '{{.State.Pid}}')
+WEB_PID=$(docker inspect autoflow_awx_web --format '{{.State.Pid}}')
+
+sudo kill -9 $TASK_PID $WEB_PID
+sleep 2
+
+# Vérifier que les processus sont morts
+ps aux | grep -E " $TASK_PID | $WEB_PID " | grep -v grep
+# (aucune sortie = OK)
+```
+
+**Étape 3 — Nettoyer via Docker Compose**
+
+```bash
+docker compose down --remove-orphans
+docker ps -a  # doit être vide
+```
+
+**Étape 4 — Redémarrer le stack**
+
+```bash
+make start
+```
+
+---
+
+### Si l'étape 1 ne fonctionne pas — utiliser `ctr` (containerd)
+
+Si le cgroup n'est pas accessible, forcer via containerd directement :
+
+```bash
+TASK_ID=$(docker inspect autoflow_awx_task --format '{{.Id}}')
+sudo ctr -n moby tasks kill --signal SIGKILL $TASK_ID
+
+# Puis nettoyer
+docker compose down --remove-orphans
+```
+
+---
+
+### Prévention
+
+La cause profonde est la combinaison **peu de vCPUs + CPU throttling + stop_grace_period court**.
+
+| Levier | Action |
+|---|---|
+| **Matériel** | ≥ 8 vCPUs — AWX n'utilise alors que 25% des CPUs disponibles, throttling rare |
+| **stop_grace_period** | `awx_web` et `awx_task` ont `stop_grace_period: 60s` — SIGTERM a 60s pour terminer proprement avant SIGKILL |
+| **Kernel** | `make host-setup` — pas directement lié mais maintient le host en état sain |
+
+!!! tip "Vérifier la configuration actuelle"
+    ```bash
+    # Vérifier que stop_grace_period est bien configuré
+    docker inspect autoflow_awx_task --format '{{.HostConfig.StopTimeout}}'
+    # 60  ← valeur correcte (secondes)
+    ```

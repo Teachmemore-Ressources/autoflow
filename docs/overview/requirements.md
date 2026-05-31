@@ -22,12 +22,15 @@ title: Prérequis système
 
 ## Ressources matérielles
 
-### Configuration minimale (lab / dev)
+### Configuration minimale absolue (lab / dev uniquement)
 
-| Ressource | Minimum | Notes |
+!!! danger "Ne pas utiliser en production"
+    La configuration minimale ci-dessous permet de démarrer la stack dans un environnement de test. En dessous de 8 vCPUs, AWX est soumis à du **CPU throttling** qui peut rendre les conteneurs impossibles à arrêter proprement. Voir [Pourquoi 8 vCPUs ?](#pourquoi-8-vcpus).
+
+| Ressource | Minimum absolu | Notes |
 |---|---|---|
-| CPU | 4 vCPUs | AWX est gourmand en CPU au démarrage |
-| RAM | **8 Go** | 6 Go minimum absolu, instable en dessous |
+| CPU | 4 vCPUs | Throttling fréquent — instable pour les opérations stop/restart |
+| RAM | 8 Go | 6 Go minimum absolu, instable en dessous |
 | Disque système | 50 Go SSD | Images Docker, volumes |
 | Réseau | 100 Mbps | Pour le pull des images et git sync |
 
@@ -35,25 +38,112 @@ title: Prérequis système
 
 | Ressource | Recommandé | Notes |
 |---|---|---|
-| CPU | **8 vCPUs** | Pour absorber les pics de jobs parallèles |
-| RAM | **16 Go** | Confortable pour tous les services |
-| Disque système | **100 Go SSD NVMe** | + volume dédié pour les données |
+| CPU | **8 vCPUs** | Minimum pour absorber les bursts AWX sans throttling |
+| RAM | **16 Go** | Confortable pour tous les services sous charge |
+| Disque système | **150 Go SSD NVMe** | Images Docker + volumes |
 | Disque données | **200 Go+** | PostgreSQL, Loki/MinIO (logs), Tempo (traces) |
-| Réseau | 1 Gbps | Recommandé pour les transfers de registry |
+| Réseau | 1 Gbps | Pour les transfers de registry |
+| Swap | **Désactivé** | Voir [Swap](#swap) |
 
-!!! tip "Répartition RAM approximative"
-    | Service | RAM typique |
-    |---|---|
-    | awx_web | ~500 Mo |
-    | awx_task | ~800 Mo |
-    | postgres | ~300 Mo |
-    | redis | ~100 Mo |
-    | gitea | ~200 Mo |
-    | grafana | ~200 Mo |
-    | loki | ~300 Mo |
-    | prometheus | ~300 Mo |
-    | autres services | ~500 Mo |
-    | **Total** | **~3,2 Go** (idle) → **6+ Go** sous charge |
+### Configuration optimale (production haute disponibilité)
+
+| Ressource | Optimal |
+|---|---|
+| CPU | 12-16 vCPUs |
+| RAM | 32 Go |
+| Disque système | 200 Go NVMe |
+| Disque données | 500 Go+ NVMe séparé |
+
+### Répartition RAM approximative
+
+!!! tip "Consommation réelle par service"
+    | Service | RAM typique (idle) | RAM sous charge |
+    |---|---|---|
+    | awx_web | ~500 Mo | ~800 Mo |
+    | awx_task | ~800 Mo | ~1.5 Go |
+    | postgres (AWX) | ~300 Mo | ~500 Mo |
+    | redis | ~100 Mo | ~220 Mo |
+    | gitea + gitea_postgres | ~350 Mo | ~600 Mo |
+    | grafana + prometheus | ~500 Mo | ~800 Mo |
+    | loki + tempo | ~400 Mo | ~700 Mo |
+    | traefik + autres | ~300 Mo | ~400 Mo |
+    | **Total** | **~3.3 Go** | **~5.5-6 Go** |
+
+    Avec 8 Go de RAM, la marge est très faible sous charge. **16 Go** est le vrai minimum production.
+
+---
+
+## Swap
+
+!!! danger "Désactiver le swap sur le host Docker"
+    Le swap doit être **désactivé** sur le serveur hébergeant Autoflow :
+
+    - Un conteneur qui swap provoque des **latences importantes** (PostgreSQL, AWX)
+    - Le swap masque la pression mémoire qui devrait déclencher l'OOM eviction
+    - `vm.swappiness = 10` (appliqué par `make host-setup`) empêche l'utilisation du swap même s'il est présent
+
+    ```bash
+    # Désactiver immédiatement
+    sudo swapoff -a
+
+    # Désactiver de façon permanente
+    sudo sed -i '/swap/d' /etc/fstab
+
+    # Vérifier
+    free -h | grep Swap
+    # Swap:          0B       0B       0B
+    ```
+
+---
+
+## Paramètres kernel (host Docker)
+
+Autoflow requiert plusieurs paramètres kernel ajustés sur le **host Docker**. Ces paramètres persistent après reboot.
+
+```bash
+# Appliquer tous les paramètres en une commande
+make host-setup
+```
+
+### Détail des paramètres
+
+| Paramètre | Valeur requise | Valeur par défaut | Impact si non appliqué |
+|---|---|---|---|
+| `vm.overcommit_memory` | `1` | `0` | Redis : `bgsave` / `BGREWRITEAOF` échouent silencieusement → corruption AOF |
+| `net.core.somaxconn` | `65535` | `4096` | AWX callbacks, Prometheus scrape : SYN packets droppés sous charge |
+| `net.ipv4.tcp_max_syn_backlog` | `65535` | `512` | Idem — reject de connexions entrantes en burst |
+| `fs.inotify.max_user_watches` | `524288` | `8192–61604` | Gitea / Promtail : erreur « inotify limit reached » |
+| `fs.inotify.max_user_instances` | `512` | `128` | Idem |
+| `vm.swappiness` | `10` | `60` | Swap de conteneurs → latence + masque pression mémoire |
+
+!!! note "Fichier persistant"
+    `make host-setup` écrit `/etc/sysctl.d/10-autoflow.conf` et applique les valeurs immédiatement sans redémarrage.
+
+---
+
+## Pourquoi 8 vCPUs ?
+
+### Le bug CPU throttle + SIGKILL
+
+AWX (`awx_web` + `awx_task`) est limité à `cpus: 2.0` dans `docker-compose.yml`. Avec 4 vCPUs disponibles sur le host, AWX peut consommer **jusqu'à 50% de tous les CPUs** lors d'un burst (job lancé, healthcheck, compaction DB simultanés).
+
+Quand le cgroup atteint sa limite CPU, le kernel **suspend les threads** d'AWX pendant la période de throttling. Si à ce moment Docker envoie un `SIGKILL` (après l'expiration du `stop_grace_period`), le signal est mis en queue (`SigPnd = 0x100`) mais **n'est jamais délivré** — le process ne tourne pas pour le recevoir.
+
+**Résultat observable** :
+```bash
+$ docker stop autoflow_awx_task
+Error response from daemon: cannot stop container: tried to kill container,
+but did not receive an exit event
+```
+
+Les conteneurs apparaissent **immortels** — `docker rm -f` échoue également.
+
+**Sur 8 vCPUs**, AWX n'utilise que 25% des CPUs disponibles → throttling rare → le `SIGKILL` est délivré normalement dans la majorité des cas.
+
+**Protection supplémentaire** : `stop_grace_period: 60s` sur `awx_web` et `awx_task` donne à supervisord le temps de s'arrêter proprement via SIGTERM avant que SIGKILL soit envoyé — le problème ne se pose alors plus du tout.
+
+!!! info "Voir aussi"
+    Pour la procédure de récupération si des conteneurs sont déjà bloqués : [Runbook — Conteneur AWX impossible à arrêter](../runbook/troubleshooting/awx.md#probleme-18-conteneur-awx-impossible-a-arreter-sigkill-deferred).
 
 ---
 
