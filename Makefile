@@ -249,6 +249,7 @@ WIZARD_VENV := .wizard-venv
 wizard:         ## Launch the deployment wizard on http://localhost:9000  (WIZARD_TOKEN required)
 	@[ -d $(WIZARD_VENV) ] || python3 -m venv $(WIZARD_VENV)
 	@$(WIZARD_VENV)/bin/pip install -q -r services/deploy-wizard/requirements.txt
+	@$(WIZARD_VENV)/bin/pip install -q -r docs/requirements.txt
 	@[ -n "$(WIZARD_TOKEN)" ] || { \
 		echo ""; \
 		echo "  ERROR: WIZARD_TOKEN is not set."; \
@@ -258,30 +259,39 @@ wizard:         ## Launch the deployment wizard on http://localhost:9000  (WIZAR
 		echo ""; \
 		exit 1; \
 	}
+	@if [ ! -f site/index.html ] || find docs mkdocs.yml -newer site/index.html 2>/dev/null | grep -q .; then \
+		echo "  [docs] Building documentation…"; \
+		$(WIZARD_VENV)/bin/mkdocs build -q; \
+		echo "  [docs] Done — served at http://localhost:9000/docs/"; \
+	fi
 	@echo ""
-	@echo "  ╔══════════════════════════════════════════╗"
-	@echo "  ║   Autoflow Deploy Wizard                 ║"
-	@echo "  ║   URL      : http://localhost:9000       ║"
-	@echo "  ║   Username : wizard                      ║"
-	@echo "  ║   Password : $$WIZARD_TOKEN              ║"
-	@echo "  ║   Audit    : wizard-audit.log            ║"
-	@echo "  ║   Press Ctrl+C to stop                   ║"
-	@echo "  ╚══════════════════════════════════════════╝"
+	@echo "  ╔══════════════════════════════════════════════╗"
+	@echo "  ║   Autoflow Deploy Wizard                     ║"
+	@echo "  ║   URL      : http://localhost:9000           ║"
+	@echo "  ║   Username : wizard                          ║"
+	@echo "  ║   Password : $$WIZARD_TOKEN                 ║"
+	@echo "  ║   Audit    : wizard-audit.log                ║"
+	@echo "  ║   Docs     : http://localhost:9000/docs/     ║"
+	@echo "  ║   Press Ctrl+C to stop                       ║"
+	@echo "  ╚══════════════════════════════════════════════╝"
 	@echo ""
 	@AUTOFLOW_ROOT=$(PWD) WIZARD_TOKEN=$(WIZARD_TOKEN) $(WIZARD_VENV)/bin/uvicorn main:app \
 		--host 127.0.0.1 --port 9000 \
 		--app-dir services/deploy-wizard \
 		--log-level warning
 
-docs:           ## Serve the built documentation on http://localhost:8001  (run: make docs)
+docs-build:     ## Build the documentation site into site/  (auto-called by make wizard)
+	@[ -d $(WIZARD_VENV) ] || python3 -m venv $(WIZARD_VENV)
+	@$(WIZARD_VENV)/bin/pip install -q -r docs/requirements.txt
+	@echo "  [docs] Building documentation…"
+	@$(WIZARD_VENV)/bin/mkdocs build -q
+	@echo "  [docs] Done — site/ ready ($(shell find site -name '*.html' | wc -l) pages)"
+
+docs:           ## Alias for docs-build (documentation is now served by the wizard at /docs/)
+	@$(MAKE) docs-build
 	@echo ""
-	@echo "  ╔══════════════════════════════════════════╗"
-	@echo "  ║   Autoflow Documentation                 ║"
-	@echo "  ║   URL : http://localhost:8001            ║"
-	@echo "  ║   Press Ctrl+C to stop                   ║"
-	@echo "  ╚══════════════════════════════════════════╝"
-	@echo ""
-	@python3 -m http.server 8001 --directory site/
+	@echo "  Documentation is served by the wizard at http://localhost:9000/docs/"
+	@echo "  Run:  make wizard"
 
 # ── Secrets (SOPS + Age) ─────────────────────────────────────
 

@@ -19,6 +19,7 @@ from core.env import (
     ENV_FILE,  # noqa: F401 — re-exported for test conftest monkeypatching
     GITEA_BEARER_TOKEN_FILE,  # noqa: F401 — re-exported for test conftest monkeypatching
     MONITORING_USERS,  # noqa: F401 — re-exported for test conftest monkeypatching
+    ROOT,
     STATIC_DIR,
     WIZARD_VERSION,  # noqa: F401 — re-exported for test access via wizard_main
     _load_env,  # noqa: F401 — re-exported for test access via wizard_main
@@ -80,6 +81,13 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Documentation — mounted at /docs/ when site/ exists (built by `make docs-build`).
+# StaticFiles is a sub-application: it bypasses the app-level _require_auth dependency,
+# matching the same behaviour as /static.  Docs contain no secrets so this is intentional.
+_DOCS_DIR = ROOT / "site"
+if _DOCS_DIR.is_dir():
+    app.mount("/docs", StaticFiles(directory=str(_DOCS_DIR), html=True), name="docs-static")
 
 
 @app.get("/", response_class=None)

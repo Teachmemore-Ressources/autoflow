@@ -3,7 +3,7 @@ Field definitions for the Autoflow Deploy Wizard.
 Each field maps to one .env variable.
 """
 
-DOCS_BASE = "http://localhost:8001"
+DOCS_BASE = "/docs"
 
 SECTIONS = [
     {"id": "system", "label": "System", "desc": "System user and sudo password for privileged operations."},
