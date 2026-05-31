@@ -2462,7 +2462,7 @@ function sshCredCardHtml(c) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       Verify SSH
     </button>
-    <button class="btn btn-ghost btn-sm" onclick="sshForceActivate(${id})" title="Activate without SSH test — ⚠ unverified">
+    <button class="btn btn-ghost btn-sm" onclick="sshForceActivate(${id})" title="Activate without SSH test (unverified)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
       Force-activate
     </button>`;
@@ -2497,7 +2497,7 @@ function sshCredCardHtml(c) {
   // Rotation info panel (shown when rotating)
   const rotPanel = isRotating ? `
     <div class="ssh-rot-panel" id="ssh-rot-panel-${id}">
-      <div class="ssh-rot-panel-title">🔄 Rotation in progress</div>
+      <div class="ssh-rot-panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Rotation in progress</div>
       <p style="font-size:12px;color:var(--aw-info-text);margin-bottom:8px">
         A new keypair has been generated. <strong>Add the new public key to <code>authorized_keys</code> on all target hosts before verifying.</strong><br>
         The old key remains ACTIVE until you confirm rotation.
@@ -2613,7 +2613,7 @@ function toggleSSHNewForm() {
   const btn = document.getElementById('ssh-new-btn');
   const isOpen = f.style.display !== 'none';
   f.style.display = isOpen ? 'none' : 'block';
-  btn.textContent = isOpen ? '+ New credential' : '✕ Cancel';
+  btn.textContent = isOpen ? '+ New credential' : 'Cancel';
   if (!isOpen) sshLoadOrgs();
 }
 
@@ -2693,8 +2693,8 @@ async function sshInvChanged() {
       html += '</optgroup>';
     }
 
-    html += `<option value="inventory:" style="border-top:1px solid var(--border)">📦 Full inventory — ${escHtml(invName)} (all hosts, no --limit)</option>`;
-    html += `<option value="custom:">✏️  Custom Ansible pattern…</option>`;
+    html += `<option value="inventory:" style="border-top:1px solid var(--border)">Full inventory — ${escHtml(invName)} (all hosts, no --limit)</option>`;
+    html += `<option value="custom:">Custom Ansible pattern…</option>`;
 
     targetSel.innerHTML = html;
     targetSel.disabled = false;
@@ -2802,17 +2802,17 @@ async function sshCreateCredential() {
   let limit = info?.limit || '';
   if (info?.type === 'custom') limit = customEl?.value.trim() || '';
 
-  if (!orgId)            { msg.textContent = '⚠ Select an organization.'; msg.style.color = 'var(--danger)'; return; }
-  if (!invId)            { msg.textContent = '⚠ Select an inventory.'; msg.style.color = 'var(--danger)'; return; }
-  if (!info)             { msg.textContent = '⚠ Choose a target.'; msg.style.color = 'var(--danger)'; return; }
-  if (!name)             { msg.textContent = '⚠ Credential name is required.'; msg.style.color = 'var(--danger)'; return; }
-  if (!user)             { msg.textContent = '⚠ SSH username is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (!orgId)            { msg.textContent = 'Select an organization.'; msg.style.color = 'var(--danger)'; return; }
+  if (!invId)            { msg.textContent = 'Select an inventory.'; msg.style.color = 'var(--danger)'; return; }
+  if (!info)             { msg.textContent = 'Choose a target.'; msg.style.color = 'var(--danger)'; return; }
+  if (!name)             { msg.textContent = 'Credential name is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (!user)             { msg.textContent = 'SSH username is required.'; msg.style.color = 'var(--danger)'; return; }
   if (info.type === 'custom' && !limit) {
-    msg.textContent = '⚠ Enter a custom Ansible limit pattern.'; msg.style.color = 'var(--danger)'; return;
+    msg.textContent = 'Enter a custom Ansible limit pattern.'; msg.style.color = 'var(--danger)'; return;
   }
 
   btn.disabled = true;
-  msg.textContent = '⏳ Generating keypair and creating AWX credential…';
+  msg.textContent = 'Generating keypair and creating AWX credential…';
   msg.style.color = 'var(--muted)';
 
   try {
@@ -2840,7 +2840,7 @@ async function sshCreateCredential() {
     document.getElementById('ssh-new-pubkey-text').textContent = data.public_key;
     document.getElementById('ssh-pubkey-result').style.display = 'block';
 
-    msg.textContent = `✅ Credential id=${data.cred_id} created — fingerprint: ${data.fingerprint}`;
+    msg.textContent = `Credential id=${data.cred_id} created — fingerprint: ${data.fingerprint}`;
     msg.style.color = 'var(--success)';
     btn.disabled = false;
 
@@ -2850,7 +2850,7 @@ async function sshCreateCredential() {
     // Reload credential list so the new PENDING card appears
     await loadSSHCredentials();
   } catch (e) {
-    msg.textContent = `❌ ${e.message}`;
+    msg.textContent = `Error: ${e.message}`;
     msg.style.color = 'var(--danger)';
     btn.disabled = false;
   }
@@ -2860,7 +2860,7 @@ async function sshCreateCredential() {
 
 function sshVerifyStream(id) {
   sshLogClear(id);
-  sshLog(id, '🔍 Starting SSH verification…', '');
+  sshLog(id, 'Starting SSH verification…', '');
   const evts = new EventSource(`/api/ssh/credentials/${id}/verify/stream`);
   let lastResult = null;
   evts.onmessage = e => {
@@ -2875,7 +2875,7 @@ function sshVerifyStream(id) {
       }
       return;
     }
-    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : msg.startsWith('✅') ? 'ok' : '';
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : '';
     sshLog(id, msg, cls);
   };
   evts.onerror = () => { sshLog(id, '[ERROR] Connection interrupted', 'err'); evts.close(); };
@@ -2886,13 +2886,13 @@ function sshVerifyStream(id) {
 async function sshForceActivate(id) {
   if (!confirm(`Force-activate credential id=${id} without SSH verification?\n\nThis marks the credential ACTIVE immediately. The fingerprint will be tagged [unverified].\n\nOnly do this if you have manually placed the public key in authorized_keys and cannot reach the host yet.`)) return;
   sshLogClear(id);
-  sshLog(id, '⚡ Force-activating…', '');
+  sshLog(id, 'Force-activating…', '');
   try {
     const resp = await fetch(`/api/ssh/credentials/${id}/activate`, { method: 'POST' });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
-    sshLog(id, `✅ Activated (unverified). Fingerprint: ${data.meta?.fingerprint || '—'}`, 'ok');
-    toast('Credential force-activated ⚠ unverified', 'ok');
+    sshLog(id, `Activated (unverified). Fingerprint: ${data.meta?.fingerprint || '—'}`, 'ok');
+    toast('Credential force-activated (unverified)', 'ok');
     await loadSSHCredentials();
   } catch (e) {
     sshLog(id, `[ERROR] ${e.message}`, 'err');
@@ -2921,12 +2921,12 @@ async function sshDeleteCredential(id) {
 async function sshStartRotation(id) {
   if (!confirm(`Start rotation for credential id=${id}?\n\nA new keypair will be generated. The old key remains active until you verify the new one and confirm.\n\nYou'll need to add the new public key to authorized_keys on all target hosts.`)) return;
   sshLogClear(id);
-  sshLog(id, '🔄 Starting key rotation…', '');
+  sshLog(id, 'Starting key rotation…', '');
   try {
     const resp = await fetch(`/api/ssh/credentials/${id}/rotate`, { method: 'POST' });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
-    sshLog(id, `✅ New credential id=${data.new_cred_id} created. Fingerprint: ${data.fingerprint}`, 'ok');
+    sshLog(id, `New credential id=${data.new_cred_id} created. Fingerprint: ${data.fingerprint}`, 'ok');
     sshLog(id, '   Add the new public key to authorized_keys, then click "Verify new key".', '');
     toast('Rotation started — add new public key to hosts', 'ok');
     await loadSSHCredentials();
@@ -2962,7 +2962,7 @@ let _sshRotJobId = {};
 
 function sshRotationVerifyStream(id) {
   sshLogClear(id);
-  sshLog(id, '🔍 Verifying new key…', '');
+  sshLog(id, 'Verifying new key…', '');
   const confirmBtn = document.getElementById(`ssh-confirm-btn-${id}`);
   if (confirmBtn) confirmBtn.disabled = true;
   const evts = new EventSource(`/api/ssh/credentials/${id}/rotate/stream`);
@@ -2973,17 +2973,17 @@ function sshRotationVerifyStream(id) {
     if (msg === '[DONE]') {
       evts.close();
       if (lastResult?.success) {
-        sshLog(id, '✅ New key verified successfully — click "Confirm rotation" to complete.', 'ok');
+        sshLog(id, 'New key verified successfully — click "Confirm rotation" to complete.', 'ok');
         if (lastResult.job_id) _sshRotJobId[id] = lastResult.job_id;
         if (confirmBtn) confirmBtn.disabled = false;
         toast('New key verified — confirm rotation when ready', 'ok');
       } else {
-        sshLog(id, '❌ Verification failed. Fix SSH access, then retry or cancel rotation.', 'err');
+        sshLog(id, 'Verification failed. Fix SSH access, then retry or cancel rotation.', 'err');
         toast('New key verification failed', 'err');
       }
       return;
     }
-    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : msg.startsWith('✅') ? 'ok' : '';
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : '';
     sshLog(id, msg, cls);
   };
   evts.onerror = () => { sshLog(id, '[ERROR] Connection interrupted', 'err'); evts.close(); };
@@ -2992,7 +2992,7 @@ function sshRotationVerifyStream(id) {
 async function sshConfirmRotation(id) {
   if (!confirm(`Confirm rotation for credential id=${id}?\n\nThe old key will be DELETED from AWX. Make sure the new key works before confirming.`)) return;
   sshLogClear(id);
-  sshLog(id, '✔ Confirming rotation…', '');
+  sshLog(id, 'Confirming rotation…', '');
   try {
     const body = _sshRotJobId[id] ? { verified_job_id: _sshRotJobId[id] } : {};
     const resp = await fetch(`/api/ssh/credentials/${id}/rotate/confirm`, {
@@ -3002,7 +3002,7 @@ async function sshConfirmRotation(id) {
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
-    sshLog(id, `✅ Rotation complete. New credential id=${data.new_cred_id}. Fingerprint: ${data.fingerprint}`, 'ok');
+    sshLog(id, `Rotation complete. New credential id=${data.new_cred_id}. Fingerprint: ${data.fingerprint}`, 'ok');
     toast('Key rotation complete', 'ok');
     delete _sshRotJobId[id];
     await loadSSHCredentials();
@@ -3015,12 +3015,12 @@ async function sshConfirmRotation(id) {
 async function sshCancelRotation(id) {
   if (!confirm(`Cancel rotation for credential id=${id}?\n\nThe new (rotating) credential will be deleted. The original key remains ACTIVE.`)) return;
   sshLogClear(id);
-  sshLog(id, '✗ Cancelling rotation…', '');
+  sshLog(id, 'Cancelling rotation…', '');
   try {
     const resp = await fetch(`/api/ssh/credentials/${id}/rotate`, { method: 'DELETE' });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
-    sshLog(id, '✅ Rotation cancelled — original key is still ACTIVE.', 'ok');
+    sshLog(id, 'Rotation cancelled — original key is still ACTIVE.', 'ok');
     toast('Rotation cancelled', 'ok');
     delete _sshRotJobId[id];
     await loadSSHCredentials();
