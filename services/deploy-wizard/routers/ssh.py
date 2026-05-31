@@ -327,7 +327,7 @@ async def create_credential_endpoint(request: Request, data: dict):
         "target_type",
         "inventory_id",
         "inventory_name",
-        "limit",
+        # "limit" is intentionally absent: empty string is valid for target_type=inventory
         "org_id",
         "org_name",
         "ssh_username",
