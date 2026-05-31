@@ -489,6 +489,51 @@ code{font-family:'Courier New',monospace;font-size:.9em;background:var(--surface
 .lg-meta{margin-top:14px;font-size:10px;color:var(--muted2);text-align:center;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
 .lg-meta svg{width:10px;height:10px;flex-shrink:0}
 .lg-sep{color:var(--border2)}
+
+/* ── SSH Credentials section ─────────────────────────────── */
+.ssh-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.ssh-awx-badge{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid var(--border);font-size:11px;font-weight:600;background:var(--surface2)}
+.ssh-creds-grid{display:flex;flex-direction:column;gap:10px}
+.ssh-cred-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.12s}
+.ssh-cred-card:hover{border-color:var(--border2)}
+.ssh-card-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px}
+.ssh-card-icon{width:34px;height:34px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ssh-card-icon svg{width:17px;height:17px;color:var(--accent)}
+.ssh-card-main{flex:1;min-width:0}
+.ssh-card-name{font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px}
+.ssh-card-sub{font-size:11px;color:var(--muted);line-height:1.4}
+.ssh-card-badges{display:flex;align-items:center;gap:5px;flex-shrink:0;flex-wrap:wrap}
+.ssh-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:.03em;white-space:nowrap}
+.ssh-badge-pending{background:var(--aw-warning-bg);color:var(--aw-warning-text);border:1px solid var(--aw-warning-border)}
+.ssh-badge-active{background:var(--aw-success-bg);color:var(--aw-success-text);border:1px solid var(--aw-success-border)}
+.ssh-badge-rotating{background:var(--aw-info-bg);color:var(--aw-info-text);border:1px solid var(--aw-info-border)}
+.ssh-badge-due{background:var(--aw-orange-100);color:var(--aw-orange-text);border:1px solid var(--aw-orange-200)}
+.ssh-badge-expired{background:var(--aw-danger-bg);color:var(--aw-danger-text);border:1px solid var(--aw-danger-border)}
+.ssh-card-meta{padding:0 18px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:5px 16px}
+.ssh-meta-row{display:flex;align-items:flex-start;gap:6px;font-size:12px}
+.ssh-meta-label{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:10px;letter-spacing:.05em;min-width:70px;flex-shrink:0;padding-top:2px}
+.ssh-meta-val{color:var(--text);line-height:1.5;word-break:break-all}
+.ssh-pubkey-mono{font-family:'Courier New',monospace;font-size:10px;color:var(--muted);word-break:break-all;max-width:100%}
+.ssh-card-actions{display:flex;gap:7px;padding:10px 18px 14px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.ssh-rot-panel{margin:0 18px 14px;padding:12px 14px;background:var(--aw-info-bg);border:1px solid var(--aw-info-border);border-radius:var(--radius-sm)}
+.ssh-rot-panel-title{font-size:11px;font-weight:700;color:var(--aw-info-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.ssh-pubkey-box{background:#05080f;border-radius:var(--radius-sm);padding:8px 12px;font:11px/1.5 'Courier New',monospace;color:#7dd3a8;word-break:break-all;margin-bottom:8px;border:1px solid rgba(255,255,255,.07)}
+.ssh-policy-panel{margin:0 18px 14px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.ssh-new-form-panel{background:var(--surface);border:1px solid var(--aw-orange-200);border-radius:var(--radius);padding:20px;margin-bottom:16px;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.ssh-form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:12px}
+.ssh-form-field{display:flex;flex-direction:column;gap:5px}
+.ssh-form-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ssh-type-radios{display:flex;gap:6px;flex-wrap:wrap}
+.ssh-type-radio{display:flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:.12s;user-select:none}
+.ssh-type-radio:hover{border-color:var(--border2);color:var(--text)}
+.ssh-type-radio.active{border-color:var(--accent);color:var(--accent);background:var(--acc-glow)}
+.ssh-type-radio input{display:none}
+.ssh-pubkey-result{margin-top:14px;padding:14px;background:var(--aw-success-bg);border:1px solid var(--aw-success-border);border-radius:var(--radius-sm)}
+.ssh-pubkey-result-title{font-size:11px;font-weight:700;color:var(--aw-success-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ssh-empty-state{text-align:center;padding:48px 20px;color:var(--muted)}
+.ssh-empty-state svg{width:40px;height:40px;opacity:.3;margin-bottom:12px}
+.ssh-empty-state p{font-size:13px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -1245,6 +1290,7 @@ const NAV_ICONS = {
   gitea:          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>',
   pki:            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   ee:             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+  ssh:            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>',
   advanced:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34L5.5 6.58A7 7 0 0 1 18 12l1.5 3.24A10 10 0 0 0 19.07 4.93zM4.93 19.07A10 10 0 0 0 17.01 20.66l1.49-3.24A7 7 0 0 1 6 12L4.5 8.76A10 10 0 0 0 4.93 19.07z"/></svg>',
   backup:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
   compliance:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
@@ -1279,6 +1325,15 @@ function buildNav() {
         Exec Environments
       </a>`);
   }
+  // Inject SSH Credentials nav item after EE
+  const eeLink = document.getElementById('nav-ee');
+  if (eeLink) {
+    eeLink.insertAdjacentHTML('afterend', `
+      <a id="nav-ssh" onclick="activateSection('ssh');closeSidebar()">
+        ${NAV_ICONS['ssh']}
+        SSH Credentials
+      </a>`);
+  }
   // Inject Cleanup nav item at the very bottom of the sidebar
   nav.insertAdjacentHTML('beforeend', `
     <a id="nav-cleanup" onclick="activateSection('cleanup');closeSidebar()" style="margin-top:auto;border-top:1px solid var(--border);padding-top:12px">
@@ -1296,9 +1351,10 @@ function activateSection(id) {
   if (sec) sec.classList.add('active');
   if (navLink) navLink.classList.add('active');
   const meta = SCHEMA?.sections?.find(s => s.id === id);
-  const labels = { preflight: 'Pre-flight checks', ee: 'Execution Environments', backup: 'Disaster Recovery', compliance: 'Compliance & Audit', cleanup: 'Nettoyage & Réinitialisation' };
+  const labels = { preflight: 'Pre-flight checks', ee: 'Execution Environments', ssh: 'SSH Credentials', backup: 'Disaster Recovery', compliance: 'Compliance & Audit', cleanup: 'Nettoyage & Réinitialisation' };
   document.getElementById('section-label').textContent = labels[id] ?? meta?.label ?? id;
   if (id === 'ee') checkEEStatus();
+  if (id === 'ssh') loadSSHSection();
   if (id === 'backup') checkBackupStatus();
   if (id === 'compliance') checkComplianceStatus();
   if (id === 'cleanup') loadCleanupStatus();
@@ -1680,7 +1736,7 @@ function buildSections() {
       </div>`;
   }).join('');
 
-  content.innerHTML = preflightHtml + EE_SECTION_HTML + sectionsHtml + CLEANUP_SECTION_HTML;
+  content.innerHTML = preflightHtml + EE_SECTION_HTML + SSH_SECTION_HTML + sectionsHtml + CLEANUP_SECTION_HTML;
 
   // Inject "Save credentials" button directly into SUDO_PASSWORD input-wrapper
   // so it sits on the same row as the password field, right of the eye-toggle.
@@ -2168,6 +2224,724 @@ const EE_SECTION_HTML = `
     </div>
   </div>
 </div>`;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SSH Credentials section
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SSH_SECTION_HTML = `
+<div class="section" id="sec-ssh">
+  <div class="sec-header">
+    <div class="sec-title">SSH Credentials</div>
+    <div class="sec-desc">
+      Manage Ed25519 SSH keypairs for AWX to connect to Linux hosts.
+      Keys are generated in-memory, stored encrypted in AWX, and never written to disk.<br>
+      <span style="color:var(--muted);font-size:12px">Prerequisite: AWX running with valid credentials in <code>AWX_ADMIN_USER</code> / <code>AWX_ADMIN_PASSWORD</code>.</span>
+    </div>
+  </div>
+
+  <!-- Toolbar: AWX status + actions -->
+  <div class="ssh-toolbar">
+    <div class="ssh-awx-badge" id="ssh-awx-badge">
+      <span class="pf-dot" id="ssh-awx-dot"></span>
+      <span id="ssh-awx-text">Checking AWX…</span>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadSSHCredentials()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+      Refresh
+    </button>
+    <button class="btn btn-primary btn-sm" id="ssh-new-btn" onclick="toggleSSHNewForm()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New credential
+    </button>
+  </div>
+
+  <!-- New credential form -->
+  <div id="ssh-new-form" style="display:none">
+    <div class="ssh-new-form-panel">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;color:var(--accent)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        New SSH credential
+      </div>
+      <div class="ssh-form-grid">
+        <div class="ssh-form-field">
+          <label class="ssh-form-label">AWX Organization</label>
+          <select id="ssh-f-org" onchange="sshOrgChanged()">
+            <option value="">Loading…</option>
+          </select>
+        </div>
+        <div class="ssh-form-field">
+          <label class="ssh-form-label">Inventory</label>
+          <select id="ssh-f-inv" onchange="sshInvChanged()" disabled>
+            <option value="">— select org first —</option>
+          </select>
+        </div>
+        <div class="ssh-form-field" style="grid-column:1/-1">
+          <label class="ssh-form-label">Target name <span style="color:var(--danger)">*</span></label>
+          <input id="ssh-f-name" type="text" placeholder="e.g. prod-webservers" />
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">A descriptive label — used in the AWX credential name.</div>
+        </div>
+        <div class="ssh-form-field" style="grid-column:1/-1">
+          <label class="ssh-form-label">Target type</label>
+          <div class="ssh-type-radios" id="ssh-f-type-radios">
+            <label class="ssh-type-radio active"><input type="radio" name="ssh-ttype" value="group" checked onchange="sshTypeChanged(this)">Group</label>
+            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="host" onchange="sshTypeChanged(this)">Host</label>
+            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="inventory" onchange="sshTypeChanged(this)">Full inventory</label>
+            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="custom" onchange="sshTypeChanged(this)">Custom</label>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px" id="ssh-type-hint">
+            Ansible will use this as the <code>--limit</code> value: matches all hosts in the group.
+          </div>
+        </div>
+        <div class="ssh-form-field" id="ssh-f-limit-wrap">
+          <label class="ssh-form-label">Limit <span style="color:var(--danger)">*</span></label>
+          <input id="ssh-f-limit" type="text" placeholder="e.g. webservers" list="ssh-limit-datalist"/>
+          <datalist id="ssh-limit-datalist"></datalist>
+        </div>
+        <div class="ssh-form-field">
+          <label class="ssh-form-label">SSH username <span style="color:var(--danger)">*</span></label>
+          <input id="ssh-f-user" type="text" placeholder="e.g. ubuntu" value="ubuntu"/>
+        </div>
+        <div class="ssh-form-field">
+          <label class="ssh-form-label">Pending TTL (hours)</label>
+          <input id="ssh-f-ttl" type="number" min="0" max="8760" value="24" style="width:120px"/>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">0 = no expiry. Unverified PENDING credentials are auto-deleted after this delay.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="ssh-create-btn" onclick="sshCreateCredential()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Generate keypair &amp; create
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleSSHNewForm()">Cancel</button>
+        <span id="ssh-create-msg" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+
+      <!-- Public key result (shown after creation) -->
+      <div id="ssh-pubkey-result" style="display:none">
+        <div class="ssh-pubkey-result" style="margin-top:16px">
+          <div class="ssh-pubkey-result-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Credential created — copy the public key and add it to authorized_keys on all target hosts
+          </div>
+          <div class="ssh-pubkey-box" id="ssh-new-pubkey-text"></div>
+          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="sshCopyNewPubkey()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy public key
+            </button>
+            <span style="font-size:11px;color:var(--muted)">Once added, verify SSH connectivity below ↓</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credentials list -->
+  <div id="ssh-creds-list">
+    <div class="ssh-empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <p>No managed credentials yet.<br>Click <strong>New credential</strong> to generate your first keypair.</p>
+    </div>
+  </div>
+</div>`;
+
+// ── SSH helpers ─────────────────────────────────────────────────────────────
+
+let _sshNewPubkey = '';
+let _sshNewCredId = null;
+
+function loadSSHSection() {
+  sshCheckAwx();
+  loadSSHCredentials();
+  // Pre-load orgs for the form
+  sshLoadOrgs();
+}
+
+async function sshCheckAwx() {
+  const dot = document.getElementById('ssh-awx-dot');
+  const txt = document.getElementById('ssh-awx-text');
+  if (!dot) return;
+  dot.className = 'pf-dot running';
+  txt.textContent = 'Checking AWX…';
+  try {
+    const r = await fetch('/api/ssh/awx/ping').then(x => x.json());
+    if (r.ok) {
+      dot.className = 'pf-dot ok';
+      txt.textContent = `AWX reachable — ${r.url}`;
+    } else {
+      dot.className = 'pf-dot err';
+      txt.textContent = 'AWX unreachable — check AWX_ADMIN_PASSWORD';
+    }
+  } catch {
+    dot.className = 'pf-dot err';
+    txt.textContent = 'AWX unreachable';
+  }
+}
+
+async function loadSSHCredentials() {
+  const list = document.getElementById('ssh-creds-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Loading credentials…</div>';
+  try {
+    const data = await fetch('/api/ssh/credentials').then(r => r.json());
+    renderSSHCredentials(data.credentials || []);
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);font-size:13px">Failed to load credentials: ${e.message}</div>`;
+  }
+}
+
+function renderSSHCredentials(creds) {
+  const list = document.getElementById('ssh-creds-list');
+  if (!list) return;
+  if (!creds.length) {
+    list.innerHTML = `<div class="ssh-empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <p>No managed credentials yet.<br>Click <strong>New credential</strong> to generate your first keypair.</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = `<div class="ssh-creds-grid">${creds.map(c => sshCredCardHtml(c)).join('')}</div>`;
+}
+
+function sshStatusBadge(status, expired, rotationDue) {
+  const cls = { pending: 'ssh-badge-pending', active: 'ssh-badge-active', rotating: 'ssh-badge-rotating' }[status] || 'ssh-badge-pending';
+  let badges = `<span class="ssh-badge ${cls}">${status}</span>`;
+  if (expired) badges += `<span class="ssh-badge ssh-badge-expired">expired</span>`;
+  if (rotationDue) badges += `<span class="ssh-badge ssh-badge-due">rotation due</span>`;
+  return badges;
+}
+
+function sshFmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch { return iso; }
+}
+
+function sshCredCardHtml(c) {
+  const id = c.id;
+  const m = c.meta;
+  const t = m.target;
+  const rp = m.rotation_policy || {};
+  const pubkeyShort = m.public_key ? m.public_key.slice(0, 40) + '…' : '—';
+  const isRotating = m.status === 'rotating';
+  const isPending  = m.status === 'pending';
+  const isActive   = m.status === 'active';
+
+  // Meta rows
+  let metaRows = `
+    <div class="ssh-meta-row"><span class="ssh-meta-label">Org</span><span class="ssh-meta-val">${escHtml(t.org_name)} <span style="color:var(--muted);font-size:10px">(id=${t.org_id})</span></span></div>
+    <div class="ssh-meta-row"><span class="ssh-meta-label">Inventory</span><span class="ssh-meta-val">${escHtml(t.inventory_name)}</span></div>
+    <div class="ssh-meta-row"><span class="ssh-meta-label">Type</span><span class="ssh-meta-val">${escHtml(t.type)}</span></div>`;
+  if (t.limit) metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Limit</span><span class="ssh-meta-val"><code>${escHtml(t.limit)}</code></span></div>`;
+  metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Username</span><span class="ssh-meta-val"><code>${escHtml(m.ssh_username)}</code></span></div>`;
+  metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Fingerprint</span><span class="ssh-meta-val ssh-pubkey-mono">${escHtml(m.fingerprint)}</span></div>`;
+  metaRows += `<div class="ssh-meta-row">
+    <span class="ssh-meta-label">Public key</span>
+    <span class="ssh-meta-val" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="ssh-pubkey-mono">${escHtml(pubkeyShort)}</span>
+      <button class="btn-icon" title="Copy public key" onclick="sshCopyPubkey(${id})" data-pubkey="${escHtml(m.public_key)}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </span>
+  </div>`;
+  if (m.last_verified_at) metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Verified</span><span class="ssh-meta-val">${sshFmtDate(m.last_verified_at)} ${m.last_verified_job_id ? `<span style="color:var(--muted);font-size:10px">(job #${m.last_verified_job_id})</span>` : ''}</span></div>`;
+  if (m.pending_expires_at) metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Expires</span><span class="ssh-meta-val" style="color:var(--warning)">${sshFmtDate(m.pending_expires_at)}</span></div>`;
+  if (rp.enabled && rp.next_rotation_at) metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Next rotation</span><span class="ssh-meta-val">${sshFmtDate(rp.next_rotation_at)}</span></div>`;
+  metaRows += `<div class="ssh-meta-row"><span class="ssh-meta-label">Created</span><span class="ssh-meta-val">${sshFmtDate(m.created_at)}</span></div>`;
+
+  // Action buttons
+  let actions = '';
+  if (isPending) {
+    actions += `<button class="btn btn-primary btn-sm" onclick="sshVerifyStream(${id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Verify SSH
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="sshForceActivate(${id})" title="Activate without SSH test — ⚠ unverified">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Force-activate
+    </button>`;
+  }
+  if (isActive) {
+    actions += `<button class="btn btn-ghost btn-sm" onclick="sshStartRotation(${id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+      Rotate key
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="sshTogglePolicy(${id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34L5.5 6.58A7 7 0 0 1 18 12l1.5 3.24A10 10 0 0 0 19.07 4.93zM4.93 19.07A10 10 0 0 0 17.01 20.66l1.49-3.24A7 7 0 0 1 6 12L4.5 8.76A10 10 0 0 0 4.93 19.07z"/></svg>
+      Rotation policy
+    </button>`;
+  }
+  if (isRotating) {
+    actions += `<button class="btn btn-primary btn-sm" onclick="sshRotationVerifyStream(${id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Verify new key
+    </button>
+    <button class="btn btn-ghost btn-sm" id="ssh-confirm-btn-${id}" onclick="sshConfirmRotation(${id})" disabled title="Run 'Verify new key' first">
+      Confirm rotation
+    </button>
+    <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="sshCancelRotation(${id})">
+      Cancel rotation
+    </button>`;
+  }
+  actions += `<button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:var(--danger);margin-left:auto" onclick="sshDeleteCredential(${id})">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    Delete
+  </button>`;
+
+  // Rotation info panel (shown when rotating)
+  const rotPanel = isRotating ? `
+    <div class="ssh-rot-panel" id="ssh-rot-panel-${id}">
+      <div class="ssh-rot-panel-title">🔄 Rotation in progress</div>
+      <p style="font-size:12px;color:var(--aw-info-text);margin-bottom:8px">
+        A new keypair has been generated. <strong>Add the new public key to <code>authorized_keys</code> on all target hosts before verifying.</strong><br>
+        The old key remains ACTIVE until you confirm rotation.
+      </p>
+      <div id="ssh-rot-pubkey-${id}" style="display:none">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">New public key</div>
+        <div class="ssh-pubkey-box" id="ssh-rot-pubkey-text-${id}"></div>
+        <button class="btn btn-ghost btn-sm" onclick="sshCopyRotPubkey(${id})" style="margin-top:4px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy new public key
+        </button>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="ssh-rot-load-pk-${id}" onclick="sshLoadRotatingPubkey(${id})" style="margin-top:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Show new public key
+      </button>
+    </div>` : '';
+
+  // Rotation policy panel
+  const policyPanel = isActive ? `
+    <div class="ssh-policy-panel" id="ssh-policy-panel-${id}" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Automatic rotation policy</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="ssh-policy-en-${id}" ${rp.enabled ? 'checked' : ''}
+            style="width:14px;height:14px;accent-color:var(--accent)">
+          Enable automatic rotation every
+        </label>
+        <input type="number" id="ssh-policy-days-${id}" min="1" max="365"
+          value="${rp.days || 90}" style="width:70px"
+          ${rp.enabled ? '' : 'disabled'}>
+        <span style="font-size:12px;color:var(--muted)">days</span>
+        <button class="btn btn-primary btn-sm" onclick="sshSavePolicy(${id})">Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="sshTogglePolicy(${id})">Close</button>
+      </div>
+      ${rp.enabled && rp.next_rotation_at ? `<div style="font-size:11px;color:var(--muted)">Next rotation scheduled: <strong>${sshFmtDate(rp.next_rotation_at)}</strong></div>` : ''}
+    </div>` : '';
+
+  return `
+<div class="ssh-cred-card" id="ssh-card-${id}">
+  <div class="ssh-card-head">
+    <div class="ssh-card-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="ssh-card-main">
+      <div class="ssh-card-name">${escHtml(t.name)}</div>
+      <div class="ssh-card-sub">${escHtml(t.org_name)} · ${escHtml(t.inventory_name)}</div>
+    </div>
+    <div class="ssh-card-badges">
+      ${sshStatusBadge(m.status, c.expired, c.rotation_due)}
+    </div>
+  </div>
+  <div class="ssh-card-meta">${metaRows}</div>
+  ${rotPanel}
+  ${policyPanel}
+  <div class="ssh-card-actions">${actions}</div>
+  <div class="ee-log" id="ssh-log-${id}"></div>
+</div>`;
+}
+
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function sshLog(id, msg, cls) {
+  const el = document.getElementById(`ssh-log-${id}`);
+  if (!el) return;
+  el.classList.add('open');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function sshLogClear(id) {
+  const el = document.getElementById(`ssh-log-${id}`);
+  if (el) { el.innerHTML = ''; el.classList.remove('open'); }
+}
+
+function sshCopyPubkey(id) {
+  const btn = document.querySelector(`#ssh-card-${id} [data-pubkey]`);
+  if (!btn) return;
+  const key = btn.getAttribute('data-pubkey');
+  navigator.clipboard.writeText(key).then(
+    () => toast('Public key copied to clipboard', 'ok'),
+    () => toast('Copy failed — use Ctrl+C', 'err')
+  );
+}
+
+function sshCopyNewPubkey() {
+  if (!_sshNewPubkey) return;
+  navigator.clipboard.writeText(_sshNewPubkey).then(
+    () => toast('Public key copied', 'ok'),
+    () => toast('Copy failed', 'err')
+  );
+}
+
+function sshCopyRotPubkey(id) {
+  const el = document.getElementById(`ssh-rot-pubkey-text-${id}`);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(
+    () => toast('New public key copied', 'ok'),
+    () => toast('Copy failed', 'err')
+  );
+}
+
+// ── New credential form ──────────────────────────────────────────────────────
+
+function toggleSSHNewForm() {
+  const f = document.getElementById('ssh-new-form');
+  const btn = document.getElementById('ssh-new-btn');
+  const isOpen = f.style.display !== 'none';
+  f.style.display = isOpen ? 'none' : 'block';
+  btn.textContent = isOpen ? '+ New credential' : '✕ Cancel';
+  if (!isOpen) sshLoadOrgs();
+}
+
+async function sshLoadOrgs() {
+  const sel = document.getElementById('ssh-f-org');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Loading…</option>';
+  sel.disabled = true;
+  try {
+    const data = await fetch('/api/ssh/awx/organizations').then(r => r.json());
+    const orgs = data.organizations || [];
+    sel.innerHTML = '<option value="">— select organization —</option>' +
+      orgs.map(o => `<option value="${o.id}" data-name="${escHtml(o.name)}">${escHtml(o.name)} (id=${o.id})</option>`).join('');
+    sel.disabled = false;
+    if (orgs.length === 1) { sel.value = orgs[0].id; sshOrgChanged(); }
+  } catch (e) {
+    sel.innerHTML = `<option value="">Error: ${e.message}</option>`;
+    sel.disabled = false;
+  }
+}
+
+async function sshOrgChanged() {
+  const orgSel = document.getElementById('ssh-f-org');
+  const invSel = document.getElementById('ssh-f-inv');
+  const orgId = orgSel.value;
+  invSel.innerHTML = '<option value="">Loading…</option>';
+  invSel.disabled = true;
+  if (!orgId) { invSel.innerHTML = '<option value="">— select org first —</option>'; return; }
+  try {
+    const data = await fetch(`/api/ssh/awx/inventories?org_id=${orgId}`).then(r => r.json());
+    const invs = data.inventories || [];
+    invSel.innerHTML = '<option value="">— select inventory —</option>' +
+      invs.map(i => `<option value="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)} (id=${i.id})</option>`).join('');
+    invSel.disabled = false;
+    if (invs.length === 1) { invSel.value = invs[0].id; sshInvChanged(); }
+  } catch (e) {
+    invSel.innerHTML = `<option value="">Error: ${e.message}</option>`;
+    invSel.disabled = false;
+  }
+}
+
+async function sshInvChanged() {
+  const invSel = document.getElementById('ssh-f-inv');
+  const dl = document.getElementById('ssh-limit-datalist');
+  const invId = invSel.value;
+  if (!dl || !invId) return;
+  dl.innerHTML = '';
+  try {
+    const data = await fetch(`/api/ssh/awx/inventories/${invId}/targets`).then(r => r.json());
+    const items = [...(data.groups || []).map(g => g.name), ...(data.hosts || []).map(h => h.name)];
+    dl.innerHTML = items.map(n => `<option value="${escHtml(n)}">`).join('');
+  } catch { /* ignore */ }
+}
+
+const SSH_TYPE_HINTS = {
+  group:     'Ansible will use this as the <code>--limit</code> value: matches all hosts in the group.',
+  host:      'Ansible will connect to this specific host only.',
+  inventory: 'No <code>--limit</code> applied — all hosts in the inventory are targeted.',
+  custom:    'Enter any Ansible <code>--limit</code> pattern (e.g. <code>tag_env_prod:&webservers</code>).',
+};
+
+function sshTypeChanged(radio) {
+  document.querySelectorAll('.ssh-type-radio').forEach(el => el.classList.remove('active'));
+  radio.closest('.ssh-type-radio').classList.add('active');
+  const hint = document.getElementById('ssh-type-hint');
+  if (hint) hint.innerHTML = SSH_TYPE_HINTS[radio.value] || '';
+  const limitWrap = document.getElementById('ssh-f-limit-wrap');
+  if (limitWrap) limitWrap.style.display = radio.value === 'inventory' ? 'none' : '';
+}
+
+async function sshCreateCredential() {
+  const orgSel  = document.getElementById('ssh-f-org');
+  const invSel  = document.getElementById('ssh-f-inv');
+  const name    = document.getElementById('ssh-f-name').value.trim();
+  const typeEl  = document.querySelector('input[name="ssh-ttype"]:checked');
+  const limit   = document.getElementById('ssh-f-limit')?.value.trim() || '';
+  const user    = document.getElementById('ssh-f-user').value.trim();
+  const ttl     = parseInt(document.getElementById('ssh-f-ttl').value) || 0;
+  const msg     = document.getElementById('ssh-create-msg');
+  const btn     = document.getElementById('ssh-create-btn');
+
+  const orgId   = parseInt(orgSel.value) || 0;
+  const invId   = parseInt(invSel.value) || 0;
+  const orgName = orgSel.options[orgSel.selectedIndex]?.getAttribute('data-name') || '';
+  const invName = invSel.options[invSel.selectedIndex]?.getAttribute('data-name') || '';
+  const ttype   = typeEl ? typeEl.value : 'group';
+
+  if (!orgId)   { msg.textContent = '⚠ Select an organization.'; msg.style.color = 'var(--danger)'; return; }
+  if (!invId)   { msg.textContent = '⚠ Select an inventory.'; msg.style.color = 'var(--danger)'; return; }
+  if (!name)    { msg.textContent = '⚠ Target name is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (!user)    { msg.textContent = '⚠ SSH username is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (ttype !== 'inventory' && !limit) { msg.textContent = '⚠ Limit is required for this target type.'; msg.style.color = 'var(--danger)'; return; }
+
+  btn.disabled = true;
+  msg.textContent = '⏳ Generating keypair and creating AWX credential…';
+  msg.style.color = 'var(--muted)';
+
+  try {
+    const payload = {
+      target_name: name, target_type: ttype,
+      inventory_id: invId, inventory_name: invName,
+      limit: ttype === 'inventory' ? '' : limit,
+      org_id: orgId, org_name: orgName,
+      ssh_username: user, ttl_hours: ttl,
+    };
+    const resp = await fetch('/api/ssh/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+
+    _sshNewPubkey = data.public_key;
+    _sshNewCredId = data.cred_id;
+    document.getElementById('ssh-new-pubkey-text').textContent = data.public_key;
+    document.getElementById('ssh-pubkey-result').style.display = 'block';
+
+    msg.textContent = `✅ Credential id=${data.cred_id} created — fingerprint: ${data.fingerprint}`;
+    msg.style.color = 'var(--success)';
+    btn.disabled = false;
+
+    // Reload credential list so the new PENDING card appears
+    await loadSSHCredentials();
+  } catch (e) {
+    msg.textContent = `❌ ${e.message}`;
+    msg.style.color = 'var(--danger)';
+    btn.disabled = false;
+  }
+}
+
+// ── Verification ─────────────────────────────────────────────────────────────
+
+function sshVerifyStream(id) {
+  sshLogClear(id);
+  sshLog(id, '🔍 Starting SSH verification…', '');
+  const evts = new EventSource(`/api/ssh/credentials/${id}/verify/stream`);
+  let lastResult = null;
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg.startsWith('RESULT:')) { try { lastResult = JSON.parse(msg.slice(7)); } catch {} return; }
+    if (msg === '[DONE]') {
+      evts.close();
+      if (lastResult) {
+        if (lastResult.success) { toast('SSH verified — credential is now ACTIVE', 'ok'); }
+        else { toast('SSH verification failed — see log', 'err'); }
+        loadSSHCredentials();
+      }
+      return;
+    }
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : msg.startsWith('✅') ? 'ok' : '';
+    sshLog(id, msg, cls);
+  };
+  evts.onerror = () => { sshLog(id, '[ERROR] Connection interrupted', 'err'); evts.close(); };
+}
+
+// ── Force-activate ───────────────────────────────────────────────────────────
+
+async function sshForceActivate(id) {
+  if (!confirm(`Force-activate credential id=${id} without SSH verification?\n\nThis marks the credential ACTIVE immediately. The fingerprint will be tagged [unverified].\n\nOnly do this if you have manually placed the public key in authorized_keys and cannot reach the host yet.`)) return;
+  sshLogClear(id);
+  sshLog(id, '⚡ Force-activating…', '');
+  try {
+    const resp = await fetch(`/api/ssh/credentials/${id}/activate`, { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    sshLog(id, `✅ Activated (unverified). Fingerprint: ${data.meta?.fingerprint || '—'}`, 'ok');
+    toast('Credential force-activated ⚠ unverified', 'ok');
+    await loadSSHCredentials();
+  } catch (e) {
+    sshLog(id, `[ERROR] ${e.message}`, 'err');
+    toast(e.message, 'err');
+  }
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+async function sshDeleteCredential(id) {
+  if (!confirm(`Delete credential id=${id}?\n\nThe AWX credential will be permanently removed. The public key will no longer be usable for new AWX jobs.\n\nNote: this does NOT remove the key from authorized_keys on target hosts.`)) return;
+  try {
+    const resp = await fetch(`/api/ssh/credentials/${id}`, { method: 'DELETE' });
+    if (resp.status === 204) {
+      toast('Credential deleted', 'ok');
+      await loadSSHCredentials();
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.detail || resp.statusText);
+    }
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Rotation ─────────────────────────────────────────────────────────────────
+
+async function sshStartRotation(id) {
+  if (!confirm(`Start rotation for credential id=${id}?\n\nA new keypair will be generated. The old key remains active until you verify the new one and confirm.\n\nYou'll need to add the new public key to authorized_keys on all target hosts.`)) return;
+  sshLogClear(id);
+  sshLog(id, '🔄 Starting key rotation…', '');
+  try {
+    const resp = await fetch(`/api/ssh/credentials/${id}/rotate`, { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    sshLog(id, `✅ New credential id=${data.new_cred_id} created. Fingerprint: ${data.fingerprint}`, 'ok');
+    sshLog(id, '   Add the new public key to authorized_keys, then click "Verify new key".', '');
+    toast('Rotation started — add new public key to hosts', 'ok');
+    await loadSSHCredentials();
+    // Show the new pubkey in the rot panel
+    setTimeout(() => {
+      const el = document.getElementById(`ssh-rot-pubkey-text-${id}`);
+      if (el) { el.textContent = data.public_key; document.getElementById(`ssh-rot-pubkey-${id}`).style.display = 'block'; }
+    }, 200);
+  } catch (e) {
+    sshLog(id, `[ERROR] ${e.message}`, 'err');
+    toast(e.message, 'err');
+  }
+}
+
+async function sshLoadRotatingPubkey(id) {
+  try {
+    const data = await fetch(`/api/ssh/credentials/${id}`).then(r => r.json());
+    const rotId = data.meta?.rotating_credential_id;
+    if (!rotId) { toast('No rotating credential found', 'err'); return; }
+    const rotData = await fetch(`/api/ssh/credentials/${rotId}`).then(r => r.json());
+    const pk = rotData.meta?.public_key;
+    if (!pk) { toast('Could not retrieve public key', 'err'); return; }
+    const el = document.getElementById(`ssh-rot-pubkey-text-${id}`);
+    if (el) el.textContent = pk;
+    const panel = document.getElementById(`ssh-rot-pubkey-${id}`);
+    if (panel) panel.style.display = 'block';
+    const btn = document.getElementById(`ssh-rot-load-pk-${id}`);
+    if (btn) btn.style.display = 'none';
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+let _sshRotJobId = {};
+
+function sshRotationVerifyStream(id) {
+  sshLogClear(id);
+  sshLog(id, '🔍 Verifying new key…', '');
+  const confirmBtn = document.getElementById(`ssh-confirm-btn-${id}`);
+  if (confirmBtn) confirmBtn.disabled = true;
+  const evts = new EventSource(`/api/ssh/credentials/${id}/rotate/stream`);
+  let lastResult = null;
+  evts.onmessage = e => {
+    const msg = e.data;
+    if (msg.startsWith('RESULT:')) { try { lastResult = JSON.parse(msg.slice(7)); } catch {} return; }
+    if (msg === '[DONE]') {
+      evts.close();
+      if (lastResult?.success) {
+        sshLog(id, '✅ New key verified successfully — click "Confirm rotation" to complete.', 'ok');
+        if (lastResult.job_id) _sshRotJobId[id] = lastResult.job_id;
+        if (confirmBtn) confirmBtn.disabled = false;
+        toast('New key verified — confirm rotation when ready', 'ok');
+      } else {
+        sshLog(id, '❌ Verification failed. Fix SSH access, then retry or cancel rotation.', 'err');
+        toast('New key verification failed', 'err');
+      }
+      return;
+    }
+    const cls = msg.startsWith('[ERROR]') ? 'err' : msg.startsWith('[WARN]') ? 'warn' : msg.startsWith('✅') ? 'ok' : '';
+    sshLog(id, msg, cls);
+  };
+  evts.onerror = () => { sshLog(id, '[ERROR] Connection interrupted', 'err'); evts.close(); };
+}
+
+async function sshConfirmRotation(id) {
+  if (!confirm(`Confirm rotation for credential id=${id}?\n\nThe old key will be DELETED from AWX. Make sure the new key works before confirming.`)) return;
+  sshLogClear(id);
+  sshLog(id, '✔ Confirming rotation…', '');
+  try {
+    const body = _sshRotJobId[id] ? { verified_job_id: _sshRotJobId[id] } : {};
+    const resp = await fetch(`/api/ssh/credentials/${id}/rotate/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    sshLog(id, `✅ Rotation complete. New credential id=${data.new_cred_id}. Fingerprint: ${data.fingerprint}`, 'ok');
+    toast('Key rotation complete', 'ok');
+    delete _sshRotJobId[id];
+    await loadSSHCredentials();
+  } catch (e) {
+    sshLog(id, `[ERROR] ${e.message}`, 'err');
+    toast(e.message, 'err');
+  }
+}
+
+async function sshCancelRotation(id) {
+  if (!confirm(`Cancel rotation for credential id=${id}?\n\nThe new (rotating) credential will be deleted. The original key remains ACTIVE.`)) return;
+  sshLogClear(id);
+  sshLog(id, '✗ Cancelling rotation…', '');
+  try {
+    const resp = await fetch(`/api/ssh/credentials/${id}/rotate`, { method: 'DELETE' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    sshLog(id, '✅ Rotation cancelled — original key is still ACTIVE.', 'ok');
+    toast('Rotation cancelled', 'ok');
+    delete _sshRotJobId[id];
+    await loadSSHCredentials();
+  } catch (e) {
+    sshLog(id, `[ERROR] ${e.message}`, 'err');
+    toast(e.message, 'err');
+  }
+}
+
+// ── Rotation policy ──────────────────────────────────────────────────────────
+
+function sshTogglePolicy(id) {
+  const panel = document.getElementById(`ssh-policy-panel-${id}`);
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  const en = document.getElementById(`ssh-policy-en-${id}`);
+  const days = document.getElementById(`ssh-policy-days-${id}`);
+  if (en && days) en.onchange = () => { days.disabled = !en.checked; };
+}
+
+async function sshSavePolicy(id) {
+  const en   = document.getElementById(`ssh-policy-en-${id}`).checked;
+  const days = parseInt(document.getElementById(`ssh-policy-days-${id}`).value) || 90;
+  try {
+    const resp = await fetch(`/api/ssh/credentials/${id}/rotation-policy`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: en, days }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    const next = data.next_rotation_at ? ` — next: ${sshFmtDate(data.next_rotation_at)}` : '';
+    toast(`Rotation policy ${en ? 'enabled (' + days + 'd' + next + ')' : 'disabled'}`, 'ok');
+    await loadSSHCredentials();
+  } catch (e) { toast(e.message, 'err'); }
+}
 
 // ── EE helpers ─────────────────────────────────────────────────────────────
 let EE_STATUS = {};

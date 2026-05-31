@@ -63,8 +63,9 @@ class TestFirstStartOnly:
         assert "LOKI_S3_SECRET_KEY" in fso
 
     def test_has_expected_count(self):
-        # 4 AWX + 5 Gitea + 2 PG + 2 Gitea-DB + 2 Grafana/PKI + 2 Loki = 17
-        assert len(_wm().FIRST_START_ONLY) == 17
+        # 4 AWX + 5 Gitea + 2 PG + 2 Gitea-DB + 2 Grafana/PKI + 2 Loki
+        # + 1 POSTGRES_PASSWORD + 1 GITEA_DB_PASSWORD = 19
+        assert len(_wm().FIRST_START_ONLY) == 19
 
 
 # ─────────────────────────────────────────────────────────────────────────────
