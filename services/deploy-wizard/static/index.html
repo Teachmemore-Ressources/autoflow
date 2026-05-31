@@ -2278,26 +2278,30 @@ const SSH_SECTION_HTML = `
           </select>
         </div>
         <div class="ssh-form-field" style="grid-column:1/-1">
-          <label class="ssh-form-label">Target name <span style="color:var(--danger)">*</span></label>
-          <input id="ssh-f-name" type="text" placeholder="e.g. prod-webservers" />
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">A descriptive label — used in the AWX credential name.</div>
+          <label class="ssh-form-label">Target <span style="color:var(--danger)">*</span></label>
+          <select id="ssh-f-target" onchange="sshTargetChanged()" disabled>
+            <option value="">— select inventory first —</option>
+          </select>
+          <div id="ssh-f-custom-wrap" style="display:none;margin-top:6px">
+            <input id="ssh-f-custom" type="text"
+              placeholder="Ansible --limit pattern, e.g. tag_env_prod:&amp;webservers"
+              oninput="sshCustomPatternInput()" />
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">
+              Any valid Ansible <code>--limit</code> expression. Supports patterns like
+              <code>group1:&group2</code>, <code>!excluded</code>, wildcards.
+            </div>
+          </div>
+          <div id="ssh-target-hint" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
         </div>
         <div class="ssh-form-field" style="grid-column:1/-1">
-          <label class="ssh-form-label">Target type</label>
-          <div class="ssh-type-radios" id="ssh-f-type-radios">
-            <label class="ssh-type-radio active"><input type="radio" name="ssh-ttype" value="group" checked onchange="sshTypeChanged(this)">Group</label>
-            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="host" onchange="sshTypeChanged(this)">Host</label>
-            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="inventory" onchange="sshTypeChanged(this)">Full inventory</label>
-            <label class="ssh-type-radio"><input type="radio" name="ssh-ttype" value="custom" onchange="sshTypeChanged(this)">Custom</label>
+          <label class="ssh-form-label" style="display:flex;align-items:center;gap:6px">
+            Credential name <span style="color:var(--danger)">*</span>
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">(auto-filled — edit to customise)</span>
+          </label>
+          <input id="ssh-f-name" type="text" placeholder="auto-filled when target is selected" />
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">
+            Used in AWX credential name: <code>autoflow-ssh-{org_id}-<span id="ssh-name-preview">…</span></code>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px" id="ssh-type-hint">
-            Ansible will use this as the <code>--limit</code> value: matches all hosts in the group.
-          </div>
-        </div>
-        <div class="ssh-form-field" id="ssh-f-limit-wrap">
-          <label class="ssh-form-label">Limit <span style="color:var(--danger)">*</span></label>
-          <input id="ssh-f-limit" type="text" placeholder="e.g. webservers" list="ssh-limit-datalist"/>
-          <datalist id="ssh-limit-datalist"></datalist>
         </div>
         <div class="ssh-form-field">
           <label class="ssh-form-label">SSH username <span style="color:var(--danger)">*</span></label>
@@ -2652,56 +2656,160 @@ async function sshOrgChanged() {
 }
 
 async function sshInvChanged() {
-  const invSel = document.getElementById('ssh-f-inv');
-  const dl = document.getElementById('ssh-limit-datalist');
-  const invId = invSel.value;
-  if (!dl || !invId) return;
-  dl.innerHTML = '';
+  const invSel    = document.getElementById('ssh-f-inv');
+  const targetSel = document.getElementById('ssh-f-target');
+  const invId     = invSel.value;
+  const invName   = invSel.options[invSel.selectedIndex]?.getAttribute('data-name') || '';
+
+  if (!targetSel) return;
+  targetSel.innerHTML = '<option value="">Loading targets…</option>';
+  targetSel.disabled = true;
+
+  if (!invId) {
+    targetSel.innerHTML = '<option value="">— select inventory first —</option>';
+    return;
+  }
+
   try {
     const data = await fetch(`/api/ssh/awx/inventories/${invId}/targets`).then(r => r.json());
-    const items = [...(data.groups || []).map(g => g.name), ...(data.hosts || []).map(h => h.name)];
-    dl.innerHTML = items.map(n => `<option value="${escHtml(n)}">`).join('');
-  } catch { /* ignore */ }
+    const groups = data.groups || [];
+    const hosts  = data.hosts  || [];
+
+    let html = '<option value="">— choose a target —</option>';
+
+    if (groups.length) {
+      html += `<optgroup label="Groups (${groups.length})">`;
+      html += groups.map(g =>
+        `<option value="group:${escHtml(g.name)}">${escHtml(g.name)}</option>`
+      ).join('');
+      html += '</optgroup>';
+    }
+
+    if (hosts.length) {
+      html += `<optgroup label="Hosts (${hosts.length})">`;
+      html += hosts.map(h =>
+        `<option value="host:${escHtml(h.name)}">${escHtml(h.name)}</option>`
+      ).join('');
+      html += '</optgroup>';
+    }
+
+    html += `<option value="inventory:" style="border-top:1px solid var(--border)">📦 Full inventory — ${escHtml(invName)} (all hosts, no --limit)</option>`;
+    html += `<option value="custom:">✏️  Custom Ansible pattern…</option>`;
+
+    targetSel.innerHTML = html;
+    targetSel.disabled = false;
+
+    // Auto-select if only one group
+    if (groups.length === 1 && !hosts.length) {
+      targetSel.value = `group:${groups[0].name}`;
+      sshTargetChanged();
+    }
+  } catch (e) {
+    targetSel.innerHTML = `<option value="">Error loading targets: ${e.message}</option>`;
+    targetSel.disabled = false;
+  }
 }
 
-const SSH_TYPE_HINTS = {
-  group:     'Ansible will use this as the <code>--limit</code> value: matches all hosts in the group.',
-  host:      'Ansible will connect to this specific host only.',
+// Decode the unified target select value into { type, limit, suggestedName }
+function sshParseTargetValue(val) {
+  if (!val) return null;
+  const colon = val.indexOf(':');
+  const type  = val.slice(0, colon);
+  const limit = val.slice(colon + 1);
+  const invSel = document.getElementById('ssh-f-inv');
+  const invName = invSel?.options[invSel.selectedIndex]?.getAttribute('data-name') || 'inventory';
+  const suggested = type === 'inventory' ? invName.toLowerCase().replace(/\s+/g, '-')
+                  : type === 'custom'    ? ''
+                  : limit.toLowerCase().replace(/\s+/g, '-');
+  return { type, limit, suggestedName: suggested };
+}
+
+const SSH_TARGET_HINTS = {
+  group:     'AWX will run the playbook with <code>--limit {group}</code> — targets all hosts in that group.',
+  host:      'AWX will connect to this specific host only.',
   inventory: 'No <code>--limit</code> applied — all hosts in the inventory are targeted.',
-  custom:    'Enter any Ansible <code>--limit</code> pattern (e.g. <code>tag_env_prod:&webservers</code>).',
+  custom:    'Enter any Ansible <code>--limit</code> expression below.',
 };
 
-function sshTypeChanged(radio) {
-  document.querySelectorAll('.ssh-type-radio').forEach(el => el.classList.remove('active'));
-  radio.closest('.ssh-type-radio').classList.add('active');
-  const hint = document.getElementById('ssh-type-hint');
-  if (hint) hint.innerHTML = SSH_TYPE_HINTS[radio.value] || '';
-  const limitWrap = document.getElementById('ssh-f-limit-wrap');
-  if (limitWrap) limitWrap.style.display = radio.value === 'inventory' ? 'none' : '';
+function sshTargetChanged() {
+  const sel  = document.getElementById('ssh-f-target');
+  const val  = sel?.value || '';
+  const info = sshParseTargetValue(val);
+  if (!info) return;
+
+  // Show / hide custom input
+  const customWrap = document.getElementById('ssh-f-custom-wrap');
+  if (customWrap) customWrap.style.display = info.type === 'custom' ? 'block' : 'none';
+
+  // Update hint
+  const hint = document.getElementById('ssh-target-hint');
+  if (hint) hint.innerHTML = SSH_TARGET_HINTS[info.type] || '';
+
+  // Auto-fill credential name (only if user hasn't typed their own)
+  const nameEl = document.getElementById('ssh-f-name');
+  if (nameEl && (!nameEl.dataset.userEdited || !nameEl.value)) {
+    nameEl.value = info.suggestedName;
+    nameEl.dataset.userEdited = '';
+    sshUpdateNamePreview();
+  }
 }
 
+function sshCustomPatternInput() {
+  // When user types a custom pattern, update the name suggestion
+  const nameEl = document.getElementById('ssh-f-name');
+  if (nameEl && !nameEl.dataset.userEdited) {
+    const custom = document.getElementById('ssh-f-custom')?.value.trim() || '';
+    nameEl.value = custom.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 40);
+    sshUpdateNamePreview();
+  }
+}
+
+function sshUpdateNamePreview() {
+  const nameEl  = document.getElementById('ssh-f-name');
+  const preview = document.getElementById('ssh-name-preview');
+  if (preview) preview.textContent = nameEl?.value || '…';
+}
+
+// Mark name field as user-edited so auto-fill stops overwriting it
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ssh-f-name')?.addEventListener('input', function() {
+    this.dataset.userEdited = '1';
+    sshUpdateNamePreview();
+  });
+});
+
 async function sshCreateCredential() {
-  const orgSel  = document.getElementById('ssh-f-org');
-  const invSel  = document.getElementById('ssh-f-inv');
-  const name    = document.getElementById('ssh-f-name').value.trim();
-  const typeEl  = document.querySelector('input[name="ssh-ttype"]:checked');
-  const limit   = document.getElementById('ssh-f-limit')?.value.trim() || '';
-  const user    = document.getElementById('ssh-f-user').value.trim();
-  const ttl     = parseInt(document.getElementById('ssh-f-ttl').value) || 0;
-  const msg     = document.getElementById('ssh-create-msg');
-  const btn     = document.getElementById('ssh-create-btn');
+  const orgSel    = document.getElementById('ssh-f-org');
+  const invSel    = document.getElementById('ssh-f-inv');
+  const targetSel = document.getElementById('ssh-f-target');
+  const nameEl    = document.getElementById('ssh-f-name');
+  const customEl  = document.getElementById('ssh-f-custom');
+  const user      = document.getElementById('ssh-f-user').value.trim();
+  const ttl       = parseInt(document.getElementById('ssh-f-ttl').value) || 0;
+  const msg       = document.getElementById('ssh-create-msg');
+  const btn       = document.getElementById('ssh-create-btn');
 
   const orgId   = parseInt(orgSel.value) || 0;
   const invId   = parseInt(invSel.value) || 0;
   const orgName = orgSel.options[orgSel.selectedIndex]?.getAttribute('data-name') || '';
   const invName = invSel.options[invSel.selectedIndex]?.getAttribute('data-name') || '';
-  const ttype   = typeEl ? typeEl.value : 'group';
+  const name    = nameEl.value.trim();
 
-  if (!orgId)   { msg.textContent = '⚠ Select an organization.'; msg.style.color = 'var(--danger)'; return; }
-  if (!invId)   { msg.textContent = '⚠ Select an inventory.'; msg.style.color = 'var(--danger)'; return; }
-  if (!name)    { msg.textContent = '⚠ Target name is required.'; msg.style.color = 'var(--danger)'; return; }
-  if (!user)    { msg.textContent = '⚠ SSH username is required.'; msg.style.color = 'var(--danger)'; return; }
-  if (ttype !== 'inventory' && !limit) { msg.textContent = '⚠ Limit is required for this target type.'; msg.style.color = 'var(--danger)'; return; }
+  const targetVal = targetSel?.value || '';
+  const info = sshParseTargetValue(targetVal);
+
+  // Resolve limit: custom type uses the text input
+  let limit = info?.limit || '';
+  if (info?.type === 'custom') limit = customEl?.value.trim() || '';
+
+  if (!orgId)            { msg.textContent = '⚠ Select an organization.'; msg.style.color = 'var(--danger)'; return; }
+  if (!invId)            { msg.textContent = '⚠ Select an inventory.'; msg.style.color = 'var(--danger)'; return; }
+  if (!info)             { msg.textContent = '⚠ Choose a target.'; msg.style.color = 'var(--danger)'; return; }
+  if (!name)             { msg.textContent = '⚠ Credential name is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (!user)             { msg.textContent = '⚠ SSH username is required.'; msg.style.color = 'var(--danger)'; return; }
+  if (info.type === 'custom' && !limit) {
+    msg.textContent = '⚠ Enter a custom Ansible limit pattern.'; msg.style.color = 'var(--danger)'; return;
+  }
 
   btn.disabled = true;
   msg.textContent = '⏳ Generating keypair and creating AWX credential…';
@@ -2709,11 +2817,15 @@ async function sshCreateCredential() {
 
   try {
     const payload = {
-      target_name: name, target_type: ttype,
-      inventory_id: invId, inventory_name: invName,
-      limit: ttype === 'inventory' ? '' : limit,
-      org_id: orgId, org_name: orgName,
-      ssh_username: user, ttl_hours: ttl,
+      target_name:    name,
+      target_type:    info.type,
+      inventory_id:   invId,
+      inventory_name: invName,
+      limit:          info.type === 'inventory' ? '' : limit,
+      org_id:         orgId,
+      org_name:       orgName,
+      ssh_username:   user,
+      ttl_hours:      ttl,
     };
     const resp = await fetch('/api/ssh/credentials', {
       method: 'POST',
@@ -2731,6 +2843,9 @@ async function sshCreateCredential() {
     msg.textContent = `✅ Credential id=${data.cred_id} created — fingerprint: ${data.fingerprint}`;
     msg.style.color = 'var(--success)';
     btn.disabled = false;
+
+    // Reset form state for next use
+    nameEl.dataset.userEdited = '';
 
     // Reload credential list so the new PENDING card appears
     await loadSSHCredentials();
