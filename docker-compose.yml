@@ -126,6 +126,11 @@ services:
     image: postgres:15.17-alpine  # pinned: was 15-alpine (9 HIGH CVEs fixed)
     container_name: autoflow_postgres
     restart: unless-stopped
+    # stop_grace_period: PostgreSQL flushes WAL and checkpoints data files on
+    # SIGTERM (smart shutdown).  Default 10 s can cut off the checkpoint on a
+    # busy host → WAL replay required on next start (slow) or, in rare cases,
+    # page-level corruption.  30 s covers normal checkpoint duration.
+    stop_grace_period: 30s
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-awx}
       POSTGRES_USER:     ${POSTGRES_USER:-awx}
@@ -809,6 +814,9 @@ services:
     image: gitea/gitea:1.23-rootless
     container_name: autoflow_gitea
     restart: unless-stopped
+    # stop_grace_period: Gitea flushes in-flight git operations and closes DB
+    # connections on SIGTERM.  30 s avoids corrupt pack-files on large pushes.
+    stop_grace_period: 30s
     depends_on:
       gitea_postgres:
         condition: service_healthy
@@ -895,6 +903,9 @@ services:
     image: gitea/act_runner:nightly
     container_name: autoflow_act_runner
     restart: unless-stopped
+    # stop_grace_period: act_runner may have a CI job running inside a child
+    # container.  30 s lets it send a cancellation signal before SIGKILL.
+    stop_grace_period: 30s
     depends_on:
       gitea:
         condition: service_healthy
@@ -933,6 +944,10 @@ services:
       dockerfile: Dockerfile
     container_name: autoflow_ee_builder
     restart: unless-stopped
+    # stop_grace_period: an ongoing EE image build (ansible-builder / docker build)
+    # should finish writing its current layer before SIGKILL, otherwise the
+    # builder cache is left in an inconsistent state.
+    stop_grace_period: 20s
     environment:
       GITEA_WEBHOOK_SECRET: ${GITEA_WEBHOOK_SECRET:-}
       GITEA_REGISTRY_TOKEN: ${GITEA_REGISTRY_TOKEN:-}

@@ -118,13 +118,48 @@ restore:        ## Restore from a backup  (e.g. make restore BACKUP=./backups/20
 
 host-setup:     ## Apply required host kernel settings (run once on every Docker host)
 	@echo "  [host-setup] Applying kernel settings required by Autoflow services..."
-	@# vm.overcommit_memory=1: allows Redis fork() for background saves / AOF rewrites.
-	@# Without this, AOF rewrites silently fail → AOF grows unbounded → corruption on kill.
-	@echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/10-redis.conf > /dev/null
-	@sudo sysctl -w vm.overcommit_memory=1 > /dev/null
-	@echo "  ✔ vm.overcommit_memory = 1  (persisted in /etc/sysctl.d/10-redis.conf)"
 	@echo ""
-	@echo "  All host settings applied. You may now run: make start"
+	@# ── Write all settings to a single sysctl drop-in ─────────────────────────
+	@printf '%s\n' \
+		'# Autoflow production kernel settings' \
+		'# Apply: sudo sysctl -p /etc/sysctl.d/10-autoflow.conf' \
+		'# Or:    make host-setup  (also applies immediately)' \
+		'' \
+		'# Redis: allows fork() for background AOF saves and RDB snapshots.' \
+		'# Without this, bgsave silently fails -> AOF corruption on kill.' \
+		'vm.overcommit_memory = 1' \
+		'' \
+		'# Network: AWX callbacks + Prometheus scrape = many short connections.' \
+		'# Raise backlog so SYN packets are not dropped on burst.' \
+		'net.core.somaxconn = 65535' \
+		'net.ipv4.tcp_max_syn_backlog = 65535' \
+		'' \
+		'# inotify: Gitea watches repos, Loki/Promtail watch log dirs.' \
+		'# Default 61604 watches / 128 instances cause errors under normal load.' \
+		'fs.inotify.max_user_watches = 524288' \
+		'fs.inotify.max_user_instances = 512' \
+		'' \
+		'# Swappiness: Docker hosts should not swap.' \
+		'# Swapping containers masks memory pressure and causes latency spikes.' \
+		'vm.swappiness = 10' \
+		| sudo tee /etc/sysctl.d/10-autoflow.conf > /dev/null
+	@echo "  ✔ /etc/sysctl.d/10-autoflow.conf written"
+	@echo ""
+	@# ── Apply immediately (no reboot required) ────────────────────────────────
+	@sudo sysctl -w vm.overcommit_memory=1             > /dev/null
+	@sudo sysctl -w net.core.somaxconn=65535           > /dev/null
+	@sudo sysctl -w net.ipv4.tcp_max_syn_backlog=65535 > /dev/null
+	@sudo sysctl -w fs.inotify.max_user_watches=524288 > /dev/null
+	@sudo sysctl -w fs.inotify.max_user_instances=512  > /dev/null
+	@sudo sysctl -w vm.swappiness=10                   > /dev/null
+	@echo "  ✔ vm.overcommit_memory          = 1       (Redis AOF / bgsave)"
+	@echo "  ✔ net.core.somaxconn            = 65535   (AWX callbacks / Prometheus)"
+	@echo "  ✔ net.ipv4.tcp_max_syn_backlog  = 65535"
+	@echo "  ✔ fs.inotify.max_user_watches   = 524288  (Gitea / Promtail)"
+	@echo "  ✔ fs.inotify.max_user_instances = 512"
+	@echo "  ✔ vm.swappiness                 = 10      (no container swap)"
+	@echo ""
+	@echo "  All host settings applied and persisted. You may now run: make start"
 
 redis-fix-aof:  ## Repair a corrupted Redis AOF (run when Redis fails to start with 'Bad file format')
 	@echo "  [redis-fix-aof] Checking AOF integrity..."
