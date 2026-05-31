@@ -114,6 +114,41 @@ restore:        ## Restore from a backup  (e.g. make restore BACKUP=./backups/20
 		bash scripts/restore.sh "$(BACKUP)"; \
 	fi
 
+# ── Host prerequisites ───────────────────────────────────────
+
+host-setup:     ## Apply required host kernel settings (run once on every Docker host)
+	@echo "  [host-setup] Applying kernel settings required by Autoflow services..."
+	@# vm.overcommit_memory=1: allows Redis fork() for background saves / AOF rewrites.
+	@# Without this, AOF rewrites silently fail → AOF grows unbounded → corruption on kill.
+	@echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/10-redis.conf > /dev/null
+	@sudo sysctl -w vm.overcommit_memory=1 > /dev/null
+	@echo "  ✔ vm.overcommit_memory = 1  (persisted in /etc/sysctl.d/10-redis.conf)"
+	@echo ""
+	@echo "  All host settings applied. You may now run: make start"
+
+redis-fix-aof:  ## Repair a corrupted Redis AOF (run when Redis fails to start with 'Bad file format')
+	@echo "  [redis-fix-aof] Checking AOF integrity..."
+	@AOF=$$(docker run --rm -v autoflow_redis_data:/data alpine \
+		find /data/appendonlydir -name '*.incr.aof' | head -1) && \
+	if [ -z "$$AOF" ]; then echo "  No incr.aof found — nothing to fix."; exit 0; fi && \
+	echo "  Found: $$AOF" && \
+	RESULT=$$(docker run --rm -v autoflow_redis_data:/data redis:7.4.8-alpine \
+		redis-check-aof "$$AOF" 2>&1) && \
+	if echo "$$RESULT" | grep -q "is valid"; then \
+		echo "  ✔ AOF is valid — no repair needed."; \
+	else \
+		echo "$$RESULT"; \
+		echo ""; \
+		echo "  Backing up and truncating corrupted tail..."; \
+		BACKUP="$$AOF.bak.$$(date +%Y%m%d_%H%M%S)"; \
+		docker run --rm -v autoflow_redis_data:/data alpine cp "$$AOF" "$$BACKUP"; \
+		echo "  Backup: $$BACKUP"; \
+		VALID=$$(echo "$$RESULT" | grep -oE 'ok_up_to=[0-9]+' | cut -d= -f2); \
+		docker run --rm -v autoflow_redis_data:/data python:3.12-alpine python3 -c \
+			"import os; f='$$AOF'; t=$$VALID; os.truncate(f,t); print(f'Truncated {f} to {t} bytes')"; \
+		echo "  ✔ AOF repaired. Run: make start  (data from the corrupted tail is lost)"; \
+	fi
+
 # ── Setup ────────────────────────────────────────────────────
 
 setup:          ## Bootstrap: decrypt .env.enc → .env  (or copy .env.example if no encrypted file)

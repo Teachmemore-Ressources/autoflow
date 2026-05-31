@@ -157,6 +157,11 @@ services:
     container_name: autoflow_redis
     restart: unless-stopped
     entrypoint: ["/entrypoint.sh"]
+    # stop_grace_period: time Docker waits between SIGTERM and SIGKILL.
+    # Redis flushes the AOF on SIGTERM. 30 s gives it enough time even on
+    # a busy volume. Without this (default=10 s), a slow disk flush risks
+    # being interrupted mid-write → corrupted AOF on next start.
+    stop_grace_period: 30s
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:

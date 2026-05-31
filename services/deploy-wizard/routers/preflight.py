@@ -233,6 +233,38 @@ def system_preflight():
     except Exception as exc:
         checks.append({"id": "disk", "label": "Disk ≥ 20 GB free", "ok": False, "detail": str(exc)})
 
+    # ── vm.overcommit_memory ─────────────────────────────────────────────────
+    # Required for Redis: without it, fork() for background saves / AOF rewrites
+    # may be refused even when RAM is available, causing the incremental AOF to
+    # grow without bound and become corrupted on a hard kill.
+    try:
+        val = Path("/proc/sys/vm/overcommit_memory").read_text().strip()
+        ok = val == "1"
+        checks.append(
+            {
+                "id": "overcommit",
+                "label": "vm.overcommit_memory = 1",
+                "ok": ok,
+                "detail": f"Current value: {val}"
+                + (
+                    ""
+                    if ok
+                    else " — Redis background saves will fail, risking AOF corruption."
+                    " Fix: echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/10-redis.conf"
+                    " && sudo sysctl -p /etc/sysctl.d/10-redis.conf"
+                ),
+            }
+        )
+    except Exception as exc:
+        checks.append(
+            {
+                "id": "overcommit",
+                "label": "vm.overcommit_memory = 1",
+                "ok": False,
+                "detail": f"Cannot read /proc/sys/vm/overcommit_memory: {exc}",
+            }
+        )
+
     # ── DNS resolution ────────────────────────────────────────────────────────
     dns_hosts = ["github.com", "registry-1.docker.io"]
     dns_ok = True
